@@ -1,21 +1,8 @@
-/*
-檔案位置：apps-script/Status.gs
-時間戳記：2026-06-08 13:56 UTC+8
-用途：skhpsv2 Apps Script health check；支援 JSON 與 JSONP。
+﻿/*
+檔案位置：skhpsv2/apps-script/Status.gs
+時間戳記：2026-06-08 20:15 UTC+8
+用途：skhpsv2 Apps Script API response helper；只負責 JSON / JSONP 輸出，不定義 health 或 getBackendStatus。
 */
-
-function getBackendStatus() {
-  return {
-    ok: true,
-    app: 'skhpsv2',
-    env: 'prod',
-    serverTime: Utilities.formatDate(
-      new Date(),
-      'Asia/Taipei',
-      'yyyy-MM-dd HH:mm:ss'
-    )
-  };
-}
 
 function outputJson_(data) {
   return ContentService
@@ -33,4 +20,22 @@ function outputJsonOrJsonp_(data, callback) {
   }
 
   return outputJson_(data);
+}
+
+function normalizeApiError_(err) {
+  if (!err) {
+    return {
+      message: 'Unknown error',
+      stack: ''
+    };
+  }
+
+  return {
+    message: err && err.message ? String(err.message) : String(err),
+    stack: err && err.stack ? String(err.stack) : ''
+  };
+}
+
+function formatTaipeiDateTimeForApi_(date) {
+  return Utilities.formatDate(date, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
 }

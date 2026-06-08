@@ -281,33 +281,20 @@
       }
     }
 
-    fetch(healthUrl, {
-      method: 'GET',
-      cache: 'no-store'
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error('HTTP ' + response.status);
-        }
-        return response.json();
-      })
+    loadJsonp(healthUrl)
       .then(handleHealthData)
-      .catch(function () {
-        loadJsonp(healthUrl)
-          .then(handleHealthData)
-          .catch(function (error) {
-            setItem(
-              footer,
-              'api',
-              'Apps Script',
-              error && error.message ? 'failed: ' + error.message : 'failed',
-              'error'
-            );
+      .catch(function (error) {
+        setItem(
+          footer,
+          'api',
+          'Apps Script',
+          error && error.message ? 'failed: ' + error.message : 'failed',
+          'error'
+        );
 
-            if (hasStatus(statusList, 'calendar')) {
-              setItem(footer, 'calendar', 'Calendar', 'unavailable', 'error');
-            }
-          });
+        if (hasStatus(statusList, 'calendar')) {
+          setItem(footer, 'calendar', 'Calendar', 'unavailable', 'error');
+        }
       });
   }
 

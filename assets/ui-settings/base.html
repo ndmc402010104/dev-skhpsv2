@@ -3811,135 +3811,56 @@
   window.__SKHPSV2_BASE_SHEET_API_BOUND__ = true;
 
   function status(message,tone){
-    var el = document.getElementById('baseThemeStatus');
-
-    if(!el){
-      return;
+    if(tone === 'error'){
+      console.warn('[skhpsv2] base sheet status:', message);
     }
-
-    el.textContent = message || '';
-    el.style.color =
-      tone === 'error'
-        ? '#b42318'
-        : (
-          tone === 'success'
-            ? '#15803d'
-            : '#64748b'
-        );
+    else{
+      console.log('[skhpsv2] base sheet status:', message);
+    }
   }
 
   function resolveApiBaseUrl(){
-    var candidates = [];
+    function clean(value){
+      value = String(value || '').trim();
 
-    function push(value){
-      if(value && typeof value === 'string'){
-        candidates.push(value);
+      if(/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(value)){
+        return value;
       }
+
+      return '';
     }
 
-    function readPath(obj,path){
-      if(!obj || !path){
-        return;
-      }
+    var directList = [
+      window.SKHPS_CONFIG &&
+        window.SKHPS_CONFIG.appsScript &&
+        window.SKHPS_CONFIG.appsScript.prod &&
+        window.SKHPS_CONFIG.appsScript.prod.webAppUrl,
 
-      var parts = path.split('.');
-      var current = obj;
+      window.SKHPS_CONFIG &&
+        window.SKHPS_CONFIG.endpoints &&
+        window.SKHPS_CONFIG.endpoints.prod &&
+        window.SKHPS_CONFIG.endpoints.prod.webAppUrl,
 
-      for(var i = 0; i < parts.length; i++){
-        if(!current || typeof current !== 'object'){
-          return;
-        }
+      window.SKHPS_API_BASE_URL,
 
-        current = current[parts[i]];
-      }
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.apiBaseUrl,
 
-      push(current);
-    }
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.webAppUrl,
 
-    function scanConfigObject(obj){
-      if(!obj || typeof obj !== 'object'){
-        return;
-      }
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.appsScriptUrl,
 
-      var envList = [
-        'prod',
-        'production',
-        'dev',
-        'test',
-        'staging',
-        'github',
-        'gas'
-      ];
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.execUrl
+    ];
 
-      [
-        'apiBaseUrl',
-        'webAppUrl',
-        'appsScriptUrl',
-        'execUrl'
-      ].forEach(function(key){
-        push(obj[key]);
-      });
+    for(var i = 0; i < directList.length; i++){
+      var found = clean(directList[i]);
 
-      envList.forEach(function(env){
-        [
-          'endpoints.' + env + '.apiBaseUrl',
-          'endpoints.' + env + '.webAppUrl',
-          'endpoints.' + env + '.appsScriptUrl',
-          'endpoints.' + env + '.execUrl',
-          'appsScript.' + env + '.apiBaseUrl',
-          'appsScript.' + env + '.webAppUrl',
-          'appsScript.' + env + '.appsScriptUrl',
-          'appsScript.' + env + '.execUrl',
-          env + '.apiBaseUrl',
-          env + '.webAppUrl',
-          env + '.appsScriptUrl',
-          env + '.execUrl'
-        ].forEach(function(path){
-          readPath(obj,path);
-        });
-      });
-    }
-
-    /*
-      先吃明確全域設定。
-    */
-    push(window.SKHPS_API_BASE_URL);
-
-    scanConfigObject(window.SKHPS_RUNTIME);
-    scanConfigObject(window.SKHPS_CONFIG);
-    scanConfigObject(window.SKHPS_PORTAL_CONFIG);
-    scanConfigObject(window.SKHPS_PORTAL);
-    scanConfigObject(window.SKHPS_APP_CONFIG);
-    scanConfigObject(window.SKHPS);
-
-    /*
-      再掃 window 裡名字含 SKHPS / PORTAL / CONFIG 的物件。
-      這是為了相容 portal-config.js 實際命名跟 base.html 預期不同的情況。
-    */
-    Object.keys(window).forEach(function(key){
-      if(!/(SKHPS|PORTAL|CONFIG|RUNTIME)/i.test(key)){
-        return;
-      }
-
-      try{
-        scanConfigObject(window[key]);
-      }
-      catch(err){}
-    });
-
-    /*
-      最後從目前頁面已載入的 script src 中找。
-      若未來直接把 exec URL 放 script query 也吃得到。
-    */
-    Array.prototype.slice.call(document.scripts || []).forEach(function(script){
-      push(script && script.src);
-    });
-
-    for(var i = 0; i < candidates.length; i++){
-      var value = String(candidates[i] || '').trim();
-
-      if(/https:\/\/script\.google\.com\/macros\/s\/[^"'<>\\s]+\/exec/.test(value)){
-        return value.match(/https:\/\/script\.google\.com\/macros\/s\/[^"'<>\\s]+\/exec/)[0];
+      if(found){
+        return found;
       }
     }
 
@@ -4080,4 +4001,5 @@
 })();
 </script>
 <!-- SKHPSV2_BASE_SHEET_API_END -->
+
 

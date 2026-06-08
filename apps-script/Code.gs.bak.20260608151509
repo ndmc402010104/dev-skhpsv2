@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/apps-script/Code.gs
-時間戳記：2026-06-08 15:15 UTC+8
+時間戳記：2026-06-08 15:11 UTC+8
 用途：skhpsv2 Apps Script Web App API 入口；只處理 API action，不再嘗試載入 uiset.html。
 */
 

@@ -37,49 +37,48 @@
   }
 
   function resolveApiBaseUrl(){
-    var candidates = [];
+    function clean(value){
+      value = String(value || '').trim();
 
-    function push(value){
-      if(value && typeof value === 'string'){
-        candidates.push(value);
+      if(/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec$/.test(value)){
+        return value;
       }
+
+      return '';
     }
 
-    push(window.SKHPS_API_BASE_URL);
+    var directList = [
+      window.SKHPS_CONFIG &&
+        window.SKHPS_CONFIG.appsScript &&
+        window.SKHPS_CONFIG.appsScript.prod &&
+        window.SKHPS_CONFIG.appsScript.prod.webAppUrl,
 
-    [
-      window.SKHPS_RUNTIME,
-      window.SKHPS_CONFIG,
-      window.SKHPS_PORTAL_CONFIG,
-      window.SKHPS_PORTAL,
-      window.SKHPS_APP_CONFIG,
-      window.SKHPS
-    ].forEach(function(obj){
-      if(!obj || typeof obj !== 'object') return;
+      window.SKHPS_CONFIG &&
+        window.SKHPS_CONFIG.endpoints &&
+        window.SKHPS_CONFIG.endpoints.prod &&
+        window.SKHPS_CONFIG.endpoints.prod.webAppUrl,
 
-      [
-        'apiBaseUrl',
-        'webAppUrl',
-        'appsScriptUrl',
-        'execUrl',
-        'appsScript.prod.webAppUrl',
-        'appsScript.prod.appsScriptUrl',
-        'appsScript.prod.apiBaseUrl',
-        'endpoints.prod.webAppUrl',
-        'endpoints.prod.appsScriptUrl',
-        'endpoints.prod.apiBaseUrl',
-        'appsScript.dev.webAppUrl',
-        'endpoints.dev.webAppUrl'
-      ].forEach(function(path){
-        push(readPath(obj,path));
-      });
-    });
+      window.SKHPS_API_BASE_URL,
 
-    for(var i = 0; i < candidates.length; i++){
-      var value = String(candidates[i] || '').trim();
-      var match = value.match(/https:\/\/script\.google\.com\/macros\/s\/[^"'<>\\s]+\/exec/);
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.apiBaseUrl,
 
-      if(match) return match[0];
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.webAppUrl,
+
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.appsScriptUrl,
+
+      window.SKHPS_RUNTIME &&
+        window.SKHPS_RUNTIME.execUrl
+    ];
+
+    for(var i = 0; i < directList.length; i++){
+      var found = clean(directList[i]);
+
+      if(found){
+        return found;
+      }
     }
 
     return '';
@@ -229,3 +228,4 @@
     boot();
   }
 })();
+

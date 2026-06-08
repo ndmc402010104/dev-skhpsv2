@@ -91,6 +91,19 @@
             contentEl.innerHTML = result.text;
             setStatus("已載入：" + path);
 
+            window.setTimeout(function () {
+              if (path === "CSS/footer-style-playground.html" &&
+                  window.SKHPSFooterStyleEditor &&
+                  typeof window.SKHPSFooterStyleEditor.init === "function") {
+                window.SKHPSFooterStyleEditor.init();
+              }
+
+              if (window.SKHPSCssSettingEditorCore &&
+                  typeof window.SKHPSCssSettingEditorCore.init === "function") {
+                window.SKHPSCssSettingEditorCore.init(contentEl);
+              }
+            }, 0);
+
             if (window.SKHPSCssStyleEditState) {
               window.SKHPSCssStyleEditState.init(contentEl);
             }
@@ -99,8 +112,12 @@
               window.SKHPSApplyBaseStyleFromSheet();
             }
 
-            if (window.SKHPSBaseStyleEditorStateGuard) {
-              window.SKHPSBaseStyleEditorStateGuard.init(contentEl);
+            if (window.SKHPSCssSettingEditorCore) {
+              window.SKHPSCssSettingEditorCore.init(contentEl);
+            }
+
+            if (window.SKHPSFooterStyleEditor && typeof window.SKHPSFooterStyleEditor.init === "function") {
+              window.SKHPSFooterStyleEditor.init();
             }
 
             contentEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -131,8 +148,9 @@
   </script>
   <script src="assets/js/backend-client.js"></script>
   <script src="assets/js/base-style-editor.js"></script>
+  <script src="assets/js/css-setting-editor-core.js"></script>
   <script src="assets/js/css-setting-sheet-save.js"></script>
-  <script src="assets/js/css-setting-editor-state-guard.js"></script>
+  <script src="assets/js/footer-style-editor.js"></script>
 
 
 

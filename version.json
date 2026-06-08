@@ -1,5 +1,5 @@
 ﻿{
-  "app": "skhpsv2",
-  "env": "prod",
-  "version": "prod v0.1.2-prod-202606081350"
+    "app":  "skhpsv2",
+    "env":  "prod",
+    "version":  "prod v0.1.3-prod-202606090036"
 }

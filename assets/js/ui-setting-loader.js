@@ -1,3 +1,9 @@
+/*
+檔案位置：skhpsv2/assets/js/ui-setting-loader.js
+時間戳記：2026-06-08 14:25 UTC+8
+用途：skhpsv2 UI 設定中心 loader；負責左側選單、子頁非同步載入、插入 HTML 後執行 script，並由 route config 統一控制子頁顯示名稱。
+*/
+
 (function () {
   const READY_TIMEOUT_MS = 2800;
 
@@ -41,7 +47,7 @@
       '<div class="uiset-loading-box">',
       '<div class="uiset-loading-card">',
       '<div class="uiset-loading-spinner"></div>',
-      '<div class="uiset-loading-title">', message || '讀取 UI 設定中', '</div>',
+      '<div class="uiset-loading-title">', escapeHtml(message || '讀取 UI 設定中'), '</div>',
       '<div class="uiset-loading-note">正在載入設定子頁；完成後才會顯示內容。</div>',
       '</div>',
       '</div>'
@@ -87,12 +93,39 @@
     });
   }
 
+  function applyPageMetadata(wrapper, page) {
+    if (!wrapper || !page) return;
+
+    const pageTitle = page.name || '';
+    const pageBadge = page.badge || '';
+
+    const heading = wrapper.querySelector('h1, h2');
+    if (heading) {
+      heading.textContent = pageTitle;
+    } else {
+      const firstSection = wrapper.querySelector('section') || wrapper.firstElementChild || wrapper;
+      const titleNode = document.createElement('h2');
+      titleNode.textContent = pageTitle;
+
+      if (firstSection.firstChild) {
+        firstSection.insertBefore(titleNode, firstSection.firstChild);
+      } else {
+        firstSection.appendChild(titleNode);
+      }
+    }
+
+    const badge = wrapper.querySelector('.skh-badge');
+    if (badge && pageBadge) {
+      badge.textContent = pageBadge;
+    }
+  }
+
   function buildFallbackBasePage() {
     return [
       '<section class="skh-card">',
       '<span class="skh-badge skh-badge--info">Base</span>',
-      '<h2>00 基礎樣式</h2>',
-      '<p>這是第一個 UI 設定子頁。現在先測試父頁 loader / AJAX-like 載入 / ready event gating，之後再接 Sheet 編輯器。</p>',
+      '<h2></h2>',
+      '<p>這是第一個 UI 設定子頁。基礎模式用來整理全站 token 與基本外觀設定；現在先測試父頁 loader / AJAX-like 載入 / ready event gating，之後再接 Sheet 編輯器。</p>',
 
       '<div class="skh-alert skh-alert--info">',
       '<strong>樣式來源：</strong>Google Sheet「整外科務系統CSS樣式」<br>',
@@ -146,8 +179,8 @@
 
       resolve([
         '<section class="skh-card">',
-        '<span class="skh-badge skh-badge--muted">Placeholder</span>',
-        '<h2>', escapeHtml(page.name), '</h2>',
+        '<span class="skh-badge skh-badge--muted">', escapeHtml(page.badge || 'Placeholder'), '</span>',
+        '<h2></h2>',
         '<p>此設定子頁尚未接入。</p>',
         '</section>'
       ].join(''));
@@ -241,7 +274,7 @@
         loadingNode.innerHTML = [
           '<div class="uiset-loading-card">',
           '<div class="uiset-loading-spinner"></div>',
-          '<div class="uiset-loading-title">套用 ', page.name, '</div>',
+          '<div class="uiset-loading-title">套用 ', escapeHtml(page.name), '</div>',
           '<div class="uiset-loading-note">等待子頁完成初始化。</div>',
           '</div>'
         ].join('');
@@ -249,6 +282,8 @@
         const wrapper = document.createElement('div');
         wrapper.className = 'uiset-page-wrapper is-waiting-ready';
         wrapper.innerHTML = html;
+
+        applyPageMetadata(wrapper, page);
 
         content.appendChild(loadingNode);
         content.appendChild(wrapper);
@@ -303,5 +338,3 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 })();
-
-

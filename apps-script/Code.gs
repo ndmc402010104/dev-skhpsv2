@@ -1,7 +1,7 @@
 ﻿/*
 檔案位置：skhpsv2/apps-script/Code.gs
 時間戳記：2026-06-08 20:15 UTC+8
-用途：skhpsv2 Apps Script Web App API 單一入口；清除 v1 uiset.html / google.script.run 路由殘留，只保留 GitHub Pages 可呼叫的 action router。
+用途：skhpsv2 Apps Script Web App API 單一入口；skhpsv2 Apps Script Web App API 單一入口。
 */
 
 function doGet(e) {
@@ -70,30 +70,6 @@ function dispatchApiAction_(action, payload, context) {
     case 'checkRequiredServices':
       return apiCheckRequiredServices();
 
-    case 'getBaseCssSettings':
-      return {
-        ok: true,
-        action: action,
-        data: getUiSetBaseCssSettings(),
-        serverTime: formatTaipeiDateTimeForApi_(new Date())
-      };
-
-    case 'getBaseDefaultCssSettings':
-      return {
-        ok: true,
-        action: action,
-        data: getUiSetBaseDefaultCssSettings(),
-        serverTime: formatTaipeiDateTimeForApi_(new Date())
-      };
-
-    case 'getUiThemeSettings':
-      return {
-        ok: true,
-        action: action,
-        data: getUiSetThemeSettings(),
-        serverTime: formatTaipeiDateTimeForApi_(new Date())
-      };
-
     default:
       return {
         ok: false,
@@ -102,11 +78,7 @@ function dispatchApiAction_(action, payload, context) {
         message: 'Unknown action: ' + action,
         allowedActions: [
           'health',
-          'checkRequiredServices',
-          'getBaseCssSettings',
-          'getBaseDefaultCssSettings',
-          'getUiThemeSettings'
-        ],
+          'checkRequiredServices'],
         serverTime: formatTaipeiDateTimeForApi_(new Date())
       };
   }

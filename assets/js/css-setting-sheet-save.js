@@ -1,5 +1,5 @@
 /*
-檔案位置：skhpsv2/assets/js/base-style-sheet-save.js
+檔案位置：skhpsv2/assets/js/css-setting-sheet-save.js
 時間戳記：2026-06-08 20:00 UTC+8
 用途：攔截 baseStyle Theme Editor 的「儲存」按鈕，透過 skhpsv2 backend-client 寫回 Google Sheet。
 */

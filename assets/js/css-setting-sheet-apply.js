@@ -1,5 +1,5 @@
 /*
-File: skhpsv2/assets/js/base-style-sheet-apply.js
+File: skhpsv2/assets/js/css-setting-sheet-apply.js
 Purpose: Apply baseStyle rows from Google Sheet to the current page. This file contains no hard-coded visual theme values.
 */
 

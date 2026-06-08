@@ -25,14 +25,6 @@
 </head>
 
 <body class="uiset-body">
-  <section id="skhps-uiset-script-health-light" style="margin:16px 0;padding:12px 14px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:14px;line-height:1.6;">
-    <div style="display:flex;align-items:center;gap:8px;font-weight:700;">
-      <span style="width:12px;height:12px;border-radius:999px;background:#ef4444;display:inline-block;box-shadow:0 0 0 4px rgba(239,68,68,.16);"></span>
-      <span>UIset Script 尚未載入</span>
-    </div>
-    <div style="margin-top:4px;">如果一直停在紅燈，代表 assets/js/ui-setting-loader.js 沒有被瀏覽器執行。</div>
-    <div style="font-size:12px;opacity:.8;">等待 JavaScript 初始化中。</div>
-  </section>
   <div class="skh-app-shell">
     <header class="skh-header">
       <div>
@@ -75,4 +67,3 @@
   <script src="assets/js/ui-setting-loader.js"></script>
 </body>
 </html>
-

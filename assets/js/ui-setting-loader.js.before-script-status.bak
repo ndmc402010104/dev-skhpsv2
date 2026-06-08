@@ -306,25 +306,14 @@
 
 /*
 時間戳記：2026-06-08 UTC+8
-用途：UIset 頁面 Script 載入狀態檢查；HTML 預設紅燈，本檔成功執行後改為綠燈。
+用途：UIset 頁面 Script 載入狀態檢查；只要本檔成功被瀏覽器載入，就在 UIset 頁面顯示綠燈。
 */
 (function () {
-  function markUiSetScriptLoaded() {
-    var box = document.getElementById('skhps-uiset-script-health-light');
+  function addUiSetScriptHealthLight() {
+    if (document.getElementById('skhps-uiset-script-health-light')) return;
 
-    if (!box) {
-      box = document.createElement('section');
-      box.id = 'skhps-uiset-script-health-light';
-
-      var target =
-        document.querySelector('main') ||
-        document.querySelector('.ui-setting-main') ||
-        document.querySelector('.ui-test-main') ||
-        document.body;
-
-      target.insertBefore(box, target.firstChild);
-    }
-
+    var box = document.createElement('section');
+    box.id = 'skhps-uiset-script-health-light';
     box.style.margin = '16px 0';
     box.style.padding = '12px 14px';
     box.style.border = '1px solid #d1fae5';
@@ -341,11 +330,19 @@
       '</div>' +
       '<div style="margin-top:4px;">assets/js/ui-setting-loader.js 已被瀏覽器執行。</div>' +
       '<div style="font-size:12px;opacity:.8;">檢查時間：' + new Date().toLocaleString('zh-TW') + '</div>';
+
+    var target =
+      document.querySelector('main') ||
+      document.querySelector('.ui-setting-main') ||
+      document.querySelector('.ui-test-main') ||
+      document.body;
+
+    target.insertBefore(box, target.firstChild);
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', markUiSetScriptLoaded);
+    document.addEventListener('DOMContentLoaded', addUiSetScriptHealthLight);
   } else {
-    markUiSetScriptLoaded();
+    addUiSetScriptHealthLight();
   }
 })();

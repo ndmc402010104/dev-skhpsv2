@@ -17,7 +17,7 @@ param(
   [ValidateSet("ask","none","patch","minor","major")]
   [string]$Bump = "ask",
   [string]$EnvName = "prod",
-  [string]$DeploymentId = "AKfycbyzyZp2PSHLjl3Kjvuy8uhwmBZbfeWwBXA-UjYQvzh_-m1_aDxvaIvlsT_BXwkc3v1oWg",
+  [string]$DeploymentId = "AKfycbxTmZaFGiV53YO1diNv4EldXBgx-47Huxbrt2dyah3AqyneBuasHFOKuBFCVPbF_sOJ8w",
   [switch]$DeployAppScript,
   [switch]$SkipAppScriptDeploy
 )

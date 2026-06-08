@@ -308,6 +308,24 @@
     update(scope);
   }
 
+  function collectRows(scope) {
+    return inputList(scope).map(function (input) {
+      var row = input.closest("tr");
+      var label = row ? row.querySelector("strong") : null;
+
+      return {
+        component: scope.getAttribute("data-css-setting-component") || "",
+        className: input.getAttribute("data-class-name") || "",
+        property: input.getAttribute("data-property") || "",
+        value: input.value || "",
+        description: label
+          ? (label.getAttribute("title") || label.textContent || "")
+          : ""
+      };
+    }).filter(function (row) {
+      return row.component && row.className && row.property;
+    });
+  }
   function replaceDefault(scope) {
     var s = scope.__skhpsCssSettingCoreState;
     if (!s || !s.editing) return;
@@ -335,6 +353,12 @@
     }
 
     var rows = collectRows(scope);
+    rows.forEach(function (row) {
+      row.updatedAt = "default";
+    });
+    rows.forEach(function (row) {
+      row.updatedAt = "default";
+    });
     var tabKey = scope.getAttribute("data-css-setting-tab-key") || "";
 
     if (!tabKey || !rows.length) {
@@ -344,7 +368,7 @@
 
     setStatus(scope, "取代 default：寫回 Google Sheet 中...");
 
-    window.SKHPSBackend.call("replaceCssSheetDefaultRows", {
+    window.SKHPSBackend.call("saveCssSheetRows", {
       tabKey: tabKey,
       rows: rows
     })

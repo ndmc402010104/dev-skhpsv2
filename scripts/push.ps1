@@ -170,39 +170,25 @@ function Ask-CommitMessage {
 
   Write-Host ""
   Write-Host "Commit 訊息：" -ForegroundColor Cyan
-  Write-Host "1. 使用自動訊息：$auto"
-  Write-Host "2. 自己輸入"
+  Write-Host "直接 Enter = 使用自動訊息"
+  Write-Host "有輸入文字 = 使用你輸入的內容"
   Write-Host ""
 
-  $choice = Read-Host "輸入 1/2，Enter = 1"
+  $manual = Read-Host "Commit message，Enter = $auto"
 
-  if ([string]::IsNullOrWhiteSpace($choice)) {
+  if ([string]::IsNullOrWhiteSpace($manual)) {
     return $auto
   }
 
-  if ($choice.Trim() -eq "2") {
-    $manual = Read-Host "請輸入 commit message"
-
-    if (![string]::IsNullOrWhiteSpace($manual)) {
-      return $manual.Trim()
-    }
-  }
-
-  return $auto
+  return $manual.Trim()
 }
+
 
 function Update-VersionJson {
   $versionPath = Join-Path $repoRoot "version.json"
 
   if (!(Test-Path $versionPath)) {
     Write-Host "找不到 version.json，略過版本更新。" -ForegroundColor Yellow
-    return
-  }
-
-  $answer = Ask-Default "要更新 version.json 嗎？Y/N" "Y"
-
-  if (!(Test-Yes $answer)) {
-    Write-Host "略過 version.json 更新。" -ForegroundColor Yellow
     return
   }
 
@@ -227,16 +213,16 @@ function Update-VersionJson {
   Write-Host ""
   Write-Host "目前版本：$current" -ForegroundColor Cyan
   Write-Host "版本更新："
-  Write-Host "1. patch：小修改，預設"
+  Write-Host "1. patch：小修改"
   Write-Host "2. minor：新增功能"
   Write-Host "3. major：大改版"
-  Write-Host "4. none：不更新"
+  Write-Host "4. none：不更新，預設"
   Write-Host ""
 
-  $choice = Read-Host "輸入 1/2/3/4，Enter = 1"
+  $choice = Read-Host "輸入 1/2/3/4，Enter = 4 none"
 
   if ([string]::IsNullOrWhiteSpace($choice)) {
-    $choice = "1"
+    $choice = "4"
   }
 
   $choice = $choice.Trim().ToLowerInvariant()
@@ -284,6 +270,7 @@ function Update-VersionJson {
   Write-Host "  $current"
   Write-Host "  -> $newVersion"
 }
+
 
 function Get-DeploymentIdFromConfig {
   $configPath = Join-Path $repoRoot "config.json"

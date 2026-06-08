@@ -25,14 +25,6 @@
 </head>
 
 <body class="uiset-body">
-  <section id="skhps-uiset-script-health-light" style="margin:16px 0;padding:12px 14px;border:1px solid #fecaca;border-radius:12px;background:#fef2f2;color:#991b1b;font-size:14px;line-height:1.6;">
-    <div style="display:flex;align-items:center;gap:8px;font-weight:700;">
-      <span style="width:12px;height:12px;border-radius:999px;background:#ef4444;display:inline-block;box-shadow:0 0 0 4px rgba(239,68,68,.16);"></span>
-      <span>UIset Script 尚未載入</span>
-    </div>
-    <div style="margin-top:4px;">如果一直停在紅燈，代表 assets/js/ui-setting-loader.js 沒有被瀏覽器執行。</div>
-    <div style="font-size:12px;opacity:.8;">等待 JavaScript 初始化中。</div>
-  </section>
   <div class="skh-app-shell">
     <header class="skh-header">
       <div>
@@ -61,67 +53,19 @@
       </section>
     </main>
 
-    <footer class="skh-footer">
-      <span>skhpsv2 / UI 設定</span>
-      <span>AJAX-like child page loader</span>
-      <span>v0.1.1</span>
-    </footer>
+    <footer class="skh-footer" data-skhps-footer data-footer-status="version,api"></footer>
   </div>
-
-    <script>
-    window.markUiSetScriptLoadedFromHtml = function () {
-      var box = document.getElementById('skhps-uiset-script-health-light');
-      if (!box) return;
-
-      box.style.border = '1px solid #d1fae5';
-      box.style.background = '#ecfdf5';
-      box.style.color = '#065f46';
-      box.style.position = 'fixed';
-      box.style.right = '16px';
-      box.style.top = '16px';
-      box.style.zIndex = '99999';
-      box.style.margin = '0';
-      box.style.padding = '8px 12px';
-      box.style.borderRadius = '999px';
-      box.style.boxShadow = '0 8px 24px rgba(15, 23, 42, 0.16)';
-      box.style.fontSize = '13px';
-      box.style.lineHeight = '1.4';
-      box.innerHTML =
-        '<div style="display:flex;align-items:center;gap:8px;font-weight:700;">' +
-          '<span style="width:12px;height:12px;border-radius:999px;background:#22c55e;display:inline-block;box-shadow:0 0 0 4px rgba(34,197,94,.16);"></span>' +
-          '<span>UIset JS OK</span>';
-    };
-
-    window.markUiSetScriptLoadFailedFromHtml = function () {
-      var box = document.getElementById('skhps-uiset-script-health-light');
-      if (!box) return;
-
-      box.style.border = '1px solid #fecaca';
-      box.style.background = '#fef2f2';
-      box.style.color = '#991b1b';
-      box.style.position = 'fixed';
-      box.style.right = '16px';
-      box.style.top = '16px';
-      box.style.zIndex = '99999';
-      box.style.margin = '0';
-      box.style.padding = '8px 12px';
-      box.style.borderRadius = '999px';
-      box.style.boxShadow = '0 8px 24px rgba(15, 23, 42, 0.16)';
-      box.style.fontSize = '13px';
-      box.style.lineHeight = '1.4';
-      box.innerHTML =
-        '<div style="display:flex;align-items:center;gap:8px;font-weight:700;">' +
-          '<span style="width:12px;height:12px;border-radius:999px;background:#ef4444;display:inline-block;box-shadow:0 0 0 4px rgba(239,68,68,.16);"></span>' +
-          '<span>UIset JS FAIL</span>';
-    };
-  </script>
   <script src="assets/js/skhps-runtime.js"></script>
   <script src="assets/js/skhps-route-config.js"></script>
   <script src="assets/js/skhps-router.js"></script>
   <script src="assets/js/ui-setting-route-config.js"></script>
-  <script src="assets/js/ui-setting-loader.js" onload="window.markUiSetScriptLoadedFromHtml && window.markUiSetScriptLoadedFromHtml()" onerror="window.markUiSetScriptLoadFailedFromHtml && window.markUiSetScriptLoadFailedFromHtml()"></script>
+  <script src="assets/js/ui-setting-loader.js"></script>
+  <script src="assets/js/footer.js"></script>
 </body>
 </html>
+
+
+
 
 
 

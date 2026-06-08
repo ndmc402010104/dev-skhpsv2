@@ -130,3 +130,65 @@
   background: var(--skh-color-surface-soft);
   color: var(--skh-color-text-muted);
 }
+
+/*
+時間戳記：2026-06-08 12:00 UTC+8
+用途：共用 footer 狀態列樣式；顯示 version、Apps Script 與選擇性系統狀態。
+*/
+.skh-footer--status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--skh-space-2, 8px);
+}
+
+.skh-footer-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--skh-color-border, #d1d5db);
+  border-radius: 999px;
+  background: var(--skh-color-surface, #ffffff);
+  color: var(--skh-color-text-muted, #64748b);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.skh-footer-status-item strong {
+  font-weight: 700;
+  color: inherit;
+}
+
+.skh-footer-status-item[data-state="ok"] {
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.skh-footer-status-item[data-state="checking"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.skh-footer-status-item[data-state="error"] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+@media (max-width: 640px) {
+  .skh-footer--status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .skh-footer-status-item {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

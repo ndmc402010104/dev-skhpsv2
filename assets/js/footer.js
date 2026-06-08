@@ -132,18 +132,24 @@
         'endpoints.' + env + '.apiBaseUrl',
         'endpoints.' + env + '.webAppUrl',
         'endpoints.' + env + '.appsScriptUrl',
+        'appsScript.' + env + '.webAppUrl',
+        'appsScript.' + env + '.appsScriptUrl',
         'appsScript.' + env + '.url'
       ]) ||
       getNestedValue(window.SKHPS_RUNTIME, [
         'endpoints.' + env + '.apiBaseUrl',
         'endpoints.' + env + '.webAppUrl',
         'endpoints.' + env + '.appsScriptUrl',
+        'appsScript.' + env + '.webAppUrl',
+        'appsScript.' + env + '.appsScriptUrl',
         'appsScript.' + env + '.url'
       ]) ||
       getNestedValue(window.SKHPS_CONFIG, [
         'endpoints.' + env + '.apiBaseUrl',
         'endpoints.' + env + '.webAppUrl',
         'endpoints.' + env + '.appsScriptUrl',
+        'appsScript.' + env + '.webAppUrl',
+        'appsScript.' + env + '.appsScriptUrl',
         'appsScript.' + env + '.url'
       ]);
 
@@ -284,5 +290,6 @@
     initFooter();
   }
 })();
+
 
 

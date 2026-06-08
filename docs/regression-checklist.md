@@ -4,7 +4,7 @@
 
 - [ ] index.html 可正常開啟
 - [ ] admin.html 可正常開啟
-- [ ] ui-test.html 可正常開啟
+- [ ] uiset.html 可正常開啟
 - [ ] footer 在桌機與手機寬度大小一致
 - [ ] button base / role / size / state 顯示正常
 - [ ] card 間距與陰影一致
@@ -15,3 +15,4 @@
 - [ ] 所有正式頁沒有大量 inline style
 - [ ] 未連接 Apps Script
 - [ ] 未搬移 QR / Dressing / HIS / legacy 功能
+

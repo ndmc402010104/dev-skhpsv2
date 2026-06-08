@@ -20,7 +20,7 @@
 
 - index.html：前台 Portal 外觀測試
 - admin.html：後台入口外觀測試
-- ui-test.html：CSS / UI Design System 測試頁
+- uiset.html：UI 設定 / CSS Design System 頁面
 
 ## 第一階段禁止事項
 
@@ -29,3 +29,4 @@
 - 不搬 Dressing 功能
 - 不搬 HIS 功能
 - 不修改舊專案
+

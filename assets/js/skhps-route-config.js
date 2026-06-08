@@ -17,11 +17,11 @@ window.SKHPS_ROUTE_CONFIG = {
       description: 'skhpsv2 後台入口'
     },
 
-    'portal.uiTest': {
-      label: 'CSS / UI 測試頁',
+    'portal.uiSetting': {
+      label: 'UI 設定',
       type: 'internal',
-      href: 'ui-test.html',
-      description: 'skhpsv2 CSS / UI Design System 測試頁'
+      href: 'uiset.html',
+      description: 'skhpsv2 UI 設定與 CSS Design System 頁面'
     },
 
     'qr.signIn': {
@@ -53,3 +53,4 @@ window.SKHPS_ROUTE_CONFIG = {
     }
   }
 };
+

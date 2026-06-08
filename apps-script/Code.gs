@@ -1,4 +1,4 @@
-﻿function doGet(e) {
+function doGet(e) {
   return handleApiRequest_(e);
 }
 
@@ -29,7 +29,8 @@ function routeAction_(action, params) {
     'health',
     'checkRequiredServices',
     'sheetStatus',
-    'getCssSheetPreview'
+    'getCssSheetPreview',
+    'saveCssSheetRows'
   ];
 
   if (allowedActions.indexOf(action) === -1) {
@@ -79,8 +80,8 @@ function routeAction_(action, params) {
   }
 
   if (action === 'getCssSheetPreview') {
-    var payload = parsePayload_(params);
-    var tabKey = params.tabKey || payload.tabKey || '';
+    var previewPayload = parsePayload_(params);
+    var tabKey = params.tabKey || previewPayload.tabKey || '';
 
     return {
       ok: true,
@@ -90,6 +91,30 @@ function routeAction_(action, params) {
       data: getCssSheetPreview_(tabKey),
       serverTime: getServerTime_()
     };
+  }
+
+  if (action === 'saveCssSheetRows') {
+    var savePayload = parsePayload_(params);
+
+    try {
+      var saveResult = saveCssSheetRows_(savePayload);
+
+      saveResult.app = 'skhpsv2';
+      saveResult.env = getServerEnv_();
+      saveResult.serverTime = getServerTime_();
+
+      return saveResult;
+    } catch (error) {
+      return {
+        ok: false,
+        action: action,
+        app: 'skhpsv2',
+        env: getServerEnv_(),
+        error: 'SAVE_CSS_SHEET_ROWS_FAILED',
+        message: error && error.message ? error.message : String(error),
+        serverTime: getServerTime_()
+      };
+    }
   }
 
   return {

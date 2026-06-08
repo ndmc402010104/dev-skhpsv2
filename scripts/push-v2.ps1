@@ -1,15 +1,13 @@
 # File: skhpsv2/scripts/push-v2.ps1
-# Timestamp: 2026-06-08 15:33 UTC+8
-# Purpose: One-stop skhpsv2 push workflow. GitHub Pages frontend push, then ALWAYS Apps Script backend clasp push + deploy unless -SkipAppScriptDeploy is explicitly used.
+# Purpose: One-stop skhpsv2 push workflow.
 # Flow:
-# 1. Ask version bump and commit message upfront.
+# 1. Ask all choices upfront.
 # 2. Update version.json.
 # 3. Git add / commit / push.
-# 4. Push Apps Script backend from apps-script/ and deploy to the configured Web App deployment ID.
+# 4. Always clasp push + clasp deploy unless -SkipAppScriptDeploy is used.
 # Notes:
 # - Root folder is GitHub Pages frontend area.
 # - Apps Script files stay under apps-script/.
-# - .clasp.json must stay under apps-script/.
 # - ASCII-only script text to avoid PowerShell encoding damage.
 
 param(
@@ -273,6 +271,71 @@ function Update-VersionJson {
   return $newVersion
 }
 
+
+function Assert-AppsScriptManifest {
+  param([string]$AppScriptDir)
+
+  $manifestPath = Join-Path $AppScriptDir "appsscript.json"
+
+  if (-not (Test-Path $manifestPath)) {
+    throw "appsscript.json not found: $manifestPath"
+  }
+
+  try {
+    $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+  }
+  catch {
+    throw "appsscript.json is invalid JSON: $manifestPath"
+  }
+
+  if (-not $manifest.webapp) {
+    throw "appsscript.json must contain webapp settings. Required: executeAs=USER_DEPLOYING, access=ANYONE_ANONYMOUS."
+  }
+
+  if ($manifest.webapp.executeAs -ne "USER_DEPLOYING") {
+    throw "appsscript.json webapp.executeAs must be USER_DEPLOYING. Current: $($manifest.webapp.executeAs)"
+  }
+
+  if ($manifest.webapp.access -ne "ANYONE_ANONYMOUS") {
+    throw "appsscript.json webapp.access must be ANYONE_ANONYMOUS. Current: $($manifest.webapp.access). This prevents deploying a Web App that requires Google login."
+  }
+}
+
+function Test-AppsScriptJsonpHealth {
+  param([string]$DeploymentId)
+
+  $callback = "skhpsPushHealth"
+  $url = "https://script.google.com/macros/s/$DeploymentId/exec?action=health&callback=$callback"
+  $lastError = $null
+
+  for ($i = 1; $i -le 3; $i++) {
+    try {
+      Write-Host "Health check attempt ${i}: $url" -ForegroundColor Cyan
+      $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 20
+      $body = [string]$response.Content
+
+      if ($body -match "^\s*$callback\(" -and $body -match '"ok"\s*:\s*true') {
+        Write-Host "Apps Script JSONP health OK." -ForegroundColor Green
+        return
+      }
+
+      $preview = $body
+      if ($preview.Length -gt 300) {
+        $preview = $preview.Substring(0, 300)
+      }
+
+      $lastError = "Unexpected health response: $preview"
+    }
+    catch {
+      $lastError = $_.Exception.Message
+    }
+
+    Start-Sleep -Seconds 5
+  }
+
+  throw "Apps Script JSONP health check failed after deploy. Last error: $lastError"
+}
+
 function Invoke-AppsScriptDeploy {
   param(
     [string]$RepoRoot,
@@ -289,6 +352,8 @@ function Invoke-AppsScriptDeploy {
   if (-not (Test-Path (Join-Path $appScriptDir ".clasp.json"))) {
     throw ".clasp.json not found under apps-script. Do not put it in repo root."
   }
+
+  Assert-AppsScriptManifest -AppScriptDir $appScriptDir
 
   Push-Location $appScriptDir
 
@@ -314,6 +379,8 @@ function Invoke-AppsScriptDeploy {
   finally {
     Pop-Location
   }
+
+  Test-AppsScriptJsonpHealth -DeploymentId $DeploymentId
 }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -397,13 +464,12 @@ try {
     }
   }
 
-  # Default rule for skhpsv2:
-  # Always push + deploy Apps Script backend after Git push.
-  # Use -SkipAppScriptDeploy only for emergency frontend-only pushes.
   if ($SkipAppScriptDeploy) {
     $shouldDeploy = $false
   }
   else {
+    # Default policy: always push + deploy Apps Script backend.
+    # Use -SkipAppScriptDeploy only for emergency frontend-only pushes.
     $shouldDeploy = $true
   }
 
@@ -413,7 +479,7 @@ try {
   Write-Host "  Version bump : $Bump"
   Write-Host "  New version  : $previewVersion"
   Write-Host "  Commit msg   : $Message"
-  Write-Host "  Deploy GAS   : $shouldDeploy (default always deploy unless -SkipAppScriptDeploy)"
+  Write-Host "  Deploy GAS   : $shouldDeploy"
   Write-Host ""
 
   $confirm = Read-YesNo -Prompt "Start workflow now?" -Default $true

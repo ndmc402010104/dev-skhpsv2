@@ -470,13 +470,20 @@
         : "<span></span>";
 
       return [
+        "<section class='base-control-item' data-css-setting-editor data-css-setting-core='on' data-css-setting-sheet-save='on' data-css-setting-component='base' data-css-setting-tab-key='baseStyle'>",
         "<strong title='" + escapeHtml(desc) + "'>" + escapeHtml(label) + "</strong>",
         "<input type='" + type + "' readonly data-css-var='" + cssName + "' data-class-name='" + escapeHtml(group.className) + "' data-property='" + escapeHtml(key) + "' data-default='" + escapeHtml(def) + "' value='" + escapeHtml(value) + "'>",
-        swatch
+        swatch,
+        "<p class='base-actions'>",
+        "<button type='button' data-css-setting-action='edit'>編輯</button>",
+        "<button type='button' data-css-setting-action='save'>儲存</button>",
+        "<button type='button' data-css-setting-action='default'>恢復 default</button>",
+        "</p>",
+        "<p class='base-status' data-css-setting-status>預覽模式。</p>",
+        "</section>"
       ].join("");
     }).join("");
   }
-
   function cssPreviewGroup(group, maps) {
     var lines = [":root{"];
 
@@ -491,7 +498,7 @@
 
   function renderGroup(group, maps) {
     return [
-      "<section class='base-editor-section' data-css-setting-editor data-css-setting-core='on' data-css-setting-sheet-save='on' data-css-setting-component='base' data-css-setting-tab-key='baseStyle' data-css-setting-scope='" + escapeHtml(group.className) + "'>",
+      "<section class='base-editor-section' data-base-style-group='" + escapeHtml(group.className) + "'>",
       "<h2>" + escapeHtml(group.title) + "</h2>",
       "<div class='base-table-wrap'>",
       "<table class='base-table'>",
@@ -506,13 +513,6 @@
       "<td>" + renderDemo(group) + "</td>",
       "<td>",
       "<div class='base-control-grid'>" + renderControls(group, maps) + "</div>",
-      "<div class='base-actions'>",
-      "<button type='button' data-css-setting-action='edit'>編輯</button>",
-      "<button type='button' data-css-setting-action='save'>儲存</button>",
-      "<button type='button' data-css-setting-action='default'>恢復 default</button>",
-      
-      "</div>",
-      "<p class='base-status' data-css-setting-status>預覽模式：修改會即時套用，按儲存後保留在本機。</p>",
       "</td>",
       "<td><pre class='base-preview' data-css-preview>" + escapeHtml(cssPreviewGroup(group, maps)) + "</pre></td>",
       "</tr></tbody>",

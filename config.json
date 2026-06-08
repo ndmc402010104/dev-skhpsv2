@@ -16,6 +16,11 @@
       "id": "admin",
       "title": "系統後台",
       "href": "admin.html"
+    },
+    {
+      "id": "css-setting",
+      "title": "CSS Setting",
+      "href": "css-setting.html"
     }
   ],
   "appsScript": {

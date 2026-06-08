@@ -64,6 +64,15 @@ function dispatchApiAction_(action, payload, context) {
   }
 
   switch (action) {
+
+    case 'sheetStatus':
+      return {
+        ok: true,
+        app: 'skhpsv2',
+        env: getServerConfig_ && getServerConfig_().env ? getServerConfig_().env : 'prod',
+        data: getSheetStatus_(),
+        serverTime: new Date().toISOString()
+      };
     case 'health':
       return apiHealth_();
 

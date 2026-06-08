@@ -13,48 +13,61 @@
     footer.innerHTML = "";
 
     var version = document.createElement("span");
-    version.textContent = "Version：" + (state.versionText || "unknown");
+    version.textContent = "Version：" + (state.versionText || "loading");
     footer.appendChild(version);
 
     footer.appendChild(document.createTextNode("　"));
 
     var api = document.createElement("span");
-    api.textContent = "Apps Script：" + (state.apiText || "not tested");
+    api.textContent = "Apps Script：" + (state.apiText || "testing");
     footer.appendChild(api);
+
+    footer.appendChild(document.createTextNode("　"));
+
+    var sheet = document.createElement("span");
+    sheet.textContent = "Sheet：" + (state.sheetText || "testing");
+    footer.appendChild(sheet);
+  }
+
+  function setState(state, patch){
+    Object.keys(patch).forEach(function(key){
+      state[key] = patch[key];
+    });
+
+    renderFooter(state);
   }
 
   function boot(){
     var state = {
       versionText: "loading",
-      apiText: "testing"
+      apiText: "testing",
+      sheetText: "testing"
     };
 
     renderFooter(state);
 
-    var configPromise =
-      window.SKHPSConfig
-        ? window.SKHPSConfig.loadConfig()
-        : Promise.reject(new Error("SKHPSConfig not loaded"));
+    if(!window.SKHPSConfig){
+      setState(state, {
+        versionText: "config failed",
+        apiText: "config failed",
+        sheetText: "config failed"
+      });
+      return;
+    }
 
-    var versionPromise =
-      window.SKHPSConfig
-        ? window.SKHPSConfig.loadVersion()
-        : Promise.reject(new Error("SKHPSConfig not loaded"));
-
-    versionPromise
+    window.SKHPSConfig.loadVersion()
       .then(function(version){
-        state.versionText =
-          version.version ||
-          version.name ||
-          "unknown";
-        renderFooter(state);
+        setState(state, {
+          versionText: version.version || "unknown"
+        });
       })
-      .catch(function(error){
-        state.versionText = "version.json failed";
-        renderFooter(state);
+      .catch(function(){
+        setState(state, {
+          versionText: "version.json failed"
+        });
       });
 
-    configPromise
+    window.SKHPSConfig.loadConfig()
       .then(function(){
         if(!window.SKHPSBackend){
           throw new Error("SKHPSBackend not loaded");
@@ -64,18 +77,54 @@
       })
       .then(function(response){
         if(response && response.ok){
-          state.apiText =
-            "OK" +
-            (response.env ? " / " + response.env : "");
+          setState(state, {
+            apiText: "OK" + (response.env ? " / " + response.env : "")
+          });
         } else {
-          state.apiText = "failed";
+          setState(state, {
+            apiText: "failed"
+          });
+        }
+      })
+      .catch(function(){
+        setState(state, {
+          apiText: "failed"
+        });
+      });
+
+    window.SKHPSConfig.loadConfig()
+      .then(function(){
+        if(!window.SKHPSBackend){
+          throw new Error("SKHPSBackend not loaded");
         }
 
-        renderFooter(state);
+        return window.SKHPSBackend.call("sheetStatus");
       })
-      .catch(function(error){
-        state.apiText = "failed";
-        renderFooter(state);
+      .then(function(response){
+        var data = response && response.data ? response.data : response;
+
+        if(data && data.ok){
+          setState(state, {
+            sheetText: "OK / " + (data.spreadsheetName || "connected")
+          });
+          return;
+        }
+
+        if(data && data.configured === false){
+          setState(state, {
+            sheetText: "not configured"
+          });
+          return;
+        }
+
+        setState(state, {
+          sheetText: "failed"
+        });
+      })
+      .catch(function(){
+        setState(state, {
+          sheetText: "failed"
+        });
       });
   }
 

@@ -28,7 +28,7 @@
         <h1 class="skh-page-title">新光整形外科室系統</h1>
         <p class="skh-page-subtitle">Portal shell / CSS foundation preview</p>
       </div>
-      <a class="skh-btn skh-btn--ghost" href="admin.html">後台</a>
+      <a class="skh-btn skh-btn--ghost" href="#" data-route="portal.admin">後台</a>
     </header>
 
     <main class="skh-main">
@@ -37,7 +37,7 @@
           <span class="skh-badge skh-badge--info">第一階段</span>
           <h2>晨會 QR 簽到</h2>
           <p>此按鈕目前只作為 UI placeholder，暫不連接舊系統或後端 API。</p>
-          <a class="skh-btn skh-btn--primary skh-btn--lg" href="#" aria-disabled="true">晨會 QR 簽到</a>
+          <a class="skh-btn skh-btn--primary skh-btn--lg" href="#" data-route="qr.signIn">晨會 QR 簽到</a>
         </div>
       </section>
     </main>
@@ -50,6 +50,8 @@
   </div>
 
   <script src="assets/js/skhps-runtime.js"></script>
+  <script src="assets/js/skhps-route-config.js"></script>
+  <script src="assets/js/skhps-router.js"></script>
   <script src="assets/js/version.js"></script>
   <script src="assets/js/portal-main.js"></script>
 </body>

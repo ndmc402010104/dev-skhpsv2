@@ -2,7 +2,7 @@
 <!--
 檔案位置：skhpsv2/admin.html
 時間戳記：2026-06-08 00:00 UTC+8
-用途：skhpsv2 第一階段後台入口外觀測試；所有入口先使用 placeholder。
+用途：skhpsv2 第一階段後台入口外觀測試；所有入口透過統一 route config 管理。
 -->
 <html lang="zh-Hant">
 <head>
@@ -28,30 +28,30 @@
         <h1 class="skh-page-title">skhpsv2 後台入口</h1>
         <p class="skh-page-subtitle">本頁目前只測試後台版型與卡片樣式。</p>
       </div>
-      <a class="skh-btn skh-btn--ghost" href="index.html">回前台</a>
+      <a class="skh-btn skh-btn--ghost" href="#" data-route="portal.home">回前台</a>
     </header>
 
     <main class="skh-main">
       <section class="admin-grid">
-        <a class="admin-tool-card skh-card" href="ui-test.html">
+        <a class="admin-tool-card skh-card" href="#" data-route="portal.uiTest">
           <span class="skh-badge skh-badge--success">UI</span>
           <h2>CSS / UI 測試頁</h2>
           <p>測試 tokens、button、card、form、table、footer、mobile RWD。</p>
         </a>
 
-        <a class="admin-tool-card skh-card" href="#">
+        <a class="admin-tool-card skh-card" href="#" data-route="qr.generator">
           <span class="skh-badge skh-badge--info">QR</span>
           <h2>晨會 QR 產生</h2>
           <p>placeholder，之後再連接 legacy 或 skhps-qr。</p>
         </a>
 
-        <a class="admin-tool-card skh-card" href="#">
+        <a class="admin-tool-card skh-card" href="#" data-route="qr.admin">
           <span class="skh-badge skh-badge--warning">QR Admin</span>
           <h2>晨會簽到後台</h2>
           <p>placeholder，之後再處理簽到後台與 recordCode overlay。</p>
         </a>
 
-        <a class="admin-tool-card skh-card" href="#">
+        <a class="admin-tool-card skh-card" href="#" data-route="api.health">
           <span class="skh-badge skh-badge--muted">API</span>
           <h2>API Health Check</h2>
           <p>placeholder，尚未連接 Apps Script API。</p>
@@ -61,12 +61,14 @@
 
     <footer class="skh-footer">
       <span>skhpsv2 admin</span>
-      <span>placeholder only</span>
+      <span>route config enabled</span>
       <span>v0.1.0</span>
     </footer>
   </div>
 
   <script src="assets/js/skhps-runtime.js"></script>
+  <script src="assets/js/skhps-route-config.js"></script>
+  <script src="assets/js/skhps-router.js"></script>
   <script src="assets/js/portal-admin.js"></script>
 </body>
 </html>

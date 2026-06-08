@@ -170,7 +170,7 @@
       const script = document.createElement('script');
       const timeoutId = window.setTimeout(function () {
         cleanup();
-        reject(new Error('JSONP timeout'));
+        reject(new Error('JSONP timeout: ' + script.src));
       }, 5000);
 
       function cleanup() {
@@ -190,9 +190,10 @@
         resolve(data);
       };
 
-      script.onerror = function () {
+            script.onerror = function () {
+        const failedUrl = script.src;
         cleanup();
-        reject(new Error('JSONP failed'));
+        reject(new Error('JSONP failed: ' + failedUrl));
       };
 
       script.src = url + separator + 'callback=' + encodeURIComponent(callbackName);

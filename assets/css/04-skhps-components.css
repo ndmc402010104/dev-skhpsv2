@@ -260,3 +260,106 @@
     width: 100%;
   }
 }
+
+
+/* === skhpsv2 footer fixed status override BEGIN === */
+/*
+時間戳記：2026-06-08 12:55 UTC+8
+用途：固定共用 footer 於視窗底部，統一 Version / Apps Script 狀態項目的顯示格式。
+*/
+:root {
+  --skh-footer-fixed-height: 56px;
+}
+
+body {
+  padding-bottom: calc(var(--skh-footer-fixed-height) + 20px);
+}
+
+.skh-footer.skh-footer--status {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  left: 16px;
+  z-index: 9990;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: auto;
+  min-height: var(--skh-footer-fixed-height);
+  padding: 8px 14px;
+  margin: 0;
+  border: 1px solid #d8dee9;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.skh-footer.skh-footer--status .skh-footer-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 30px;
+  padding: 5px 12px;
+  border: 1px solid #d8dee9;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.skh-footer.skh-footer--status .skh-footer-status-label {
+  font-weight: 700;
+  color: inherit;
+}
+
+.skh-footer.skh-footer--status .skh-footer-status-value {
+  color: inherit;
+}
+
+.skh-footer.skh-footer--status .skh-footer-status-item[data-state="ok"] {
+  border-color: #bbf7d0;
+  background: #ecfdf5;
+  color: #166534;
+}
+
+.skh-footer.skh-footer--status .skh-footer-status-item[data-state="checking"] {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.skh-footer.skh-footer--status .skh-footer-status-item[data-state="error"] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+@media (min-width: 1200px) {
+  .skh-footer.skh-footer--status {
+    right: 32px;
+    left: 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --skh-footer-fixed-height: 92px;
+  }
+
+  .skh-footer.skh-footer--status {
+    align-items: stretch;
+    flex-direction: column;
+    border-radius: 20px;
+  }
+
+  .skh-footer.skh-footer--status .skh-footer-status-item {
+    justify-content: space-between;
+    width: 100%;
+  }
+}
+/* === skhpsv2 footer fixed status override END === */

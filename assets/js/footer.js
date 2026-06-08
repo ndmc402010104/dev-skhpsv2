@@ -47,8 +47,8 @@
 
     item.setAttribute('data-state', state || 'neutral');
     item.innerHTML =
-      '<strong>' + escapeHtml(label) + '：</strong>' +
-      '<span>' + escapeHtml(value || '') + '</span>';
+      '<span class="skh-footer-status-label">' + escapeHtml(label) + '：</span>' +
+      '<span class="skh-footer-status-value">' + escapeHtml(value || '') + '</span>';
   }
 
   function getNestedValue(source, paths) {
@@ -284,4 +284,5 @@
     initFooter();
   }
 })();
+
 

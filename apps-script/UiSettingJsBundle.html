@@ -335,18 +335,37 @@ window.SKHPS_UI_SETTING_PAGES = [
         return;
       }
 
-      if (page.id === 'base') {
-        resolve(buildFallbackBasePage());
-        return;
-      }
+      var staticPath = 'apps-script/' + page.path + '.html';
 
-      resolve([
-        '<section class="skh-card">',
-        '<span class="skh-badge skh-badge--muted">Placeholder</span>',
-        '<h2>', escapeHtml(page.name), '</h2>',
-        '<p>此設定子頁尚未接入。</p>',
-        '</section>'
-      ].join(''));
+      fetch(staticPath, {
+        cache: 'no-store'
+      })
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error('Static UI setting page not found: ' + staticPath + ' (' + response.status + ')');
+          }
+
+          return response.text();
+        })
+        .then(function (html) {
+          resolve(html);
+        })
+        .catch(function (error) {
+          console.warn('[skhpsv2] UI setting static fetch fallback:', error);
+
+          if (page.id === 'base') {
+            resolve(buildFallbackBasePage());
+            return;
+          }
+
+          resolve([
+            '<section class="skh-card">',
+            '<span class="skh-badge skh-badge--muted">', escapeHtml(page.badge || 'Placeholder'), '</span>',
+            '<h2></h2>',
+            '<p>此設定子頁尚未接入。</p>',
+            '</section>'
+          ].join(''));
+        });
     });
   }
 
@@ -502,6 +521,8 @@ window.SKHPS_UI_SETTING_PAGES = [
 
 
 </script>
+
+
 
 
 

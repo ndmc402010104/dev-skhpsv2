@@ -160,17 +160,26 @@
 
   function fetchUiSettingPageContent(page) {
     return new Promise(function (resolve, reject) {
-      if (!page || !page.path) {
-        reject(new Error('UI setting page path is missing.'));
+      if (window.google && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(function (html) {
+            resolve(html);
+          })
+          .withFailureHandler(function (error) {
+            reject(error);
+          })
+          .getUiSettingPageContent(page.path);
         return;
       }
 
-      fetch(page.path, {
+      var staticPath = 'apps-script/' + page.path + '.html';
+
+      fetch(staticPath, {
         cache: 'no-store'
       })
         .then(function (response) {
           if (!response.ok) {
-            throw new Error('UI setting partial not found: ' + page.path + ' (' + response.status + ')');
+            throw new Error('Static UI setting page not found: ' + staticPath + ' (' + response.status + ')');
           }
 
           return response.text();
@@ -179,14 +188,18 @@
           resolve(html);
         })
         .catch(function (error) {
-          console.warn('[skhpsv2] UI setting partial fetch failed:', error);
+          console.warn('[skhpsv2] UI setting static fetch fallback:', error);
+
+          if (page.id === 'base') {
+            resolve(buildFallbackBasePage());
+            return;
+          }
 
           resolve([
             '<section class="skh-card">',
             '<span class="skh-badge skh-badge--muted">', escapeHtml(page.badge || 'Placeholder'), '</span>',
             '<h2></h2>',
-            '<p>此設定子頁尚未接入或載入失敗。</p>',
-            '<p class="skh-muted">', escapeHtml(error && error.message ? error.message : String(error)), '</p>',
+            '<p>此設定子頁尚未接入。</p>',
             '</section>'
           ].join(''));
         });
@@ -344,5 +357,4 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 })();
-
 

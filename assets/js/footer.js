@@ -163,6 +163,43 @@
     return baseUrl + separator + 'action=health&ts=' + encodeURIComponent(Date.now());
   }
 
+  function loadJsonp(url) {
+    return new Promise(function (resolve, reject) {
+      const callbackName = 'skhpsFooterHealth_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+      const separator = url.indexOf('?') === -1 ? '?' : '&';
+      const script = document.createElement('script');
+      const timeoutId = window.setTimeout(function () {
+        cleanup();
+        reject(new Error('JSONP timeout'));
+      }, 5000);
+
+      function cleanup() {
+        window.clearTimeout(timeoutId);
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+        try {
+          delete window[callbackName];
+        } catch (error) {
+          window[callbackName] = undefined;
+        }
+      }
+
+      window[callbackName] = function (data) {
+        cleanup();
+        resolve(data);
+      };
+
+      script.onerror = function () {
+        cleanup();
+        reject(new Error('JSONP failed'));
+      };
+
+      script.src = url + separator + 'callback=' + encodeURIComponent(callbackName);
+      document.head.appendChild(script);
+    });
+  }
+
   function loadVersion(footer) {
     setItem(footer, 'version', 'Version', 'loading', 'checking');
 
@@ -216,7 +253,35 @@
       return;
     }
 
-    fetch(buildHealthUrl(apiUrl), {
+    const healthUrl = buildHealthUrl(apiUrl);
+
+    function handleHealthData(data) {
+      if (!data || data.ok !== true) {
+        throw new Error(data && data.message ? data.message : 'health check failed');
+      }
+
+      setItem(
+        footer,
+        'api',
+        'Apps Script',
+        data.env ? 'OK / ' + data.env : 'OK',
+        'ok'
+      );
+
+      if (hasStatus(statusList, 'calendar')) {
+        const calendarText =
+          data.calendarName ||
+          data.calendarId ||
+          data.calendar ||
+          '';
+
+        if (calendarText) {
+          setItem(footer, 'calendar', 'Calendar', calendarText, 'ok');
+        }
+      }
+    }
+
+    fetch(healthUrl, {
       method: 'GET',
       cache: 'no-store'
     })
@@ -226,43 +291,23 @@
         }
         return response.json();
       })
-      .then(function (data) {
-        if (!data || data.ok !== true) {
-          throw new Error(data && data.message ? data.message : 'health check failed');
-        }
+      .then(handleHealthData)
+      .catch(function () {
+        loadJsonp(healthUrl)
+          .then(handleHealthData)
+          .catch(function (error) {
+            setItem(
+              footer,
+              'api',
+              'Apps Script',
+              error && error.message ? 'failed: ' + error.message : 'failed',
+              'error'
+            );
 
-        setItem(
-          footer,
-          'api',
-          'Apps Script',
-          data.env ? 'OK / ' + data.env : 'OK',
-          'ok'
-        );
-
-        if (hasStatus(statusList, 'calendar')) {
-          const calendarText =
-            data.calendarName ||
-            data.calendarId ||
-            data.calendar ||
-            '';
-
-          if (calendarText) {
-            setItem(footer, 'calendar', 'Calendar', calendarText, 'ok');
-          }
-        }
-      })
-      .catch(function (error) {
-        setItem(
-          footer,
-          'api',
-          'Apps Script',
-          error && error.message ? 'failed: ' + error.message : 'failed',
-          'error'
-        );
-
-        if (hasStatus(statusList, 'calendar')) {
-          setItem(footer, 'calendar', 'Calendar', 'unavailable', 'error');
-        }
+            if (hasStatus(statusList, 'calendar')) {
+              setItem(footer, 'calendar', 'Calendar', 'unavailable', 'error');
+            }
+          });
       });
   }
 

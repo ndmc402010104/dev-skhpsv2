@@ -99,6 +99,10 @@
               window.SKHPSApplyBaseStyleFromSheet();
             }
 
+            if (window.SKHPSBaseStyleEditorStateGuard) {
+              window.SKHPSBaseStyleEditorStateGuard.init(contentEl);
+            }
+
             contentEl.scrollIntoView({ behavior: "smooth", block: "start" });
           })
           .catch(function (error) {
@@ -128,6 +132,7 @@
   <script src="assets/js/backend-client.js"></script>
   <script src="assets/js/base-style-editor.js"></script>
   <script src="assets/js/base-style-sheet-save.js"></script>
+  <script src="assets/js/base-style-editor-state-guard.js"></script>
 
 
 

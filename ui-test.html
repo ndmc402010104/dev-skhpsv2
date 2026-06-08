@@ -171,6 +171,20 @@
         <div class="skh-alert skh-alert--danger">這是錯誤訊息。</div>
         <div class="skh-empty-state">目前沒有資料。</div>
       </section>
+      <section class="ui-test-section">
+        <h2>9. Route Config</h2>
+        <div class="skh-card">
+          <h3>統一路由設定檢查</h3>
+          <p>所有頁面跳轉先集中由 <code>skhps-route-config.js</code> 管理，再由 <code>skhps-router.js</code> 套用到 <code>data-route</code>。</p>
+          <div class="ui-test-row">
+            <a class="skh-btn skh-btn--secondary" href="#" data-route="portal.home">前台首頁</a>
+            <a class="skh-btn skh-btn--secondary" href="#" data-route="portal.admin">後台入口</a>
+            <a class="skh-btn skh-btn--secondary" href="#" data-route="portal.uiTest">UI 測試頁</a>
+            <a class="skh-btn skh-btn--primary" href="#" data-route="qr.signIn">晨會 QR 簽到 placeholder</a>
+          </div>
+          <div class="skh-mt-4" data-route-debug></div>
+        </div>
+      </section>
 
       <section class="ui-test-section">
         <h2>8. 實際案例 placeholder</h2>
@@ -195,5 +209,6 @@
   <script src="assets/js/ui-test.js"></script>
 </body>
 </html>
+
 
 

@@ -34,3 +34,15 @@ p {
 .skh-text-muted {
   color: var(--skh-color-text-muted);
 }
+
+code {
+  padding: 0.12rem 0.35rem;
+  border-radius: var(--skh-radius-sm);
+  background: var(--skh-color-surface-soft);
+  color: var(--skh-color-primary);
+  font-size: 0.9em;
+}
+
+.skh-table code {
+  white-space: nowrap;
+}

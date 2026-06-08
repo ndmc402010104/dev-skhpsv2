@@ -6,43 +6,50 @@ window.SKHPS_ROUTE_CONFIG = {
     'portal.home': {
       label: '前台首頁',
       type: 'internal',
-      href: 'index.html'
+      href: 'index.html',
+      description: 'skhpsv2 前台 Portal 首頁'
     },
+
     'portal.admin': {
       label: '後台入口',
       type: 'internal',
-      href: 'admin.html'
+      href: 'admin.html',
+      description: 'skhpsv2 後台入口'
     },
+
     'portal.uiTest': {
       label: 'CSS / UI 測試頁',
       type: 'internal',
-      href: 'ui-test.html'
+      href: 'ui-test.html',
+      description: 'skhpsv2 CSS / UI Design System 測試頁'
     },
 
     'qr.signIn': {
       label: '晨會 QR 簽到',
       type: 'placeholder',
       href: '#',
-      note: 'Phase 1 placeholder. Later connect to legacy QR sign-in or skhps-qr.'
+      description: '未來連接晨會 QR 簽到功能，目前只作為按鈕與 route placeholder'
     },
+
     'qr.generator': {
       label: '晨會 QR 產生',
       type: 'placeholder',
       href: '#',
-      note: 'Phase 1 placeholder. Later connect to legacy QR generator or skhps-qr.'
+      description: '未來連接晨會 QR 產生頁，目前只作為 route placeholder'
     },
+
     'qr.admin': {
       label: '晨會簽到後台',
       type: 'placeholder',
       href: '#',
-      note: 'Phase 1 placeholder. Later connect to legacy admin meeting or skhps-qr.'
+      description: '未來連接晨會簽到後台，目前只作為 route placeholder'
     },
 
     'api.health': {
       label: 'API Health Check',
       type: 'placeholder',
       href: '#',
-      note: 'Phase 1 placeholder. Apps Script API is not connected yet.'
+      description: '未來連接 Apps Script health check，目前不連線'
     }
   }
 };

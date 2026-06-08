@@ -3,6 +3,12 @@
 // 用途：skhpsv2 Apps Script 入口；目前只測試 UI 設定頁與子頁載入。
 
 function doGet(e) {
+  var action = e && e.parameter && e.parameter.action;
+
+  if (action === 'health') {
+    return outputJson_(getBackendStatus());
+  }
+
   return showUiSettingPage_();
 }
 
@@ -17,3 +23,4 @@ function showUiSettingPage_() {
     .setTitle('skhpsv2 UI 設定')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
+

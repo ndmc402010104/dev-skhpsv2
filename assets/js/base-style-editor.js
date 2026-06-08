@@ -9,7 +9,7 @@
   var STATUS_ID = "baseStyleEditorStatus";
   var STYLE_ID = "baseStyleEditorStyle";
   var STORAGE_KEY = "skhpsv2.baseStyle.localDraft.v1";
-  var RENDERED_ATTR = "data-base-style-editor-rendered";
+  var RENDERED_ATTR = "data-css-setting-style-editor-rendered";
 
   var GROUPS = [
     {
@@ -509,7 +509,7 @@
     setCssVar(className, property, input.value);
     setMapValue(currentMap, className, property, input.value);
 
-    var editor = input.closest("[data-base-editor]");
+    var editor = input.closest("[data-css-setting-editor]");
     if (!editor) return;
 
     var swatch = editor.querySelector("[data-swatch-for='" + input.getAttribute("data-css-var") + "']");
@@ -517,7 +517,7 @@
 
     refreshEditorPreview(editor);
 
-    var status = editor.querySelector("[data-base-status]");
+    var status = editor.querySelector("[data-css-setting-status]");
     if (status) status.textContent = "已即時套用到本頁；尚未儲存。";
   }
 
@@ -556,7 +556,7 @@
 
   function renderGroup(group, maps) {
     return [
-      "<section class='base-editor-section' data-base-editor='" + escapeHtml(group.className) + "'>",
+      "<section class='base-editor-section' data-css-setting-editor='" + escapeHtml(group.className) + "'>",
       "<h2>" + escapeHtml(group.title) + "</h2>",
       "<div class='base-table-wrap'>",
       "<table class='base-table'>",
@@ -572,12 +572,12 @@
       "<td>",
       "<div class='base-control-grid'>" + renderControls(group, maps) + "</div>",
       "<div class='base-actions'>",
-      "<button type='button' data-base-action='edit'>編輯</button>",
-      "<button type='button' data-base-action='save'>儲存</button>",
-      "<button type='button' data-base-action='default'>恢復 default</button>",
-      "<button type='button' data-base-action='reload-sheet'>回到 Sheet 值</button>",
+      "<button type='button' data-css-setting-action='edit'>編輯</button>",
+      "<button type='button' data-css-setting-action='save'>儲存</button>",
+      "<button type='button' data-css-setting-action='default'>恢復 default</button>",
+      "<button type='button' data-css-setting-action='reload-sheet'>回到 Sheet 值</button>",
       "</div>",
-      "<p class='base-status' data-base-status>預覽模式：修改會即時套用，按儲存後保留在本機。</p>",
+      "<p class='base-status' data-css-setting-status>預覽模式：修改會即時套用，按儲存後保留在本機。</p>",
       "</td>",
       "<td><pre class='base-preview' data-css-preview>" + escapeHtml(cssPreviewGroup(group, maps)) + "</pre></td>",
       "</tr></tbody>",
@@ -597,8 +597,8 @@
       "<h2>儲存狀態</h2>",
       "<p class='base-save-note' id='baseSaveNote'>" + note + "</p>",
       "<p>",
-      "<button type='button' data-base-global-action='save-all'>儲存全部到本機</button> ",
-      "<button type='button' data-base-global-action='clear-local'>清除本機暫存，回到 Sheet</button>",
+      "<button type='button' data-css-setting-global-action='save-all'>儲存全部到本機</button> ",
+      "<button type='button' data-css-setting-global-action='clear-local'>清除本機暫存，回到 Sheet</button>",
       "</p>",
       "</section>"
     ].join("");
@@ -659,14 +659,14 @@
 
   function bind() {
     document.addEventListener("click", function (event) {
-      var actionButton = event.target.closest("[data-base-action]");
+      var actionButton = event.target.closest("[data-css-setting-action]");
       if (actionButton) {
-        var editor = actionButton.closest("[data-base-editor]");
+        var editor = actionButton.closest("[data-css-setting-editor]");
         if (!editor) return;
 
-        var action = actionButton.getAttribute("data-base-action");
+        var action = actionButton.getAttribute("data-css-setting-action");
         var inputs = Array.prototype.slice.call(editor.querySelectorAll("[data-css-var]"));
-        var status = editor.querySelector("[data-base-status]");
+        var status = editor.querySelector("[data-css-setting-status]");
 
         if (action === "edit") {
           inputs.forEach(function (input) {
@@ -699,9 +699,9 @@
         }
       }
 
-      var globalButton = event.target.closest("[data-base-global-action]");
+      var globalButton = event.target.closest("[data-css-setting-global-action]");
       if (globalButton) {
-        var globalAction = globalButton.getAttribute("data-base-global-action");
+        var globalAction = globalButton.getAttribute("data-css-setting-global-action");
 
         if (globalAction === "save-all") {
           saveLocalDraft(currentMap);

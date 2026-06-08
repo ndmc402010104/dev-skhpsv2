@@ -9,7 +9,7 @@
 
   function allEditors(root) {
     return Array.prototype.slice.call(
-      (root || document).querySelectorAll("[data-base-editor]")
+      (root || document).querySelectorAll("[data-css-setting-editor]")
     );
   }
 
@@ -18,7 +18,7 @@
   }
 
   function btn(editor, action) {
-    return editor.querySelector("[data-base-action='" + action + "']");
+    return editor.querySelector("[data-css-setting-action='" + action + "']");
   }
 
   function show(el, yes) {
@@ -80,7 +80,7 @@
     undo = document.createElement("button");
     undo.type = "button";
     undo.textContent = labels.undo;
-    undo.setAttribute("data-base-action", "undo");
+    undo.setAttribute("data-css-setting-action", "undo");
     undo.className = edit.className || "";
 
     edit.parentNode.insertBefore(undo, edit.nextSibling);
@@ -108,7 +108,7 @@
       show(sheet, false);
       show(replaceDefault, false);
 
-      editor.setAttribute("data-base-edit-mode", "readonly");
+      editor.setAttribute("data-css-setting-edit-mode", "readonly");
       return;
     }
 
@@ -123,7 +123,7 @@
       show(sheet, false);
       show(replaceDefault, false);
 
-      editor.setAttribute("data-base-edit-mode", "editing");
+      editor.setAttribute("data-css-setting-edit-mode", "editing");
       return;
     }
 
@@ -133,7 +133,7 @@
     show(sheet, true);
     show(replaceDefault, true);
 
-    editor.setAttribute("data-base-edit-mode", "dirty");
+    editor.setAttribute("data-css-setting-edit-mode", "dirty");
   }
 
   function refreshDirty(editor) {
@@ -270,10 +270,10 @@
       editor.__skhpsBaseGuardBound = true;
 
       editor.addEventListener("click", function (event) {
-        var button = event.target.closest("[data-base-action]");
+        var button = event.target.closest("[data-css-setting-action]");
         if (!button || !editor.contains(button)) return;
 
-        var action = button.getAttribute("data-base-action");
+        var action = button.getAttribute("data-css-setting-action");
 
         if (action === "edit") {
           event.preventDefault();

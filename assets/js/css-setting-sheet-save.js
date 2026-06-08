@@ -6,7 +6,7 @@
 
 (function () {
   function setStatus(scope, message) {
-    var status = scope.querySelector("[data-base-status]");
+    var status = scope.querySelector("[data-css-setting-status]");
     if (status) status.textContent = message;
   }
 
@@ -84,10 +84,10 @@
   }
 
   document.addEventListener("click", function (event) {
-    var button = event.target.closest('[data-base-action="save"]');
+    var button = event.target.closest('[data-css-setting-action="save"]');
     if (!button) return;
 
-    var scope = button.closest("[data-base-editor]");
+    var scope = button.closest("[data-css-setting-editor]");
     if (!scope) return;
 
     event.preventDefault();

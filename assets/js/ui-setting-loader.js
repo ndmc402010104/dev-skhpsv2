@@ -303,3 +303,46 @@
 
   document.addEventListener('DOMContentLoaded', boot);
 })();
+
+/*
+時間戳記：2026-06-08 UTC+8
+用途：UIset 頁面 Script 載入狀態檢查；只要本檔成功被瀏覽器載入，就在 UIset 頁面顯示綠燈。
+*/
+(function () {
+  function addUiSetScriptHealthLight() {
+    if (document.getElementById('skhps-uiset-script-health-light')) return;
+
+    var box = document.createElement('section');
+    box.id = 'skhps-uiset-script-health-light';
+    box.style.margin = '16px 0';
+    box.style.padding = '12px 14px';
+    box.style.border = '1px solid #d1fae5';
+    box.style.borderRadius = '12px';
+    box.style.background = '#ecfdf5';
+    box.style.color = '#065f46';
+    box.style.fontSize = '14px';
+    box.style.lineHeight = '1.6';
+
+    box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;font-weight:700;">' +
+        '<span style="width:12px;height:12px;border-radius:999px;background:#22c55e;display:inline-block;box-shadow:0 0 0 4px rgba(34,197,94,.16);"></span>' +
+        '<span>UIset Script 載入成功</span>' +
+      '</div>' +
+      '<div style="margin-top:4px;">assets/js/ui-setting-loader.js 已被瀏覽器執行。</div>' +
+      '<div style="font-size:12px;opacity:.8;">檢查時間：' + new Date().toLocaleString('zh-TW') + '</div>';
+
+    var target =
+      document.querySelector('main') ||
+      document.querySelector('.ui-setting-main') ||
+      document.querySelector('.ui-test-main') ||
+      document.body;
+
+    target.insertBefore(box, target.firstChild);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addUiSetScriptHealthLight);
+  } else {
+    addUiSetScriptHealthLight();
+  }
+})();

@@ -1,4 +1,4 @@
-﻿{
+{
   "app": "skhpsv2",
   "env": "prod",
   "title": "整外資訊系統首頁",
@@ -17,5 +17,9 @@
       "title": "系統後台",
       "href": "admin.html"
     }
-  ]
+  ],
+  "appsScript": {
+    "scriptId": "1Qp-aHNtuDr4Jv_yYx006bo8JVfMkUikmdrhhL2YPBYoQYWszKHdVX7d2",
+    "rootDir": "apps-script"
+  }
 }

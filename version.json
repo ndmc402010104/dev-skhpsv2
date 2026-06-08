@@ -1,7 +1,25 @@
 {
-  "app": "skhpsv2",
-  "version": "0.1.0",
-  "stage": "css-ui-foundation",
-  "updatedAt": "2026-06-08",
-  "description": "SKHPS v2 CSS / UI Design System and Portal shell foundation."
+  "project": "skhpsv2",
+  "defaultEnv": "dev",
+  "current": {
+    "env": "dev",
+    "version": "v0.1.2-dev-202606081225"
+  },
+  "environments": {
+    "dev": {
+      "label": "測試版",
+      "site": "dev-skhps",
+      "version": "v0.1.2-dev-202606081225"
+    },
+    "prod": {
+      "label": "正式版",
+      "site": "skhps",
+      "version": "not-released"
+    },
+    "local": {
+      "label": "本機",
+      "site": "localhost",
+      "version": "v0.1.2-dev-202606081225"
+    }
+  }
 }

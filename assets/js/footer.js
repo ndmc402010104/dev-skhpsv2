@@ -102,8 +102,14 @@
         return response.json();
       })
       .then(function (data) {
-        const version = data.version || data.VERSION || data.name || 'unknown';
-        setItem(footer, 'version', 'Version', version, 'ok');
+        const current = data.current || {};
+        const envKey = current.env || data.defaultEnv || 'dev';
+        const envInfo = data.environments && data.environments[envKey] ? data.environments[envKey] : {};
+        const label = envInfo.label || current.label || envKey;
+        const version = current.version || envInfo.version || data.version || data.VERSION || data.name || 'unknown';
+        const displayVersion = label ? label + ' ' + version : version;
+
+        setItem(footer, 'version', 'Version', displayVersion, 'ok');
       })
       .catch(function () {
         setItem(footer, 'version', 'Version', 'version.json failed', 'error');
@@ -197,4 +203,7 @@
     initFooter();
   }
 })();
+
+
+
 

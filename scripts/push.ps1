@@ -1,15 +1,15 @@
-﻿# File: skhpsv2/scripts/push.ps1
-# Timestamp: 2026-06-08 20:10 UTC+8
-# Purpose: Stable interactive push tool for skhpsv2.
-# Rules:
-# - Repo root must NOT have .clasp.json.
-# - Apps Script lives under apps-script/.
-# - clasp deploy always uses config.json api.deploymentId with: clasp deploy -i <deploymentId>.
-# - This script does NOT create a new Apps Script deployment id.
-# - This script does NOT rewrite config.json api.webAppUrl.
+﻿# 檔案位置：skhpsv2/scripts/push.ps1
+# 時間戳記：2026-06-08 20:30 UTC+8
+# 用途：skhpsv2 簡化中文 push 工具；平常推 GitHub，必要時同步 Apps Script 後端。
+# 規則：
+# - skhpsv2 根目錄不可有 .clasp.json。
+# - Apps Script 後端只放在 apps-script/。
+# - clasp deploy 一律讀 config.json 的 api.deploymentId，使用 clasp deploy -i。
+# - 不建立新的 Apps Script deployment。
+# - 不自動改 config.json api.webAppUrl。
 
 param(
-  [ValidateSet("menu", "status", "git", "frontend", "backend", "full")]
+  [ValidateSet("menu", "status", "git", "backend")]
   [string]$Mode = "menu"
 )
 
@@ -20,9 +20,7 @@ try {
   [Console]::InputEncoding = [System.Text.UTF8Encoding]::new()
   [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
   $OutputEncoding = [System.Text.UTF8Encoding]::new()
-} catch {
-  # Ignore encoding setup failures.
-}
+} catch {}
 
 function Get-RepoRoot {
   $here = (Resolve-Path $PSScriptRoot).Path
@@ -37,7 +35,7 @@ function Get-RepoRoot {
     return $parent
   }
 
-  throw "Cannot find Git repo root. Please run inside skhpsv2."
+  throw "找不到 Git repo 根目錄。請確認你在 skhpsv2 專案內。"
 }
 
 $repoRoot = Get-RepoRoot
@@ -49,8 +47,7 @@ function Ask-Default {
     [string]$Default
   )
 
-  $promptText = $Question + " [" + $Default + "]"
-  $answer = Read-Host $promptText
+  $answer = Read-Host ($Question + " [" + $Default + "]")
 
   if ([string]::IsNullOrWhiteSpace($answer)) {
     return $Default
@@ -67,20 +64,20 @@ function Test-Yes {
   }
 
   $v = $Value.Trim().ToUpperInvariant()
-  return @("Y", "YES", "1", "TRUE") -contains $v
+  return @("Y", "YES", "1", "TRUE", "是", "好") -contains $v
 }
 
 function Stop-IfBadRepo {
   if (!(Test-Path ".\.git")) {
-    throw "Current folder is not Git repo root."
+    throw "目前位置不是 Git repo 根目錄。"
   }
 
   if (Test-Path ".\.clasp.json") {
-    throw "Invalid repo layout: root .clasp.json is not allowed. Apps Script config should be under apps-script/."
+    throw "錯誤：skhpsv2 根目錄不應該有 .clasp.json。Apps Script 應放在 apps-script/。"
   }
 
   if (!(Test-Path ".\config.json")) {
-    throw "config.json not found."
+    throw "找不到 config.json。"
   }
 }
 
@@ -88,7 +85,7 @@ function Get-CurrentBranch {
   $branch = (git branch --show-current).Trim()
 
   if ([string]::IsNullOrWhiteSpace($branch)) {
-    throw "Cannot get current Git branch."
+    throw "無法取得目前 Git branch。"
   }
 
   return $branch
@@ -98,55 +95,55 @@ function Show-Status {
   Stop-IfBadRepo
 
   Write-Host ""
-  Write-Host "==== skhpsv2 status ====" -ForegroundColor Cyan
-  Write-Host "Repo   : $repoRoot"
-  Write-Host "Branch : $(Get-CurrentBranch)"
+  Write-Host "==== 目前狀態 ====" -ForegroundColor Cyan
+  Write-Host "專案：$repoRoot"
+  Write-Host "分支：$(Get-CurrentBranch)"
 
   Write-Host ""
-  Write-Host "Git status:" -ForegroundColor Cyan
-  git status --short
+  Write-Host "Git 變更：" -ForegroundColor Cyan
+  $status = git status --short
+
+  if ($status) {
+    git status --short
+  } else {
+    Write-Host "乾淨，沒有未提交變更。" -ForegroundColor Green
+  }
 
   Write-Host ""
-  Write-Host "Important files:" -ForegroundColor Cyan
+  Write-Host "檔案檢查：" -ForegroundColor Cyan
 
   if (Test-Path ".\config.json") {
-    Write-Host "config.json: OK" -ForegroundColor Green
+    Write-Host "config.json：OK" -ForegroundColor Green
   } else {
-    Write-Host "config.json: missing" -ForegroundColor Red
+    Write-Host "config.json：找不到" -ForegroundColor Red
   }
 
   if (Test-Path ".\version.json") {
-    Write-Host "version.json: OK" -ForegroundColor Green
+    Write-Host "version.json：OK" -ForegroundColor Green
   } else {
-    Write-Host "version.json: missing" -ForegroundColor Yellow
-  }
-
-  if (Test-Path ".\apps-script") {
-    Write-Host "apps-script folder: OK" -ForegroundColor Green
-  } else {
-    Write-Host "apps-script folder: missing" -ForegroundColor Yellow
+    Write-Host "version.json：找不到，會略過版本更新" -ForegroundColor Yellow
   }
 
   if (Test-Path ".\apps-script\.clasp.json") {
-    Write-Host "apps-script/.clasp.json: OK" -ForegroundColor Green
+    Write-Host "apps-script/.clasp.json：OK" -ForegroundColor Green
   } else {
-    Write-Host "apps-script/.clasp.json: missing" -ForegroundColor Yellow
+    Write-Host "apps-script/.clasp.json：找不到，不能推 Apps Script" -ForegroundColor Yellow
   }
 
   if (Test-Path ".\.clasp.json") {
-    Write-Host "root .clasp.json: INVALID" -ForegroundColor Red
+    Write-Host "根目錄 .clasp.json：錯誤，不應存在" -ForegroundColor Red
   } else {
-    Write-Host "root .clasp.json: OK, not found" -ForegroundColor Green
+    Write-Host "根目錄 .clasp.json：OK，沒有誤綁" -ForegroundColor Green
   }
 
   Write-Host ""
 }
 
 function Save-VSCodeTabs {
-  $answer = Ask-Default "Save all VS Code tabs now? Y/N" "Y"
+  $answer = Ask-Default "要先儲存所有 VS Code 分頁嗎？Y/N" "Y"
 
   if (!(Test-Yes $answer)) {
-    Write-Host "Skip VS Code save all." -ForegroundColor Yellow
+    Write-Host "略過 VS Code 全部儲存。" -ForegroundColor Yellow
     return
   }
 
@@ -154,12 +151,12 @@ function Save-VSCodeTabs {
     try {
       code --reuse-window --command workbench.action.files.saveAll | Out-Null
       Start-Sleep -Milliseconds 800
-      Write-Host "VS Code save all command sent." -ForegroundColor Green
+      Write-Host "已送出 VS Code 全部儲存。" -ForegroundColor Green
     } catch {
-      Write-Host "VS Code save all failed. Continue anyway." -ForegroundColor Yellow
+      Write-Host "VS Code 全部儲存失敗，繼續執行。" -ForegroundColor Yellow
     }
   } else {
-    Write-Host "code CLI not found. Skip save all." -ForegroundColor Yellow
+    Write-Host "找不到 code 指令，略過 VS Code 全部儲存。" -ForegroundColor Yellow
   }
 }
 
@@ -172,19 +169,19 @@ function Ask-CommitMessage {
   $auto = New-AutoCommitMessage
 
   Write-Host ""
-  Write-Host "Commit message:"
-  Write-Host "1. Auto: $auto"
-  Write-Host "2. Manual"
+  Write-Host "Commit 訊息：" -ForegroundColor Cyan
+  Write-Host "1. 使用自動訊息：$auto"
+  Write-Host "2. 自己輸入"
   Write-Host ""
 
-  $choice = Read-Host "Input 1/2, Enter = 1"
+  $choice = Read-Host "輸入 1/2，Enter = 1"
 
   if ([string]::IsNullOrWhiteSpace($choice)) {
     return $auto
   }
 
   if ($choice.Trim() -eq "2") {
-    $manual = Read-Host "Commit message"
+    $manual = Read-Host "請輸入 commit message"
 
     if (![string]::IsNullOrWhiteSpace($manual)) {
       return $manual.Trim()
@@ -198,21 +195,28 @@ function Update-VersionJson {
   $versionPath = Join-Path $repoRoot "version.json"
 
   if (!(Test-Path $versionPath)) {
-    Write-Host "version.json not found. Skip version update." -ForegroundColor Yellow
+    Write-Host "找不到 version.json，略過版本更新。" -ForegroundColor Yellow
+    return
+  }
+
+  $answer = Ask-Default "要更新 version.json 嗎？Y/N" "Y"
+
+  if (!(Test-Yes $answer)) {
+    Write-Host "略過 version.json 更新。" -ForegroundColor Yellow
     return
   }
 
   $json = Get-Content $versionPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
   if (!($json.PSObject.Properties.Name -contains "version")) {
-    Write-Host "version field not found. Skip version update." -ForegroundColor Yellow
+    Write-Host "version.json 沒有 version 欄位，略過。" -ForegroundColor Yellow
     return
   }
 
   $current = [string]$json.version
 
   if ($current -notmatch 'v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)') {
-    Write-Host "Cannot parse current version: $current" -ForegroundColor Yellow
+    Write-Host "無法解析目前版本：$current，略過。" -ForegroundColor Yellow
     return
   }
 
@@ -221,15 +225,15 @@ function Update-VersionJson {
   $patch = [int]$Matches.patch
 
   Write-Host ""
-  Write-Host "Current version: $current" -ForegroundColor Cyan
-  Write-Host "Version bump:"
-  Write-Host "1. patch, default"
-  Write-Host "2. minor"
-  Write-Host "3. major"
-  Write-Host "4. none"
+  Write-Host "目前版本：$current" -ForegroundColor Cyan
+  Write-Host "版本更新："
+  Write-Host "1. patch：小修改，預設"
+  Write-Host "2. minor：新增功能"
+  Write-Host "3. major：大改版"
+  Write-Host "4. none：不更新"
   Write-Host ""
 
-  $choice = Read-Host "Input 1/2/3/4, Enter = 1"
+  $choice = Read-Host "輸入 1/2/3/4，Enter = 1"
 
   if ([string]::IsNullOrWhiteSpace($choice)) {
     $choice = "1"
@@ -247,10 +251,10 @@ function Update-VersionJson {
     $minor = 0
     $patch = 0
   } elseif ($choice -eq "4" -or $choice -eq "none") {
-    Write-Host "version.json not updated." -ForegroundColor Yellow
+    Write-Host "version.json 不更新。" -ForegroundColor Yellow
     return
   } else {
-    Write-Host "Unsupported version option. Skip version update." -ForegroundColor Yellow
+    Write-Host "不支援的選項，略過版本更新。" -ForegroundColor Yellow
     return
   }
 
@@ -276,7 +280,7 @@ function Update-VersionJson {
     Set-Content $versionPath -Encoding UTF8
 
   Write-Host ""
-  Write-Host "version.json updated:" -ForegroundColor Green
+  Write-Host "version.json 已更新：" -ForegroundColor Green
   Write-Host "  $current"
   Write-Host "  -> $newVersion"
 }
@@ -296,7 +300,7 @@ function Get-DeploymentIdFromConfig {
   }
 
   if ([string]::IsNullOrWhiteSpace($deploymentId)) {
-    throw "Cannot find api.deploymentId in config.json."
+    throw "config.json 找不到 api.deploymentId。"
   }
 
   return $deploymentId
@@ -304,7 +308,7 @@ function Get-DeploymentIdFromConfig {
 
 function Sync-AppsScriptConfig {
   Write-Host ""
-  Write-Host "==== Sync Apps Script config ====" -ForegroundColor Cyan
+  Write-Host "==== 同步 Apps Script 設定 ====" -ForegroundColor Cyan
 
   $syncClasp = Join-Path $repoRoot "scripts\sync-clasp-from-config.ps1"
   $syncAppConfig = Join-Path $repoRoot "scripts\sync-appscript-config-from-config.ps1"
@@ -312,84 +316,69 @@ function Sync-AppsScriptConfig {
   if (Test-Path $syncClasp) {
     & $syncClasp
     if ($LASTEXITCODE -ne 0) {
-      throw "sync-clasp-from-config.ps1 failed."
+      throw "sync-clasp-from-config.ps1 失敗。"
     }
   } else {
-    Write-Host "sync-clasp-from-config.ps1 not found. Skip." -ForegroundColor Yellow
+    Write-Host "找不到 sync-clasp-from-config.ps1，略過。" -ForegroundColor Yellow
   }
 
   if (Test-Path $syncAppConfig) {
     & $syncAppConfig
     if ($LASTEXITCODE -ne 0) {
-      throw "sync-appscript-config-from-config.ps1 failed."
+      throw "sync-appscript-config-from-config.ps1 失敗。"
     }
   } else {
-    Write-Host "sync-appscript-config-from-config.ps1 not found. Skip." -ForegroundColor Yellow
+    Write-Host "找不到 sync-appscript-config-from-config.ps1，略過。" -ForegroundColor Yellow
   }
 }
 
-function Invoke-Clasp {
-  param(
-    [bool]$DoPush,
-    [bool]$DoDeploy,
-    [string]$DeployDescription
-  )
-
-  if (!$DoPush -and !$DoDeploy) {
-    Write-Host "Skip clasp." -ForegroundColor Yellow
-    return
-  }
+function Invoke-ClaspDeploy {
+  param([string]$DeployDescription)
 
   $appsScriptDir = Join-Path $repoRoot "apps-script"
 
   if (!(Test-Path $appsScriptDir)) {
-    throw "apps-script folder not found."
+    throw "找不到 apps-script 資料夾。"
   }
 
   if (!(Test-Path (Join-Path $appsScriptDir ".clasp.json"))) {
-    throw "apps-script/.clasp.json not found."
+    throw "找不到 apps-script/.clasp.json。"
   }
 
   if (!(Get-Command clasp -ErrorAction SilentlyContinue)) {
-    throw "clasp command not found."
+    throw "找不到 clasp 指令，請先安裝或登入 clasp。"
   }
+
+  Sync-AppsScriptConfig
 
   Push-Location $appsScriptDir
 
   try {
-    if ($DoPush) {
-      Write-Host ""
-      Write-Host "==== clasp push ====" -ForegroundColor Cyan
-      clasp push
-    }
+    Write-Host ""
+    Write-Host "==== clasp push ====" -ForegroundColor Cyan
+    clasp push
 
-    if ($DoDeploy) {
-      Write-Host ""
-      Write-Host "==== clasp deploy -i ====" -ForegroundColor Cyan
-      $deploymentId = Get-DeploymentIdFromConfig
+    Write-Host ""
+    Write-Host "==== clasp deploy -i ====" -ForegroundColor Cyan
+    $deploymentId = Get-DeploymentIdFromConfig
 
-      Write-Host "Deployment ID from config.json:"
-      Write-Host "  $deploymentId"
+    Write-Host "使用 config.json deploymentId："
+    Write-Host "  $deploymentId"
 
-      clasp deploy -i $deploymentId -d "$DeployDescription"
-    }
+    clasp deploy -i $deploymentId -d "$DeployDescription"
   }
   finally {
     Pop-Location
   }
 }
 
-function Invoke-GitCommitPullPush {
-  param(
-    [string]$CommitMessage,
-    [bool]$DoPullBeforePush,
-    [bool]$DoPush
-  )
+function Invoke-GitPush {
+  param([string]$CommitMessage)
 
   $branch = Get-CurrentBranch
 
   Write-Host ""
-  Write-Host "==== Git status ====" -ForegroundColor Cyan
+  Write-Host "==== Git 狀態 ====" -ForegroundColor Cyan
   git status --short
 
   $changes = git status --porcelain
@@ -400,161 +389,115 @@ function Invoke-GitCommitPullPush {
     git add -A
     git commit -m "$CommitMessage"
   } else {
-    Write-Host "No Git changes to commit." -ForegroundColor Green
-  }
-
-  if ($DoPullBeforePush) {
-    Write-Host ""
-    Write-Host "==== Git pull --rebase ====" -ForegroundColor Cyan
-    git pull --rebase origin $branch
-  }
-
-  if ($DoPush) {
-    Write-Host ""
-    Write-Host "==== Git push ====" -ForegroundColor Cyan
-
-    $upstream = ""
-    try {
-      $upstream = (git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null).Trim()
-    } catch {
-      $upstream = ""
-    }
-
-    if ([string]::IsNullOrWhiteSpace($upstream)) {
-      git push -u origin $branch
-    } else {
-      git push
-    }
-  } else {
-    Write-Host "Skip Git push." -ForegroundColor Yellow
+    Write-Host "沒有 Git 變更需要 commit。" -ForegroundColor Green
   }
 
   Write-Host ""
-  Write-Host "==== Done ====" -ForegroundColor Green
+  Write-Host "==== Git pull --rebase ====" -ForegroundColor Cyan
+  git pull --rebase origin $branch
+
+  Write-Host ""
+  Write-Host "==== Git push ====" -ForegroundColor Cyan
+
+  $upstream = ""
+  try {
+    $upstream = (git rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>$null).Trim()
+  } catch {
+    $upstream = ""
+  }
+
+  if ([string]::IsNullOrWhiteSpace($upstream)) {
+    git push -u origin $branch
+  } else {
+    git push
+  }
+
+  Write-Host ""
+  Write-Host "==== 完成 ====" -ForegroundColor Green
   git status --short
 }
 
-function Invoke-Workflow {
-  param(
-    [ValidateSet("git", "frontend", "backend", "full")]
-    [string]$Workflow
-  )
-
+function Invoke-GitOnlyWorkflow {
   Stop-IfBadRepo
 
   Write-Host ""
-  Write-Host "==== skhpsv2 push ====" -ForegroundColor Cyan
-  Write-Host "Repo     : $repoRoot"
-  Write-Host "Branch   : $(Get-CurrentBranch)"
-  Write-Host "Workflow : $Workflow"
+  Write-Host "==== 只推 GitHub ====" -ForegroundColor Cyan
+  Write-Host "適用：HTML / CSS / JS / 前端設定 / 文件"
+  Write-Host "不會執行 clasp，不會碰 Apps Script。"
 
   Save-VSCodeTabs
-
-  $doVersion = $true
-  $doClaspPush = $false
-  $doClaspDeploy = $false
-  $doGitPull = $true
-  $doGitPush = $true
-
-  if ($Workflow -eq "backend" -or $Workflow -eq "full") {
-    $doClaspPush = $true
-    $doClaspDeploy = $true
-  }
-
-  Write-Host ""
-  Write-Host "Default actions:" -ForegroundColor Yellow
-  Write-Host "version.json       : $doVersion"
-  Write-Host "clasp push         : $doClaspPush"
-  Write-Host "clasp deploy -i    : $doClaspDeploy"
-  Write-Host "git pull --rebase  : $doGitPull"
-  Write-Host "git push           : $doGitPush"
-  Write-Host ""
-
-  $custom = Ask-Default "Change actions? Y/N" "N"
-
-  if (Test-Yes $custom) {
-    $defVersion = if ($doVersion) { "Y" } else { "N" }
-    $defClaspPush = if ($doClaspPush) { "Y" } else { "N" }
-    $defClaspDeploy = if ($doClaspDeploy) { "Y" } else { "N" }
-    $defGitPull = if ($doGitPull) { "Y" } else { "N" }
-    $defGitPush = if ($doGitPush) { "Y" } else { "N" }
-
-    $doVersion = Test-Yes (Ask-Default "Update version.json? Y/N" $defVersion)
-    $doClaspPush = Test-Yes (Ask-Default "Run clasp push? Y/N" $defClaspPush)
-    $doClaspDeploy = Test-Yes (Ask-Default "Run clasp deploy -i? Y/N" $defClaspDeploy)
-    $doGitPull = Test-Yes (Ask-Default "Run git pull --rebase before push? Y/N" $defGitPull)
-    $doGitPush = Test-Yes (Ask-Default "Run git push? Y/N" $defGitPush)
-  }
-
-  if ($doVersion) {
-    Update-VersionJson
-  } else {
-    Write-Host "Skip version.json update." -ForegroundColor Yellow
-  }
-
+  Update-VersionJson
   $commitMessage = Ask-CommitMessage
 
-  $deployDescription = $commitMessage
-
-  if ($doClaspDeploy) {
-    $deployDescription = Ask-Default "clasp deploy description" $commitMessage
-  }
-
   Write-Host ""
-  Write-Host "==== Confirm ====" -ForegroundColor Cyan
-  Write-Host "Workflow           : $Workflow"
-  Write-Host "Commit message     : $commitMessage"
-  Write-Host "version.json       : $doVersion"
-  Write-Host "clasp push         : $doClaspPush"
-  Write-Host "clasp deploy -i    : $doClaspDeploy"
-  if ($doClaspDeploy) {
-    Write-Host "deploy description : $deployDescription"
-  }
-  Write-Host "git pull --rebase  : $doGitPull"
-  Write-Host "git push           : $doGitPush"
+  Write-Host "最後確認：" -ForegroundColor Cyan
+  Write-Host "流程：只推 GitHub"
+  Write-Host "Commit：$commitMessage"
+  Write-Host "Apps Script：不處理"
   Write-Host ""
 
-  $confirm = Ask-Default "Run now? Y/N" "Y"
+  $confirm = Ask-Default "確定執行？Y/N" "Y"
 
   if (!(Test-Yes $confirm)) {
-    Write-Host "Canceled." -ForegroundColor Yellow
+    Write-Host "已取消。" -ForegroundColor Yellow
     return
   }
 
-  if ($doClaspPush -or $doClaspDeploy) {
-    Sync-AppsScriptConfig
-    Invoke-Clasp -DoPush:$doClaspPush -DoDeploy:$doClaspDeploy -DeployDescription $deployDescription
+  Invoke-GitPush -CommitMessage $commitMessage
+}
+
+function Invoke-BackendWorkflow {
+  Stop-IfBadRepo
+
+  Write-Host ""
+  Write-Host "==== 推後端 + GitHub ====" -ForegroundColor Cyan
+  Write-Host "適用：有修改 apps-script/ 後端。"
+  Write-Host "會執行：clasp push、clasp deploy -i、Git commit/pull/push。"
+
+  Save-VSCodeTabs
+  Update-VersionJson
+  $commitMessage = Ask-CommitMessage
+  $deployDescription = Ask-Default "Apps Script deploy description" $commitMessage
+
+  Write-Host ""
+  Write-Host "最後確認：" -ForegroundColor Cyan
+  Write-Host "流程：推 Apps Script 後端 + GitHub"
+  Write-Host "Commit：$commitMessage"
+  Write-Host "Deploy description：$deployDescription"
+  Write-Host ""
+
+  $confirm = Ask-Default "確定執行？Y/N" "Y"
+
+  if (!(Test-Yes $confirm)) {
+    Write-Host "已取消。" -ForegroundColor Yellow
+    return
   }
 
-  Invoke-GitCommitPullPush -CommitMessage $commitMessage -DoPullBeforePush:$doGitPull -DoPush:$doGitPush
+  Invoke-ClaspDeploy -DeployDescription $deployDescription
+  Invoke-GitPush -CommitMessage $commitMessage
 }
 
 function Show-Menu {
   while ($true) {
     Write-Host ""
-    Write-Host "==== skhpsv2 push menu ====" -ForegroundColor Cyan
-    Write-Host "Repo: $repoRoot"
+    Write-Host "==== skhpsv2 push ====" -ForegroundColor Cyan
+    Write-Host "專案：$repoRoot"
     Write-Host ""
-    Write-Host "1. Status only"
-    Write-Host "2. Git push only: version + commit + pull --rebase + push"
-    Write-Host "3. Frontend push: same as Git push only"
-    Write-Host "4. Backend push: clasp push + clasp deploy -i + git push"
-    Write-Host "5. Full push: frontend + Apps Script backend"
-    Write-Host "6. Open VS Code"
-    Write-Host "0. Exit"
+    Write-Host "請選擇："
+    Write-Host "1. 看狀態"
+    Write-Host "2. 只推 GitHub：前端 / CSS / HTML / JS 用"
+    Write-Host "3. 推後端：Apps Script + GitHub"
+    Write-Host "0. 離開"
     Write-Host ""
 
-    $choice = Read-Host "Input number"
+    $choice = Read-Host "輸入數字"
 
     switch ($choice) {
       "1" { Show-Status }
-      "2" { Invoke-Workflow -Workflow "git" }
-      "3" { Invoke-Workflow -Workflow "frontend" }
-      "4" { Invoke-Workflow -Workflow "backend" }
-      "5" { Invoke-Workflow -Workflow "full" }
-      "6" { code . }
+      "2" { Invoke-GitOnlyWorkflow }
+      "3" { Invoke-BackendWorkflow }
       "0" { return }
-      default { Write-Host "Input 0-6." -ForegroundColor Yellow }
+      default { Write-Host "請輸入 0-3。" -ForegroundColor Yellow }
     }
   }
 }
@@ -565,13 +508,9 @@ try {
   if ($Mode -eq "status") {
     Show-Status
   } elseif ($Mode -eq "git") {
-    Invoke-Workflow -Workflow "git"
-  } elseif ($Mode -eq "frontend") {
-    Invoke-Workflow -Workflow "frontend"
+    Invoke-GitOnlyWorkflow
   } elseif ($Mode -eq "backend") {
-    Invoke-Workflow -Workflow "backend"
-  } elseif ($Mode -eq "full") {
-    Invoke-Workflow -Workflow "full"
+    Invoke-BackendWorkflow
   } else {
     Show-Menu
   }

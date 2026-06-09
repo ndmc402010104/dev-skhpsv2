@@ -1,3 +1,20 @@
+function getQuickLoginSheetByGid_(ss, gid) {
+  gid = String(gid || '').trim();
+
+  if (!gid) {
+    return null;
+  }
+
+  var sheets = ss.getSheets();
+
+  for (var i = 0; i < sheets.length; i += 1) {
+    if (String(sheets[i].getSheetId()) === gid) {
+      return sheets[i];
+    }
+  }
+
+  return null;
+}
 /*
 檔案位置：skhpsv2/apps-script/QuickLogin.gs
 時間戳記：2026-06-10 02:20 UTC+8
@@ -15,6 +32,13 @@ function getQuickLoginStaff_(payload) {
     config.sheets.dataSheets.staffMaster &&
     config.sheets.dataSheets.staffMaster.title;
 
+  var staffSheetGid =
+    config &&
+    config.sheets &&
+    config.sheets.dataSheets &&
+    config.sheets.dataSheets.staffMaster &&
+    config.sheets.dataSheets.staffMaster.tabGid;
+
   if (!spreadsheetId) {
     return {
       ok: false,
@@ -30,13 +54,18 @@ function getQuickLoginStaff_(payload) {
   }
 
   var ss = SpreadsheetApp.openById(spreadsheetId);
-  var sheet = ss.getSheetByName(staffSheetTitle);
+  var sheet = getQuickLoginSheetByGid_(ss, staffSheetGid);
+
+  if (!sheet && staffSheetTitle) {
+    sheet = ss.getSheetByName(staffSheetTitle);
+  }
 
   if (!sheet) {
     return {
       ok: false,
       error: 'SHEET_NOT_FOUND',
-      sheetTitle: staffSheetTitle
+      sheetTitle: staffSheetTitle,
+      sheetGid: staffSheetGid
     };
   }
 
@@ -48,7 +77,8 @@ function getQuickLoginStaff_(payload) {
       staffList: [],
       extraList: [],
       source: {
-        sheetTitle: staffSheetTitle
+        sheetTitle: staffSheetTitle,
+      sheetGid: staffSheetGid
       }
     };
   }
@@ -131,7 +161,8 @@ function getQuickLoginStaff_(payload) {
     staffList: staffList,
     extraList: extraList,
     source: {
-      sheetTitle: staffSheetTitle
+      sheetTitle: staffSheetTitle,
+      sheetGid: staffSheetGid
     }
   };
 }

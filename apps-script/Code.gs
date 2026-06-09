@@ -1,3 +1,9 @@
+/**
+ * 檔案位置：skhpsv2/apps-script/Code.gs
+ * 時間戳記：2026-06-09 20:00 UTC+8
+ * 用途：skhpsv2 Apps Script API 入口與 action router；統一 JSON / JSONP 回傳，任何例外都包成 JSONP，避免前端只看到 JSONP failed。
+ */
+
 function doGet(e) {
   return handleApiRequest_(e);
 }
@@ -10,12 +16,32 @@ function handleApiRequest_(e) {
   var params = e && e.parameter ? e.parameter : {};
   var action = params.action || '';
   var callback = params.callback || '';
+  var result;
 
-  var result = routeAction_(action, params);
+  try {
+    result = routeAction_(action, params);
+  } catch (error) {
+    result = {
+      ok: false,
+      action: action,
+      app: 'skhpsv2',
+      env: getServerEnv_(),
+      error: 'API_EXCEPTION',
+      message: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? String(error.stack) : '',
+      serverTime: getServerTime_()
+    };
+  }
+
+  if (typeof outputJsonOrJsonp_ === 'function') {
+    return outputJsonOrJsonp_(result, callback);
+  }
 
   if (callback) {
+    var safeCallback = String(callback).replace(/[^\w.$]/g, '');
+
     return ContentService
-      .createTextOutput(callback + '(' + JSON.stringify(result) + ');')
+      .createTextOutput(safeCallback + '(' + JSON.stringify(result) + ');')
       .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
 
@@ -30,6 +56,7 @@ function routeAction_(action, params) {
     'checkRequiredServices',
     'sheetStatus',
     'getCssSheetPreview',
+    'getCssSheetRuntime',
     'saveCssSheetRows'
   ];
 
@@ -37,6 +64,8 @@ function routeAction_(action, params) {
     return {
       ok: false,
       action: action,
+      app: 'skhpsv2',
+      env: getServerEnv_(),
       error: 'UNKNOWN_ACTION',
       message: 'Unknown action: ' + action,
       allowedActions: allowedActions,
@@ -55,6 +84,15 @@ function routeAction_(action, params) {
   }
 
   if (action === 'checkRequiredServices') {
+    if (typeof apiCheckRequiredServices === 'function') {
+      var serviceResult = apiCheckRequiredServices();
+      serviceResult.action = action;
+      serviceResult.app = serviceResult.app || 'skhpsv2';
+      serviceResult.env = serviceResult.env || getServerEnv_();
+      serviceResult.serverTime = serviceResult.serverTime || getServerTime_();
+      return serviceResult;
+    }
+
     return {
       ok: true,
       action: action,
@@ -93,33 +131,36 @@ function routeAction_(action, params) {
     };
   }
 
+  if (action === 'getCssSheetRuntime') {
+    var runtimePayload = parsePayload_(params);
+    var sheetKeys = runtimePayload.sheetKeys || runtimePayload.sheets || [];
+
+    return {
+      ok: true,
+      action: action,
+      app: 'skhpsv2',
+      env: getServerEnv_(),
+      rows: getCssSheetRuntime_(sheetKeys),
+      serverTime: getServerTime_()
+    };
+  }
+
   if (action === 'saveCssSheetRows') {
     var savePayload = parsePayload_(params);
+    var saveResult = saveCssSheetRows_(savePayload);
 
-    try {
-      var saveResult = saveCssSheetRows_(savePayload);
+    saveResult.app = 'skhpsv2';
+    saveResult.env = getServerEnv_();
+    saveResult.serverTime = getServerTime_();
 
-      saveResult.app = 'skhpsv2';
-      saveResult.env = getServerEnv_();
-      saveResult.serverTime = getServerTime_();
-
-      return saveResult;
-    } catch (error) {
-      return {
-        ok: false,
-        action: action,
-        app: 'skhpsv2',
-        env: getServerEnv_(),
-        error: 'SAVE_CSS_SHEET_ROWS_FAILED',
-        message: error && error.message ? error.message : String(error),
-        serverTime: getServerTime_()
-      };
-    }
+    return saveResult;
   }
 
   return {
     ok: false,
     action: action,
+    app: 'skhpsv2',
+    env: getServerEnv_(),
     error: 'UNHANDLED_ACTION',
     serverTime: getServerTime_()
   };

@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/footer.js
-時間戳記：2026-06-09 23:15 UTC+8
-用途：Footer 狀態列；只負責渲染 footer、version、Apps Script 與 Sheet/CSS runtime 狀態。不讀取 footerStyle CSV、不注入 footer CSS，避免與 css-sheet-runtime.js 打架。
+時間戳記：2026-06-09 20:00 UTC+8
+用途：Footer 狀態列；只負責渲染 footer、version、Apps Script API 狀態與 CSS Sheet runtime 狀態。Apps Script 一律透過 SKHPSBackend.call()，不自行組 webAppUrl。
 */
 
 (function () {
@@ -65,6 +65,17 @@
     renderFooter(state);
   }
 
+  function compactError(error) {
+    var message = error && error.message ? error.message : String(error || "failed");
+    message = message.replace(/^Error:\s*/, "");
+
+    if (message.length > 80) {
+      return message.slice(0, 77) + "...";
+    }
+
+    return message;
+  }
+
   function loadVersion(state) {
     if (!window.SKHPSConfig || typeof window.SKHPSConfig.loadVersion !== "function") {
       setState(state, {
@@ -79,7 +90,8 @@
           versionText: version && version.version ? version.version : "unknown"
         });
       })
-      .catch(function () {
+      .catch(function (error) {
+        console.warn("Footer version failed:", error);
         setState(state, {
           versionText: "version failed"
         });
@@ -99,20 +111,21 @@
       .then(function (response) {
         if (response && response.ok === true) {
           setState(state, {
-            apiText: "ok",
+            apiText: response.env ? "ok " + response.env : "ok",
             apiOk: true
           });
           return;
         }
 
         setState(state, {
-          apiText: "failed",
+          apiText: response && response.error ? "failed: " + response.error : "failed",
           apiOk: false
         });
       })
-      .catch(function () {
+      .catch(function (error) {
+        console.warn("Footer Apps Script health failed:", error);
         setState(state, {
-          apiText: "failed",
+          apiText: "failed: " + compactError(error),
           apiOk: false
         });
       });
@@ -144,12 +157,6 @@
   }
 
   function checkSheetStatusOnlyIfRuntimeMissing(state) {
-    /*
-      重要：
-      目前 CSS Sheet 已由 css-sheet-runtime.js 直接讀 CSV/cache。
-      sheetStatus 是 Apps Script 後端健康檢查，不等於 CSS Sheet runtime 是否成功。
-      所以如果 runtime 已經成功，不能再用 sheetStatus failed 覆蓋成 failed。
-    */
     if (state.sheetRuntimeOk) {
       return Promise.resolve();
     }
@@ -169,15 +176,16 @@
         }
 
         if (response && response.ok === true) {
+          var count = response.data && response.data.sheetCount ? response.data.sheetCount : "ok";
           setState(state, {
-            sheetText: "ok",
+            sheetText: "api " + count,
             sheetOk: true
           });
           return;
         }
 
         setState(state, {
-          sheetText: "status failed",
+          sheetText: response && response.error ? "status failed: " + response.error : "status failed",
           sheetOk: false
         });
       })

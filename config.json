@@ -16,12 +16,12 @@
     {
       "id": "qr-signin",
       "title": "晨會QR簽到",
-      "href": "qr-signin.html"
+      "href": "https://ndmc402010104.github.io/skhps-qr/"
     },
     {
       "id": "quick-login",
       "title": "醫院系統快速登入",
-      "href": "skhps-quick-login.html"
+      "href": "https://ndmc402010104.github.io/skhps-quick-login/"
     },
     {
       "id": "admin",

@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/footer.js
-時間戳記：2026-06-09 20:55 UTC+8
-用途：Footer 狀態列；只負責渲染 footer、version、Apps Script 與 Sheet 狀態。不再讀取 footerStyle CSV、不再注入 footer CSS，避免與 css-sheet-runtime.js 打架。
+時間戳記：2026-06-09 23:15 UTC+8
+用途：Footer 狀態列；只負責渲染 footer、version、Apps Script 與 Sheet/CSS runtime 狀態。不讀取 footerStyle CSV、不注入 footer CSS，避免與 css-sheet-runtime.js 打架。
 */
 
 (function () {
@@ -118,10 +118,45 @@
       });
   }
 
-  function checkSheet(state) {
+  function updateFromRuntime(state, runtime) {
+    if (!runtime) return false;
+
+    var count = runtime.sheetKeys ? runtime.sheetKeys.length : "?";
+    var source = runtime.source || "runtime";
+
+    setState(state, {
+      sheetText: "css " + count + " sheets (" + source + ")",
+      sheetOk: true,
+      sheetRuntimeOk: true
+    });
+
+    return true;
+  }
+
+  function watchCssRuntime(state) {
+    if (window.SKHPSCssSheetRuntime) {
+      updateFromRuntime(state, window.SKHPSCssSheetRuntime);
+    }
+
+    document.addEventListener("skhps-css-sheet-runtime-ready", function (event) {
+      updateFromRuntime(state, event.detail || window.SKHPSCssSheetRuntime);
+    });
+  }
+
+  function checkSheetStatusOnlyIfRuntimeMissing(state) {
+    /*
+      重要：
+      目前 CSS Sheet 已由 css-sheet-runtime.js 直接讀 CSV/cache。
+      sheetStatus 是 Apps Script 後端健康檢查，不等於 CSS Sheet runtime 是否成功。
+      所以如果 runtime 已經成功，不能再用 sheetStatus failed 覆蓋成 failed。
+    */
+    if (state.sheetRuntimeOk) {
+      return Promise.resolve();
+    }
+
     if (!window.SKHPSBackend || typeof window.SKHPSBackend.call !== "function") {
       setState(state, {
-        sheetText: "backend missing",
+        sheetText: "runtime pending",
         sheetOk: false
       });
       return Promise.resolve();
@@ -129,6 +164,10 @@
 
     return window.SKHPSBackend.call("sheetStatus")
       .then(function (response) {
+        if (state.sheetRuntimeOk) {
+          return;
+        }
+
         if (response && response.ok === true) {
           setState(state, {
             sheetText: "ok",
@@ -138,37 +177,20 @@
         }
 
         setState(state, {
-          sheetText: "failed",
+          sheetText: "status failed",
           sheetOk: false
         });
       })
       .catch(function () {
+        if (state.sheetRuntimeOk) {
+          return;
+        }
+
         setState(state, {
-          sheetText: "failed",
+          sheetText: "runtime pending",
           sheetOk: false
         });
       });
-  }
-
-  function reflectCssRuntime(state) {
-    function updateFromRuntime(detail) {
-      var runtime = detail || window.SKHPSCssSheetRuntime;
-
-      if (!runtime) return;
-
-      setState(state, {
-        sheetText: "css " + (runtime.sheetKeys ? runtime.sheetKeys.length : "?") + " sheets",
-        sheetOk: true
-      });
-    }
-
-    if (window.SKHPSCssSheetRuntime) {
-      updateFromRuntime(window.SKHPSCssSheetRuntime);
-    }
-
-    document.addEventListener("skhps-css-sheet-runtime-ready", function (event) {
-      updateFromRuntime(event.detail);
-    });
   }
 
   function boot() {
@@ -176,16 +198,17 @@
       versionText: "loading",
       apiText: "testing",
       apiOk: false,
-      sheetText: "testing",
-      sheetOk: false
+      sheetText: "runtime pending",
+      sheetOk: false,
+      sheetRuntimeOk: false
     };
 
     renderFooter(state);
-    reflectCssRuntime(state);
+    watchCssRuntime(state);
 
     loadVersion(state);
     checkApi(state);
-    checkSheet(state);
+    checkSheetStatusOnlyIfRuntimeMissing(state);
   }
 
   if (document.readyState === "loading") {

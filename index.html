@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/index.html
-時間戳記：2026-06-09 23:45 UTC+8
-用途：整外資訊系統簡約首頁；測試版：不放 inline critical gate，只調用 assets/css/skhps-loading.css。
+時間戳記：2026-06-10 19:30 UTC+8
+用途：整外資訊系統首頁；首頁只負責顯示三個入口，實際 href 由 assets/js/route.js 從 config.pages 自動補上。
 -->
-<html lang="zh-Hant" class="skhps-css-loading">
+<html lang="zh-Hant" class="skhps-css-loading" data-loading-title="整外資訊系統首頁">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -32,12 +32,28 @@
         <p class="skhps-page-subtitle">請選擇要進入的系統功能。</p>
 
         <nav class="skhps-action-grid" aria-label="系統入口">
-          <a class="skhps-btn skhps-btn-primary skhps-btn-lg" href="admin.html">
-            系統後台
+          <a
+            class="skhps-btn skhps-btn-primary skhps-btn-lg"
+            href="#"
+            data-skhps-page-id="qr-signin"
+          >
+            晨會QR簽到
           </a>
 
-          <a class="skhps-btn skhps-btn-secondary skhps-btn-lg" href="css-setting.html">
-            CSS 設定
+          <a
+            class="skhps-btn skhps-btn-secondary skhps-btn-lg"
+            href="#"
+            data-skhps-page-id="quick-login"
+          >
+            醫院系統快速登入
+          </a>
+
+          <a
+            class="skhps-btn skhps-btn-secondary skhps-btn-lg"
+            href="#"
+            data-skhps-page-id="admin"
+          >
+            進入後台
           </a>
         </nav>
       </div>
@@ -48,9 +64,10 @@
     Footer 載入中...
   </footer>
 
-  <script src="assets/js/config.js?v=202606092034"></script>
-  <script src="assets/js/backend-client.js?v=202606092034"></script>
-  <script src="assets/js/css-sheet-runtime.js?v=202606092034"></script>
-  <script src="assets/js/footer.js?v=202606092034"></script>
+  <script src="assets/js/config.js?v=202606101930"></script>
+  <script src="assets/js/route.js?v=202606101930"></script>
+  <script src="assets/js/backend-client.js?v=202606101930"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=202606101930"></script>
+  <script src="assets/js/footer.js?v=202606101930"></script>
 </body>
 </html>

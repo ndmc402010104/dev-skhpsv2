@@ -14,6 +14,16 @@
       "href": "index.html"
     },
     {
+      "id": "qr-signin",
+      "title": "晨會QR簽到",
+      "href": "qr-signin.html"
+    },
+    {
+      "id": "quick-login",
+      "title": "醫院系統快速登入",
+      "href": "quick-login.html"
+    },
+    {
       "id": "admin",
       "title": "系統後台",
       "href": "admin.html"

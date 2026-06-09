@@ -1,49 +1,104 @@
 ﻿<!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/admin.html
+時間戳記：2026-06-09 13:00 UTC+8
+用途：系統後台；套用 skhpsv2 最簡單版 loading gate 與共用 CSS runtime。
 -->
-<html lang="zh-Hant">
+<html lang="zh-Hant" class="skhps-css-loading" data-loading-title="系統後台">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="stylesheet" href="assets/css/skhps-loading.css">
   <title>系統後台</title>
+
+  <style>
+    .skhps-admin-shell {
+      width: min(760px, calc(100% - 32px));
+      margin: 96px auto 120px;
+      display: grid;
+      gap: 20px;
+    }
+
+    .skhps-admin-card {
+      padding: 36px 40px;
+      text-align: center;
+    }
+
+    .skhps-admin-test-card {
+      padding: 28px 32px;
+    }
+
+    .skhps-admin-test-card h2 {
+      margin-top: 0;
+    }
+
+    .skhps-admin-actions {
+      justify-content: center;
+      margin-top: 26px;
+    }
+
+    .skhps-admin-result {
+      margin-top: 18px;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 640px) {
+      .skhps-admin-shell {
+        width: min(100% - 24px, 760px);
+        margin: 48px auto 96px;
+      }
+
+      .skhps-admin-card,
+      .skhps-admin-test-card {
+        padding: 28px 22px;
+      }
+    }
+  </style>
 </head>
-<body>
-  <main>
-    <h1>系統後台</h1>
+<body class="skhps-body">
+  <main class="skhps-page">
+    <div class="skhps-admin-shell">
+      <section class="skhps-card skhps-admin-card">
+        <p class="skhps-eyebrow">Admin</p>
+        <h1 class="skhps-page-title">系統後台</h1>
+        <p class="skhps-page-subtitle">後台連線測試與系統設定入口。</p>
 
-    <nav>
-      <ul>
-        <li><a href="index.html">整外資訊系統首頁</a></li>
-      </ul>
-    </nav>
+        <nav class="skhps-action-grid skhps-admin-actions" aria-label="後台導覽">
+          <a class="skhps-btn skhps-btn-secondary skhps-btn-lg" href="index.html">
+            整外資訊系統首頁
+          </a>
 
-    <section>
-      <h2>後台連線測試</h2>
-      <button type="button" id="testBackendBtn">測試後台 health</button>
-      <pre id="backendResult">尚未測試。</pre>
-    </section>
-      <section>
-      <h2>設定頁面</h2>
-      <p>
-        <a href="css-setting.html">
-          <button type="button">進入 CSS Setting</button>
-        </a>
-      </p>
-    </section>
-</main>
+          <a class="skhps-btn skhps-btn-primary skhps-btn-lg" href="css-setting.html">
+            進入 CSS Setting
+          </a>
+        </nav>
+      </section>
 
-  <footer data-skhps-footer>
+      <section class="skhps-card skhps-admin-test-card">
+        <h2>後台連線測試</h2>
+
+        <button class="skhps-btn skhps-btn-primary" type="button" id="testBackendBtn">
+          測試後台 health
+        </button>
+
+        <pre id="backendResult" class="skhps-admin-result">尚未測試。</pre>
+      </section>
+    </div>
+  </main>
+
+  <footer data-skhps-footer class="skhps-footer">
     Footer 載入中...
   </footer>
 
   <script src="assets/js/config.js"></script>
   <script src="assets/js/backend-client.js"></script>
+  <script src="assets/js/css-sheet-runtime.js"></script>
   <script src="assets/js/footer.js"></script>
   <script>
-    if(window.SKHPSConfig){
-      window.SKHPSConfig.loadConfig().then(function(){
-        if(window.SKHPSBackend){
+    if (window.SKHPSConfig) {
+      window.SKHPSConfig.loadConfig().then(function () {
+        if (window.SKHPSBackend) {
           window.SKHPSBackend.bindHealthButton("testBackendBtn", "backendResult");
         }
       });

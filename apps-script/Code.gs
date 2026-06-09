@@ -57,6 +57,7 @@ function routeAction_(action, params) {
     'sheetStatus',
     'getCssSheetPreview',
     'getCssSheetRuntime',
+    'getQuickLoginStaff',
     'saveCssSheetRows'
   ];
 
@@ -145,7 +146,8 @@ function routeAction_(action, params) {
     };
   }
 
-  if (action === 'saveCssSheetRows') {
+  if (action === 'getQuickLoginStaff',
+    'saveCssSheetRows') {
     var savePayload = parsePayload_(params);
     var saveResult = saveCssSheetRows_(savePayload);
 

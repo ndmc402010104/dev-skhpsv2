@@ -146,8 +146,14 @@ function routeAction_(action, params) {
     };
   }
 
-  if (action === 'getQuickLoginStaff',
-    'saveCssSheetRows') {
+  if (action === 'getQuickLoginStaff') {
+    return {
+      ok: true,
+      data: getQuickLoginStaff_(parsePayload_(params))
+    };
+  }
+
+  if (action === 'saveCssSheetRows') {
     var savePayload = parsePayload_(params);
     var saveResult = saveCssSheetRows_(savePayload);
 

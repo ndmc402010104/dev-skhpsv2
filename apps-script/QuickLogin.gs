@@ -1,16 +1,12 @@
 /*
 檔案位置：skhpsv2/apps-script/QuickLogin.gs
-時間戳記：2026-06-10 23:55 UTC+8
-用途：提供 quick-login 讀取人員主檔；Sheet 位置一律從 config.json / getConfig_() 取得。
+時間戳記：2026-06-10 02:20 UTC+8
+用途：提供 quick-login 讀取人員主檔；Sheet 位置從 getServerConfig_() / getSpreadsheetId_() 取得。
 */
 
 function getQuickLoginStaff_(payload) {
-  var config = getConfig_();
-
-  var spreadsheetId =
-    config &&
-    config.sheets &&
-    config.sheets.mainSpreadsheetId;
+  var config = getServerConfig_ ? getServerConfig_() : {};
+  var spreadsheetId = getSpreadsheetId_();
 
   var staffSheetTitle =
     config &&

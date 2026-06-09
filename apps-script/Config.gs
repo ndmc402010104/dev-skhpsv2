@@ -1,4 +1,4 @@
-﻿const SKHPS_SERVER_CONFIG = {
+const SKHPS_SERVER_CONFIG = {
   app: 'skhpsv2',
   env: 'prod',
   appsScript: {
@@ -6,7 +6,14 @@
   },
   sheets: {
     mainSpreadsheetId: '1Kd2T_XhkeAUyDzmdXvDUBcHKbmGII-7sky5nfJ8PY50',
-    mainGid: ''
+    mainGid: '',
+    dataSheets: {
+      staffMaster: {
+        key: 'staffMaster',
+        title: '人員主檔',
+        tabGid: '1704216215'
+      }
+    }
   }
 };
 

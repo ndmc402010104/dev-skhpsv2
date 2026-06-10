@@ -1,16 +1,22 @@
 ﻿/*
 檔案位置：skhpsv2/assets/js/app-entry.js
 用途：子專案共用入口。
-用法：
+規則：
 - 子專案只宣告 window.SKHPS_APP_ID，例如 "quick-login"。
-- app-entry 會從 skhpsv2/assets/js/app-registry.js 讀取設定。
-- app-entry 再設定 window.SKHPS_APP_ENV，最後載入 skhpsv2/assets/js/bootstrap.js。
+- app-entry 從 skhpsv2/assets/js/app-registry.js 讀取設定。
+- URL 參數 skhpsRuntime=local-dev|dev|prod 可指定要使用哪個 skhpsv2 runtime。
+- app-entry 建立 window.SKHPS_APP_ENV，最後載入 skhpsv2/assets/js/bootstrap.js。
 */
 
 (function () {
   "use strict";
 
   var currentScript = document.currentScript;
+  var ALLOWED_ENVS = {
+    "local-dev": true,
+    dev: true,
+    prod: true
+  };
 
   function stripQueryAndHash(url) {
     return String(url || "").split("#")[0].split("?")[0];
@@ -56,7 +62,26 @@
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(version);
   }
 
+  function getRuntimeParam() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var runtime = String(params.get("skhpsRuntime") || "").trim();
+
+      if (ALLOWED_ENVS[runtime]) {
+        return runtime;
+      }
+    } catch (error) {}
+
+    return "";
+  }
+
   function inferEnvFromPageLocation() {
+    var requestedRuntime = getRuntimeParam();
+
+    if (requestedRuntime) {
+      return requestedRuntime;
+    }
+
     var host = String(window.location.hostname || "").toLowerCase();
 
     if (host === "127.0.0.1" || host === "localhost" || host === "") {
@@ -140,6 +165,7 @@
         window.SKHPS_APP_ENV = {
           appId: appId,
           env: env,
+          requestedRuntime: getRuntimeParam() || "",
           sharedBaseUrl: normalizeBaseUrl(registrySharedBaseUrl || sharedBaseUrl),
           version: version,
           title: app.title || appId,
@@ -155,6 +181,7 @@
 
   window.SKHPSAppEntry = {
     init: init,
+    getRuntimeParam: getRuntimeParam,
     inferEnvFromPageLocation: inferEnvFromPageLocation
   };
 

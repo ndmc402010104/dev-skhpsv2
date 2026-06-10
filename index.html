@@ -1,14 +1,22 @@
 <!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/index.html
-時間戳記：2026-06-10 19:30 UTC+8
+時間戳記：2026-06-10 19:45 UTC+8
 用途：整外資訊系統首頁；首頁只負責顯示三個入口，實際 href 由 assets/js/route.js 從 config.pages 自動補上。
+修正：
+- 明確宣告 loading gate 任務：首頁只等 css-runtime。
+- loading-gate.js 也加版本號，避免瀏覽器吃舊快取。
 -->
-<html lang="zh-Hant" class="skhps-css-loading" data-loading-title="整外資訊系統首頁">
+<html
+  lang="zh-Hant"
+  class="skhps-css-loading"
+  data-loading-title="整外資訊系統首頁"
+  data-skhps-loading-tasks="css-runtime"
+>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <link rel="stylesheet" href="assets/css/skhps-loading.css">
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=202606101945">
   <title>整外資訊系統首頁</title>
 </head>
 <body class="skhps-body">
@@ -64,10 +72,11 @@
     Footer 載入中...
   </footer>
 
-  <script src="assets/js/config.js?v=202606101930"></script>
-  <script src="assets/js/route.js?v=202606101930"></script>
-  <script src="assets/js/backend-client.js?v=202606101930"></script>
-  <script src="assets/js/css-sheet-runtime.js?v=202606101930"></script>
-  <script src="assets/js/footer.js?v=202606101930"></script>
+  <script src="assets/js/loading-gate.js?v=202606101945"></script>
+  <script src="assets/js/config.js?v=202606101945"></script>
+  <script src="assets/js/route.js?v=202606101945"></script>
+  <script src="assets/js/backend-client.js?v=202606101945"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=202606101945"></script>
+  <script src="assets/js/footer.js?v=202606101945"></script>
 </body>
 </html>

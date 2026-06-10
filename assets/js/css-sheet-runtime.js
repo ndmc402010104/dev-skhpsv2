@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/css-sheet-runtime.js
 時間戳記：2026-06-10 00:20 UTC+8
-用途：統一 CSS Sheet runtime；第一次進入網域一定重新抓 Sheet 並顯示 loading，同一次瀏覽流程換頁才使用 localStorage cache；loading title 由 config.json / pages / document.title 自動帶入。正式預設走 CSV，避免後端 action 尚未完成時噴 JSONP failed。
+用途：統一 CSS Sheet runtime；第一次進入網域一定重新抓 Sheet，同一次瀏覽流程換頁才使用 localStorage cache；loading title 由 config.json / pages / document.title 自動帶入。正式預設走 CSV，避免後端 action 尚未完成時噴 JSONP failed。CSS 載入狀態被動回報給 SKHPSLoading gate。
 */
 
 (function () {
@@ -37,14 +37,47 @@
     el.setAttribute("data-ok", ok ? "true" : "false");
   }
 
-  function showPage() {
-    document.documentElement.classList.remove(LOADING_CLASS);
+  function markCssRuntimePending() {
+    document.documentElement.setAttribute("data-skhps-css-ready", "false");
+
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.require === "function") {
+      window.SKHPSLoading.require("css-runtime");
+    }
+  }
+
+  function markCssRuntimeDone() {
     document.documentElement.setAttribute("data-skhps-css-ready", "true");
+
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
+      window.SKHPSLoading.done("css-runtime");
+      return;
+    }
+
+    /*
+      Fallback for old pages that have not loaded assets/js/loading-gate.js yet.
+      New pages should let SKHPSLoading release the page only after every required
+      task declared in data-skhps-loading-tasks is done or fail-rendered.
+    */
+    document.documentElement.classList.remove(LOADING_CLASS);
+    document.documentElement.classList.remove("skhps-loading");
+  }
+
+  function markCssRuntimeFailed(error) {
+    document.documentElement.setAttribute("data-skhps-css-ready", "false");
+
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
+      window.SKHPSLoading.fail("css-runtime", error);
+      return;
+    }
+
+    /* Fallback: do not leave old pages permanently hidden when CSS failed. */
+    document.documentElement.classList.remove(LOADING_CLASS);
+    document.documentElement.classList.remove("skhps-loading");
   }
 
   function keepLoading() {
     document.documentElement.classList.add(LOADING_CLASS);
-    document.documentElement.setAttribute("data-skhps-css-ready", "false");
+    markCssRuntimePending();
   }
 
   function getSessionReady() {
@@ -521,7 +554,7 @@
     }
 
     injectCss(cache.cssText);
-    showPage();
+    markCssRuntimeDone();
 
     setStatus(
       "CSS Sheet：已套用本次瀏覽快取 " +
@@ -574,7 +607,7 @@
       var built = buildCss(result.rows);
 
       injectCss(built.cssText);
-      showPage();
+      markCssRuntimeDone();
 
       window.SKHPSCssSheetRuntime = {
         source: result.source,
@@ -618,7 +651,7 @@
         return window.SKHPSCssSheetRuntime;
       }
 
-      showPage();
+      markCssRuntimeFailed(error);
       setStatus("CSS Sheet：載入失敗：" + (error.message || String(error)), false);
       throw error;
     });

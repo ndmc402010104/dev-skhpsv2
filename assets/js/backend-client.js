@@ -10,7 +10,180 @@
   var DEFAULT_TIMEOUT_MS = 15000;
   var configPromise = null;
 
+  function runtime() {
+    return window.SKHPSRuntime || null;
+  }
+
+  function runtimeStart(name) {
+    if (runtime() && typeof runtime().start === "function") {
+      runtime().start(name);
+    }
+  }
+
+  function runtimeDone(name, data) {
+    if (runtime() && typeof runtime().done === "function") {
+      runtime().done(name, data);
+    }
+  }
+
+  function runtimeFail(name, error, data) {
+    if (runtime() && typeof runtime().fail === "function") {
+      runtime().fail(name, error, data);
+    }
+  }
+
+  function setRuntimeBackend(data) {
+    if (runtime() && typeof runtime().setBackend === "function") {
+      runtime().setBackend(data);
+    }
+  }
+
+  function setRuntimeBackendCall(data) {
+    if (runtime() && typeof runtime().setBackendCall === "function") {
+      runtime().setBackendCall(data);
+    }
+  }
+
+  function firstValue() {
+    var values = Array.prototype.slice.call(arguments);
+    var i;
+
+    for (i = 0; i < values.length; i += 1) {
+      if (values[i] !== undefined && values[i] !== null && String(values[i]).trim() !== "") {
+        return values[i];
+      }
+    }
+
+    return "";
+  }
+
+  function normalizeList(value) {
+    if (Array.isArray(value)) {
+      return value.map(function (item) {
+        return String(item || "").trim();
+      }).filter(Boolean);
+    }
+
+    return String(value || "")
+      .split(",")
+      .map(function (item) {
+        return String(item || "").trim();
+      })
+      .filter(Boolean);
+  }
+
+  function lookupSheetName(key, config) {
+    var sheets = config && config.sheets ? config.sheets : {};
+    var groups = [
+      sheets.cssSheets || {},
+      sheets.dataSheets || {},
+      sheets.sheets || {}
+    ];
+    var i;
+    var item;
+
+    key = String(key || "").trim();
+    if (!key) return "";
+
+    for (i = 0; i < groups.length; i += 1) {
+      item = groups[i][key];
+      if (item) {
+        return String(item.title || item.tabName || item.name || item.key || key);
+      }
+    }
+
+    return key;
+  }
+
+  function lookupCalendarName(value, config) {
+    var calendars = config && (config.calendars || (config.resources && config.resources.calendars)) || {};
+    var key = String(value || "").trim();
+    var item = calendars[key];
+
+    if (!key) return "";
+    if (item) return String(item.title || item.name || item.calendarName || item.id || key);
+
+    return key;
+  }
+
+  function inferResource(action, payload, config) {
+    payload = payload || {};
+
+    var lowerAction = String(action || "").toLowerCase();
+    var resourceType = String(payload.resourceType || "").trim();
+    var sheetKeys = normalizeList(payload.sheetKeys || payload.sheets || payload.sheetKey || payload.sheetName);
+    var calendarKeys = normalizeList(payload.calendarNames || payload.calendarIds || payload.calendarName || payload.calendarId);
+    var resourceName = "";
+
+    if (!resourceType) {
+      if (lowerAction.indexOf("calendar") >= 0) {
+        resourceType = "calendar";
+      } else if (
+        lowerAction.indexOf("sheet") >= 0 ||
+        lowerAction.indexOf("css") >= 0 ||
+        lowerAction.indexOf("staff") >= 0
+      ) {
+        resourceType = "sheet";
+      } else if (lowerAction.indexOf("drive") >= 0 || lowerAction.indexOf("file") >= 0) {
+        resourceType = "drive";
+      } else if (lowerAction.indexOf("mail") >= 0 || lowerAction.indexOf("gmail") >= 0) {
+        resourceType = "gmail";
+      } else if (lowerAction.indexOf("registerexternalapp") >= 0) {
+        resourceType = "registry";
+      } else if (lowerAction === "health") {
+        resourceType = "backend";
+      } else {
+        resourceType = "apps-script";
+      }
+    }
+
+    if (payload.resourceName) {
+      resourceName = String(payload.resourceName).trim();
+    } else if (resourceType === "sheet" && sheetKeys.length) {
+      resourceName = sheetKeys.map(function (key) {
+        return lookupSheetName(key, config);
+      }).join(", ");
+    } else if (resourceType === "calendar" && calendarKeys.length) {
+      resourceName = calendarKeys.map(function (key) {
+        return lookupCalendarName(key, config);
+      }).join(", ");
+    } else {
+      resourceName = String(firstValue(
+        payload.calendarName,
+        payload.calendarId,
+        payload.sheetName,
+        payload.sheetKey,
+        payload.tabName,
+        payload.appId,
+        payload.title,
+        action
+      ) || "").trim();
+    }
+
+    return {
+      resourceType: resourceType,
+      resourceName: resourceName
+    };
+  }
+
+  function traceFunction(functionName, status, data) {
+    if (runtime() && typeof runtime().log === "function") {
+      runtime().log({
+        level: status === "error" ? "error" : "debug",
+        module: "backend-client.js",
+        message: "function-" + status,
+        data: Object.assign({
+          file: "backend-client.js",
+          functionName: functionName,
+          status: status
+        }, data || {})
+      });
+    }
+  }
+
   function loadConfig() {
+    traceFunction("loadConfig", "start");
+
     if (window.SKHPSConfig && typeof window.SKHPSConfig.loadConfig === "function") {
       return window.SKHPSConfig.loadConfig();
     }
@@ -68,6 +241,10 @@
 
   function callJsonp(endpoint, action, payload, options) {
     options = options || {};
+    traceFunction("callJsonp", "start", {
+      action: action,
+      url: endpoint
+    });
 
     return new Promise(function (resolve, reject) {
       if (!endpoint) {
@@ -110,11 +287,20 @@
 
       window[callbackName] = function (result) {
         cleanup();
+        traceFunction("callJsonp", "done", {
+          action: action,
+          url: endpoint
+        });
         resolve(result);
       };
 
       script.onerror = function () {
         cleanup();
+        traceFunction("callJsonp", "error", {
+          action: action,
+          url: endpoint,
+          error: "JSONP failed"
+        });
         reject(new Error("JSONP failed: " + action + " @ " + endpoint));
       };
 
@@ -125,19 +311,127 @@
   }
 
   function call(action, payload, options) {
+    var startedAt = Date.now();
+    var resource = inferResource(action, payload);
+    var callId =
+      String(action || "unknown") +
+      "::" +
+      startedAt;
+
+    setRuntimeBackendCall({
+      callId: callId,
+      action: action,
+      resourceType: resource.resourceType,
+      resourceName: resource.resourceName,
+      status: "running",
+      startedAt: new Date(startedAt).toISOString()
+    });
+
+    traceFunction("call", "start", {
+      action: action
+    });
+
+    if (action === "health") {
+      runtimeStart("backend");
+    }
+
     return loadConfig().then(function (config) {
       var endpoint = endpointFromConfig(config);
+      var env =
+        window.SKHPSConfig && typeof window.SKHPSConfig.getEnv === "function"
+          ? window.SKHPSConfig.getEnv(config)
+          : config && config.runtimeEnv || config && config.env || "";
+      resource = inferResource(action, payload, config);
+
+      setRuntimeBackend({
+        loaded: true,
+        endpoint: endpoint,
+        env: env,
+        durationMs: Date.now() - startedAt
+      });
+
+      setRuntimeBackendCall({
+        callId: callId,
+        action: action,
+        resourceType: resource.resourceType,
+        resourceName: resource.resourceName,
+        status: "running",
+        durationMs: Date.now() - startedAt
+      });
+
       return callJsonp(endpoint, action, payload, options);
     }).then(function (response) {
       if (response && response.ok === false && response.error) {
         console.warn("SKHPSBackend action returned ok=false:", action, response);
       }
 
+      if (action === "health") {
+        setRuntimeBackend({
+          healthy: Boolean(response && response.ok === true),
+          durationMs: Date.now() - startedAt
+        });
+
+        if (response && response.ok === true) {
+          runtimeDone("backend", {
+            action: action
+          });
+        } else {
+          runtimeFail("backend", new Error(response && response.error ? response.error : "health returned ok=false"), {
+            action: action
+          });
+        }
+      }
+
+      setRuntimeBackendCall({
+        callId: callId,
+        action: action,
+        resourceType: resource.resourceType,
+        resourceName: resource.resourceName,
+        status: response && response.ok === false ? "fail" : "ok",
+        durationMs: Date.now() - startedAt,
+        finishedAt: new Date().toISOString(),
+        error: response && response.ok === false && response.error ? response.error : ""
+      });
+
+      traceFunction("call", "done", {
+        action: action
+      });
       return response;
+    }).catch(function (error) {
+      if (action === "health") {
+        setRuntimeBackend({
+          healthy: false,
+          durationMs: Date.now() - startedAt
+        });
+        runtimeFail("backend", error, {
+          action: action
+        });
+      }
+
+      traceFunction("call", "error", {
+        action: action,
+        error: error && error.message ? error.message : String(error)
+      });
+      setRuntimeBackendCall({
+        callId: callId,
+        action: action,
+        resourceType: resource.resourceType,
+        resourceName: resource.resourceName,
+        status: "fail",
+        durationMs: Date.now() - startedAt,
+        finishedAt: new Date().toISOString(),
+        error: error && error.message ? error.message : String(error)
+      });
+      throw error;
     });
   }
 
   function bindHealthButton(buttonId, resultId) {
+    traceFunction("bindHealthButton", "start", {
+      buttonId: buttonId,
+      resultId: resultId
+    });
+
     var button = document.getElementById(buttonId);
     var result = document.getElementById(resultId);
 

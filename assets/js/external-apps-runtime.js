@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/external-apps-runtime.js
-用途：首頁讀取 Sheet「外部專案」，顯示目前 runtime 啟用中的前台外部專案。
+用途：首頁讀取 Sheet「外部專案」，顯示目前 runtime 啟用中的外部專案。
 
 Loading Gate：
 - 任務名稱：external-apps-runtime
@@ -108,7 +108,7 @@ Loading Gate：
     }
 
     if (!apps.length) {
-      setStatus("目前沒有啟用中的外部前台專案（" + runtime + "）");
+      setStatus("目前沒有啟用中的外部專案（" + runtime + "）");
       return;
     }
 
@@ -116,7 +116,7 @@ Loading Gate：
       container.appendChild(createAppButton(app));
     });
 
-    setStatus("已載入 " + apps.length + " 個外部前台專案（" + runtime + "）");
+    setStatus("已載入 " + apps.length + " 個外部專案（" + runtime + "）");
   }
 
   function renderError(error) {
@@ -173,7 +173,6 @@ Loading Gate：
 
     callBackend("listExternalApps", {
       activeOnly: true,
-      appType: "前台",
       env: runtime
     })
       .then(function (response) {

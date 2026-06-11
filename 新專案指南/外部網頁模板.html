@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<!--
+檔案位置：skhpsv2/新專案指南/外部網頁模板.html
+用途：建立新的 SKHPS 外部 App 時可複製的最小 HTML 模板。
+
+此檔不是 skhpsv2 主站頁面，也不是要直接在 skhpsv2 裡正式使用。
+請複製到新的外部專案後，再依 body 內 checklist 建立必要檔案。
+標準模式是：HTML 只設定 runtime 與 app-card.json 位置；App 資訊、afterScripts、href、version 交給 JSON。
+-->
+<html
+  lang="zh-Hant"
+  class="skhps-css-loading"
+  data-loading-title="外部 App"
+  data-skhps-page-id="external-app-template"
+  data-skhps-loading-tasks="css-runtime"
+>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>外部 App</title>
+
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=20260611">
+</head>
+
+<body class="skhps-body">
+  <header id="header" class="skhps-header" data-skhps-header></header>
+
+  <main class="skhps-page">
+    <div class="skhps-container">
+      <section class="skhps-hero" aria-labelledby="appTitle">
+        <div class="skhps-hero-card">
+          <p class="skhps-eyebrow">External App</p>
+          <h1 id="appTitle" class="skhps-page-title">外部 App</h1>
+          <p class="skhps-page-subtitle">
+            這是一份外部 App 起手模板。請先複製到新專案，再建立 app-card.json、version.json 和 assets/js/app.js。
+          </p>
+        </div>
+      </section>
+
+      <section class="skhps-section" aria-labelledby="newProjectChecklistTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">New Project Checklist</p>
+            <h2 id="newProjectChecklistTitle" class="skhps-section-title">開新外部專案還需要做的事</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <ol>
+            <li>建立新的外部專案資料夾，例如 your-app。</li>
+            <li>複製此模板為外部專案的 index.html。</li>
+            <li>在 HTML 裡只設定 SKHPS_ENTRY_BASE_URL、SKHPS_ENTRY_VERSION、SKHPS_APP_CARD_URL。</li>
+            <li>在 app-card.json 裡設定 appId、title、group、order、href、afterScripts、registerExternalApp。</li>
+            <li>確認 data-skhps-loading-tasks 內的 app-ready 和 app.js 呼叫的 loading task 名稱一致。</li>
+            <li>建立 assets/js/app.js，內容可先使用下方最小範本。</li>
+            <li>建立 version.json，記錄目前外部 App 版本。</li>
+            <li>不要在外部 App 自己再載入 config.js、loading-gate.js、backend-client.js、css-sheet-runtime.js、header.js、footer.js。</li>
+            <li>如果需要後端功能，新增 Apps Script action，前端用 SKHPSBackend.call("actionName", payload)。</li>
+            <li>部署後確認 external-app-loader.js、header、footer、CSS runtime、backend、afterScripts 都有載入成功。</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="skhps-section" aria-labelledby="fileStructureTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">Files</p>
+            <h2 id="fileStructureTitle" class="skhps-section-title">最小檔案結構</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <pre class="skhps-code-block">your-app/
+  index.html
+  app-card.json
+  version.json
+  assets/
+    js/
+      app.js</pre>
+        </div>
+      </section>
+
+      <section class="skhps-section" aria-labelledby="headSnippetTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">index.html head</p>
+            <h2 id="headSnippetTitle" class="skhps-section-title">head 最小呼叫範本</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <pre class="skhps-code-block">&lt;link
+  rel="stylesheet"
+  href="https://dev-skhps.jonaminz.com/assets/css/skhps-loading.css?v=20260611"
+&gt;
+
+&lt;script&gt;
+  window.SKHPS_ENTRY_BASE_URL = "https://dev-skhps.jonaminz.com/";
+  window.SKHPS_ENTRY_VERSION = "20260611";
+  window.SKHPS_APP_CARD_URL = "app-card.json";
+&lt;/script&gt;
+
+&lt;script src="https://dev-skhps.jonaminz.com/assets/js/app-entry.js?v=20260611"&gt;&lt;/script&gt;</pre>
+        </div>
+      </section>
+
+      <section class="skhps-section" aria-labelledby="appJsTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">assets/js/app.js</p>
+            <h2 id="appJsTitle" class="skhps-section-title">最小 app.js 範本</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <pre class="skhps-code-block">(function () {
+  "use strict";
+
+  var APP_READY_TASK = "app-ready";
+
+  function loadingDone(task) {
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
+      window.SKHPSLoading.done(task);
+      return;
+    }
+
+    document.documentElement.classList.remove("skhps-css-loading");
+    document.documentElement.classList.remove("skhps-loading");
+  }
+
+  function loadingFail(task, error) {
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
+      window.SKHPSLoading.fail(task, error);
+      return;
+    }
+
+    document.documentElement.classList.remove("skhps-css-loading");
+    document.documentElement.classList.remove("skhps-loading");
+  }
+
+  function init() {
+    try {
+      /*
+        在這裡初始化你的外部 App。
+        如果需要後端資料，可以用：
+        SKHPSBackend.call("actionName", {});
+      */
+      loadingDone(APP_READY_TASK);
+    } catch (error) {
+      console.error(error);
+      loadingFail(APP_READY_TASK, error);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();</pre>
+        </div>
+      </section>
+
+      <section class="skhps-section" aria-labelledby="versionJsonTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">version.json</p>
+            <h2 id="versionJsonTitle" class="skhps-section-title">最小 version.json 範本</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <pre class="skhps-code-block">{
+  "app": "your-app-id",
+  "version": "your-app v0.1.0-20260611",
+  "env": "prod"
+}</pre>
+        </div>
+      </section>
+
+      <section class="skhps-section" aria-labelledby="appCardTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">app-card.json</p>
+            <h2 id="appCardTitle" class="skhps-section-title">app-card.json 範本</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <p class="skhps-page-subtitle">
+            app-entry.js 會讀取 app-card.json，建立 SKHPS_APP_CONFIG / SKHPS_APP_ENV，再交給 external-app-loader.js 載入共用 runtime。
+          </p>
+          <pre class="skhps-code-block">{
+  "appId": "your-app-id",
+  "title": "外部 App",
+  "group": "未分類",
+  "order": 9999,
+  "registerExternalApp": true,
+  "versionUrl": "version.json",
+  "afterScripts": [
+    "assets/js/app.js"
+  ],
+  "href": {
+    "local-dev": "http://127.0.0.1:5500/your-app/?skhpsRuntime=local-dev",
+    "dev": "https://your-app.example.com/?skhpsRuntime=dev",
+    "prod": "https://your-app.example.com/?skhpsRuntime=prod"
+  }
+}</pre>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer data-skhps-footer class="skhps-footer">
+    Footer 載入中...
+  </footer>
+
+  <!--
+    Viewer-only:
+    這幾支 script 只讓此模板檔在 skhpsv2 裡可以用共用樣式閱讀。
+    複製成真正外部 App 時，不要複製這段；請使用上方「head 最小呼叫範本」裡的 app-entry.js。
+  -->
+  <script src="assets/js/runtime.js?v=20260611"></script>
+  <script src="assets/js/loading-gate.js?v=20260611"></script>
+  <script src="assets/js/config.js?v=20260611"></script>
+  <script src="assets/js/backend-client.js?v=20260611"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=20260611"></script>
+  <script src="assets/js/header.js?v=20260611"></script>
+  <script src="assets/js/footer.js?v=20260611"></script>
+</body>
+</html>

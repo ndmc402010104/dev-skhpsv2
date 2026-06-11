@@ -93,16 +93,16 @@ function saveCssSheetRows_(payload) {
   );
 
   var values = rows.map(function(row) {
-    return [
-      String(row.component || '').trim(),
-      String(row.className || '').trim(),
-      String(row.property || '').trim(),
-      String(row.value || '').trim(),
-      String(row.description || '').trim(),
-      (String(row.updatedAt || '').trim().toLowerCase() === 'default' ? 'default' : updatedAt)
-    ];
+    return {
+      component: String(row.component || '').trim(),
+      className: String(row.className || '').trim(),
+      property: String(row.property || '').trim(),
+      value: String(row.value || '').trim(),
+      description: String(row.description || '').trim(),
+      updatedAt: String(row.updatedAt || '').trim().toLowerCase() === 'default' ? 'default' : updatedAt
+    };
   }).filter(function(row) {
-    return row[0] && row[1] && row[2] && row[3] !== '';
+    return row.component && row.className && row.property && row.value !== '';
   });
 
   if (!values.length) throw new Error('No valid rows');
@@ -138,16 +138,17 @@ function saveCssSheetRows_(payload) {
  */
 function upsertCssSheetRowsByKey_(sheet, values) {
   var lastRow = sheet.getLastRow();
+  var columns = getCssSheetWriteColumns_(sheet);
   var index = {};
 
   if (lastRow >= 2) {
-    var existing = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    var existing = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
 
     existing.forEach(function(row, i) {
-      var component = String(row[0] || '').trim();
-      var className = String(row[1] || '').trim();
-      var property = String(row[2] || '').trim();
-      var updatedAt = String(row[5] || '').trim().toLowerCase();
+      var component = String(row[columns.component] || '').trim();
+      var className = String(row[columns.className] || '').trim();
+      var property = String(row[columns.property] || '').trim();
+      var updatedAt = String(row[columns.updatedAt] || '').trim().toLowerCase();
 
       if (!component || !className || !property) return;
 
@@ -169,12 +170,12 @@ function upsertCssSheetRowsByKey_(sheet, values) {
   var updatedRows = 0;
 
   values.forEach(function(valueRow) {
-    var key = cssSheetUpsertKey_(valueRow[0], valueRow[1], valueRow[2]);
+    var key = cssSheetUpsertKey_(valueRow.component, valueRow.className, valueRow.property);
     var hit = index[key];
     var targetRow = hit && hit.overrideRowNumber ? hit.overrideRowNumber : 0;
 
     if (targetRow) {
-      sheet.getRange(targetRow, 1, 1, 6).setValues([valueRow]);
+      writeCssSheetValueRow_(sheet, targetRow, valueRow, columns);
       updatedRows += 1;
     } else {
       toAppend.push(valueRow);
@@ -182,9 +183,7 @@ function upsertCssSheetRowsByKey_(sheet, values) {
   });
 
   if (toAppend.length) {
-    sheet
-      .getRange(sheet.getLastRow() + 1, 1, toAppend.length, 6)
-      .setValues(toAppend);
+    appendCssSheetValueRows_(sheet, toAppend, columns);
   }
 
   return {
@@ -226,6 +225,70 @@ function ensureCssSheetWriteHeader_(sheet) {
   if (needWrite) {
     range.setValues([header]);
   }
+}
+
+function getCssSheetWriteColumns_(sheet) {
+  var required = [
+    'component',
+    'className',
+    'property',
+    'value',
+    'description',
+    'updatedAt'
+  ];
+
+  var lastColumn = Math.max(sheet.getLastColumn(), required.length);
+  var headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
+    .map(function(header) {
+      return String(header || '').trim();
+    });
+
+  var missing = required.filter(function(name) {
+    return headers.indexOf(name) === -1;
+  });
+
+  if (missing.length) {
+    sheet.getRange(1, lastColumn + 1, 1, missing.length).setValues([missing]);
+    headers = headers.concat(missing);
+  }
+
+  return {
+    component: headers.indexOf('component'),
+    className: headers.indexOf('className'),
+    property: headers.indexOf('property'),
+    value: headers.indexOf('value'),
+    description: headers.indexOf('description'),
+    updatedAt: headers.indexOf('updatedAt'),
+    headers: headers
+  };
+}
+
+function writeCssSheetValueRow_(sheet, rowNumber, valueRow, columns) {
+  Object.keys(valueRow).forEach(function(key) {
+    var columnIndex = columns[key];
+
+    if (columnIndex === undefined || columnIndex < 0) {
+      throw new Error('CSS sheet header missing: ' + key);
+    }
+
+    sheet.getRange(rowNumber, columnIndex + 1).setValue(valueRow[key]);
+  });
+}
+
+function appendCssSheetValueRows_(sheet, valueRows, columns) {
+  var headers = columns.headers || [];
+  var startRow = sheet.getLastRow() + 1;
+  var output = valueRows.map(function(valueRow) {
+    return headers.map(function(header) {
+      if (Object.prototype.hasOwnProperty.call(valueRow, header)) {
+        return valueRow[header];
+      }
+
+      return '';
+    });
+  });
+
+  sheet.getRange(startRow, 1, output.length, headers.length).setValues(output);
 }
 
 function ensureCssMainSheetNameForWrite_(ss, sheet, expectedName) {

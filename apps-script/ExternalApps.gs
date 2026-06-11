@@ -4,7 +4,7 @@
  *
  * Sheet：外部專案
  * 欄位：
- * 專案ID、環境、專案名稱、入口網址、顯示位置、顯示群組、排序、啟用、版本、最後報到時間、報到次數
+ * 專案ID、環境、專案名稱、入口網址、顯示群組、排序、啟用、版本、最後報到時間、報到次數
  *
  * 規則：
  * - 唯一鍵 = 專案ID + 環境
@@ -21,7 +21,6 @@ const SKHPS_EXTERNAL_APPS_HEADERS = [
   '環境',
   '專案名稱',
   '入口網址',
-  '顯示位置',
   '顯示群組',
   '排序',
   '啟用',
@@ -78,7 +77,6 @@ function registerExternalApp(payload) {
       '環境': app.env,
       '專案名稱': app.title,
       '入口網址': app.href,
-      '顯示位置': app.appType,
       '顯示群組': app.group,
       '排序': app.order,
       '啟用': false,
@@ -103,7 +101,6 @@ function registerExternalApp(payload) {
   updateExternalAppRow_(sheet, found.rowIndex, {
     '專案名稱': app.title,
     '入口網址': app.href,
-    '顯示位置': app.appType,
     '顯示群組': app.group,
     '排序': app.order,
     // 重要：啟用不動，避免覆蓋後台設定
@@ -126,7 +123,6 @@ function listExternalApps(payload) {
   payload = payload || {};
 
   const activeOnly = payload.activeOnly === true;
-  const appType = String(payload.appType || '').trim();
   const env = String(payload.env || payload.runtime || '').trim();
 
   const sheet = getExternalAppsSheet_();
@@ -138,7 +134,6 @@ function listExternalApps(payload) {
       env: String(row['環境'] || '').trim(),
       title: String(row['專案名稱'] || '').trim(),
       href: String(row['入口網址'] || '').trim(),
-      appType: String(row['顯示位置'] || '').trim() || '前台',
       group: String(row['顯示群組'] || '').trim(),
       order: Number(row['排序'] || 9999) || 9999,
       active: toBoolean_(row['啟用']),
@@ -153,12 +148,6 @@ function listExternalApps(payload) {
   if (activeOnly) {
     apps = apps.filter(function (app) {
       return app.active === true;
-    });
-  }
-
-  if (appType) {
-    apps = apps.filter(function (app) {
-      return app.appType === appType;
     });
   }
 
@@ -266,14 +255,6 @@ function normalizeExternalAppPayload_(payload) {
       payload.href ||
       payload.url ||
       ''
-    ).trim(),
-
-    appType: String(
-      config.appType ||
-      config.displayLocation ||
-      payload.appType ||
-      payload.displayLocation ||
-      '前台'
     ).trim(),
 
     group: String(

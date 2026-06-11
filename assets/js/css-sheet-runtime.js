@@ -21,6 +21,71 @@
   */
   var CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v1";
   var SESSION_READY_KEY = "skhpsv2.cssSheetRuntimeSessionReady.v1";
+  var cssRuntimeStartedAt = 0;
+
+  function runtime() {
+    return window.SKHPSRuntime || null;
+  }
+
+  function runtimeStart() {
+    cssRuntimeStartedAt = Date.now();
+
+    if (runtime() && typeof runtime().start === "function") {
+      runtime().start("cssRuntime");
+    }
+
+    if (runtime() && typeof runtime().setCssRuntime === "function") {
+      runtime().setCssRuntime({
+        loaded: false,
+        source: "",
+        durationMs: null
+      });
+    }
+  }
+
+  function runtimeDone(source) {
+    if (runtime() && typeof runtime().setCssRuntime === "function") {
+      runtime().setCssRuntime({
+        loaded: true,
+        source: source || "",
+        durationMs: cssRuntimeStartedAt ? Date.now() - cssRuntimeStartedAt : null
+      });
+    }
+
+    if (runtime() && typeof runtime().done === "function") {
+      runtime().done("cssRuntime", {
+        source: source || ""
+      });
+    }
+  }
+
+  function runtimeFail(error) {
+    if (runtime() && typeof runtime().setCssRuntime === "function") {
+      runtime().setCssRuntime({
+        loaded: false,
+        durationMs: cssRuntimeStartedAt ? Date.now() - cssRuntimeStartedAt : null
+      });
+    }
+
+    if (runtime() && typeof runtime().fail === "function") {
+      runtime().fail("cssRuntime", error);
+    }
+  }
+
+  function traceFunction(functionName, status, data) {
+    if (runtime() && typeof runtime().log === "function") {
+      runtime().log({
+        level: status === "error" ? "error" : "debug",
+        module: "css-sheet-runtime.js",
+        message: "function-" + status,
+        data: Object.assign({
+          file: "css-sheet-runtime.js",
+          functionName: functionName,
+          status: status
+        }, data || {})
+      });
+    }
+  }
 
   function ready(fn) {
     if (document.readyState === "loading") {
@@ -38,7 +103,9 @@
   }
 
   function markCssRuntimePending() {
+    traceFunction("markCssRuntimePending", "start");
     document.documentElement.setAttribute("data-skhps-css-ready", "false");
+    runtimeStart();
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.require === "function") {
       window.SKHPSLoading.require("css-runtime");
@@ -46,6 +113,9 @@
   }
 
   function markCssRuntimeDone() {
+    traceFunction("markCssRuntimeDone", "done", {
+      source: window.SKHPSCssSheetRuntime && window.SKHPSCssSheetRuntime.source || ""
+    });
     document.documentElement.setAttribute("data-skhps-css-ready", "true");
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
@@ -63,7 +133,11 @@
   }
 
   function markCssRuntimeFailed(error) {
+    traceFunction("markCssRuntimeFailed", "error", {
+      error: error && error.message ? error.message : String(error)
+    });
     document.documentElement.setAttribute("data-skhps-css-ready", "false");
+    runtimeFail(error);
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
       window.SKHPSLoading.fail("css-runtime", error);
@@ -76,6 +150,7 @@
   }
 
   function keepLoading() {
+    traceFunction("keepLoading", "start");
     document.documentElement.classList.add(LOADING_CLASS);
     markCssRuntimePending();
   }
@@ -598,9 +673,13 @@
   }
 
   function applyCacheIfAvailable() {
+    traceFunction("applyCacheIfAvailable", "start");
     var cache = readCache();
 
     if (!cache) {
+      traceFunction("applyCacheIfAvailable", "done", {
+        source: "none"
+      });
       return false;
     }
 
@@ -627,11 +706,19 @@
       clearSession: clearSessionReady
     };
 
+    runtimeDone("cache");
+    traceFunction("applyCacheIfAvailable", "done", {
+      source: "cache"
+    });
+
     return true;
   }
 
   function load(options) {
     options = options || {};
+    traceFunction("load", "start", {
+      silent: Boolean(options.silent)
+    });
 
     return getConfig().then(function (config) {
       applyLoadingTitle(config);
@@ -671,6 +758,11 @@
         clearSession: clearSessionReady
       };
 
+      runtimeDone(result.source);
+      traceFunction("load", "done", {
+        source: result.source
+      });
+
       writeCache(window.SKHPSCssSheetRuntime);
       setSessionReady();
 
@@ -704,6 +796,9 @@
 
       markCssRuntimeFailed(error);
       setStatus("CSS Sheet：載入失敗：" + (error.message || String(error)), false);
+      traceFunction("load", "error", {
+        error: error && error.message ? error.message : String(error)
+      });
       throw error;
     });
   }

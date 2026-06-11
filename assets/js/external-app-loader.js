@@ -14,10 +14,7 @@ Purpose: include loader for SKHPS external child apps.
   "use strict";
 
   var CORE_SCRIPTS = [
-    {
-      path: "assets/js/runtime-tracer.js",
-      optional: true
-    },
+    "assets/js/runtime.js",
     "assets/js/loading-gate.js",
     "assets/js/config.js",
     "assets/js/backend-client.js",
@@ -91,6 +88,8 @@ Purpose: include loader for SKHPS external child apps.
     var version = appEnv.version || currentScriptVersion() || Date.now();
 
     mark("external-app-loader:init", {
+      file: "external-app-loader.js",
+      functionName: "getAppEnv",
       href: window.location.href
     });
 
@@ -106,14 +105,16 @@ Purpose: include loader for SKHPS external child apps.
       version: version,
       title: appEnv.title || "",
       href: appEnv.href || window.location.href,
-      appType: appEnv.appType || "前台",
       group: appEnv.group || "",
       order: appEnv.order || 9999,
       coreScripts: appEnv.coreScripts || CORE_SCRIPTS.slice(),
       afterScripts: appEnv.afterScripts || []
     };
 
-    mark("external-app-loader:env", options);
+    mark("external-app-loader:env", Object.assign({
+      file: "external-app-loader.js",
+      functionName: "getAppEnv"
+    }, options));
     return options;
   }
 
@@ -140,15 +141,31 @@ Purpose: include loader for SKHPS external child apps.
 
     entries.forEach(function (entry) {
       chain = chain.then(function () {
-        mark(eventBaseName + "-start", entry);
+        mark(eventBaseName + "-start " + entry.path, {
+          file: "external-app-loader.js",
+          functionName: "loadSequential",
+          scriptPath: entry.path,
+          scriptUrl: entry.url,
+          optional: entry.optional
+        });
         return loadScript(entry.url)
           .then(function (src) {
-            mark(eventBaseName + "-loaded", entry);
+            mark(eventBaseName + "-loaded " + entry.path, {
+              file: "external-app-loader.js",
+              functionName: "loadSequential",
+              scriptPath: entry.path,
+              scriptUrl: src,
+              optional: entry.optional
+            });
             return src;
           })
           .catch(function (error) {
             var detail = {
-              entry: entry,
+              file: "external-app-loader.js",
+              functionName: "loadSequential",
+              scriptPath: entry.path,
+              scriptUrl: entry.url,
+              optional: entry.optional,
               error: error && error.message ? error.message : String(error)
             };
 
@@ -245,13 +262,6 @@ Purpose: include loader for SKHPS external child apps.
       ""
     ).trim();
 
-    var appType = String(
-      config.appType ||
-      config.displayLocation ||
-      options.appType ||
-      "前台"
-    ).trim();
-
     var group = String(
       config.group ||
       options.group ||
@@ -274,7 +284,6 @@ Purpose: include loader for SKHPS external child apps.
       appId: appId,
       title: title,
       href: href,
-      appType: appType,
       group: group,
       order: order,
       version: version,
@@ -315,7 +324,11 @@ Purpose: include loader for SKHPS external child apps.
       return;
     }
 
-    mark("external-app-loader:register-start", payload);
+    mark("external-app-loader:register-start", Object.assign({
+      file: "external-app-loader.js",
+      functionName: "registerExternalAppIfNeeded",
+      action: "registerExternalApp"
+    }, payload));
 
     /*
       重要：
@@ -329,13 +342,21 @@ Purpose: include loader for SKHPS external child apps.
       .then(function (result) {
         window.SKHPS_EXTERNAL_APP_REGISTER_RESULT = result;
         console.info("[SKHPSExternalAppLoader] external app registered:", result);
-        mark("external-app-loader:register-done", result);
+        mark("external-app-loader:register-done", {
+          file: "external-app-loader.js",
+          functionName: "registerExternalAppIfNeeded",
+          action: "registerExternalApp",
+          result: result
+        });
         return result;
       })
       .catch(function (error) {
         window.SKHPS_EXTERNAL_APP_REGISTER_ERROR = error;
         console.warn("[SKHPSExternalAppLoader] registerExternalApp failed:", error);
         warn("external-app-loader:register-error", {
+          file: "external-app-loader.js",
+          functionName: "registerExternalAppIfNeeded",
+          action: "registerExternalApp",
           error: error && error.message ? error.message : String(error)
         });
         return {
@@ -358,7 +379,10 @@ Purpose: include loader for SKHPS external child apps.
 
     return loadSequential(resolveCoreUrls(options), "external-app-loader:core-script")
       .then(function () {
-        mark("external-app-loader:core-ready", options);
+        mark("external-app-loader:core-ready", Object.assign({
+          file: "external-app-loader.js",
+          functionName: "load"
+        }, options));
         registerExternalAppIfNeeded(options);
         return loadSequential(resolveAfterUrls(options), "external-app-loader:after-script");
       })
@@ -366,7 +390,10 @@ Purpose: include loader for SKHPS external child apps.
         window.SKHPS_BOOTSTRAP_LOADED = true;
         window.SKHPS_EXTERNAL_APP_LOADER_LOADED = true;
 
-        mark("external-app-loader:ready", options);
+        mark("external-app-loader:ready", Object.assign({
+          file: "external-app-loader.js",
+          functionName: "load"
+        }, options));
 
         document.dispatchEvent(new CustomEvent("skhps-bootstrap-ready", {
           detail: options

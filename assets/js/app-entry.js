@@ -252,10 +252,6 @@
       config.href = window.location.href;
     }
 
-    if (!config.appType) {
-      config.appType = "前台";
-    }
-
     if (!config.group) {
       config.group = "";
     }
@@ -327,7 +323,6 @@
           version: appConfig.version || getVersion() || "",
           title: appConfig.title || appId,
           href: appConfig.href || window.location.href,
-          appType: appConfig.appType || "前台",
           group: appConfig.group || "",
           order: appConfig.order || 9999,
           coreScripts: appConfig.coreScripts || null,
@@ -347,7 +342,7 @@
 
         return loadScript(
           withVersion(
-            joinUrl(window.SKHPS_APP_ENV.sharedBaseUrl, "assets/js/bootstrap.js"),
+            joinUrl(window.SKHPS_APP_ENV.sharedBaseUrl, "assets/js/external-app-loader.js"),
             window.SKHPS_APP_ENV.version
           )
         );

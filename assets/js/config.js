@@ -15,6 +15,55 @@
   var currentScript = document.currentScript;
   var cachedConfigPromise = null;
 
+  function runtime() {
+    return window.SKHPSRuntime || null;
+  }
+
+  function runtimeStart(name) {
+    if (runtime() && typeof runtime().start === "function") {
+      runtime().start(name);
+    }
+  }
+
+  function runtimeDone(name, data) {
+    if (runtime() && typeof runtime().done === "function") {
+      runtime().done(name, data);
+    }
+  }
+
+  function runtimeFail(name, error, data) {
+    if (runtime() && typeof runtime().fail === "function") {
+      runtime().fail(name, error, data);
+    }
+  }
+
+  function setRuntimeConfig(data) {
+    if (runtime() && typeof runtime().setConfig === "function") {
+      runtime().setConfig(data);
+    }
+  }
+
+  function setRuntimeEnv(data) {
+    if (runtime() && typeof runtime().setRuntime === "function") {
+      runtime().setRuntime(data);
+    }
+  }
+
+  function traceFunction(functionName, status, data) {
+    if (runtime() && typeof runtime().log === "function") {
+      runtime().log({
+        level: status === "error" ? "error" : "debug",
+        module: "config.js",
+        message: "function-" + status,
+        data: Object.assign({
+          file: "config.js",
+          functionName: functionName,
+          status: status
+        }, data || {})
+      });
+    }
+  }
+
   function stripQueryAndHash(url) {
     return String(url || "").split("#")[0].split("?")[0];
   }
@@ -92,17 +141,43 @@
     */
     config.runtimeEnv = getEnv(config);
 
+    setRuntimeEnv({
+      effective: config.runtimeEnv
+    });
+
     return config;
   }
 
   function loadConfig(force) {
+    traceFunction("loadConfig", "start", {
+      force: Boolean(force)
+    });
+
     if (!force && window.SKHPS_CONFIG) {
+      setRuntimeConfig({
+        loaded: true,
+        source: getConfigUrl(),
+        durationMs: 0
+      });
+      runtimeDone("config", {
+        source: getConfigUrl(),
+        cached: true
+      });
+      traceFunction("loadConfig", "done", {
+        source: getConfigUrl(),
+        cached: true
+      });
       return Promise.resolve(window.SKHPS_CONFIG);
     }
 
     if (!force && cachedConfigPromise) {
       return cachedConfigPromise;
     }
+
+    var startedAt = Date.now();
+    var source = getConfigUrl();
+
+    runtimeStart("config");
 
     cachedConfigPromise = fetch(getConfigUrl(), {
       cache: "no-store"
@@ -114,7 +189,32 @@
       return res.json();
     }).then(function (config) {
       window.SKHPS_CONFIG = normalizeConfig(config);
+      setRuntimeConfig({
+        loaded: true,
+        source: source,
+        durationMs: Date.now() - startedAt
+      });
+      runtimeDone("config", {
+        source: source
+      });
+      traceFunction("loadConfig", "done", {
+        source: source
+      });
       return window.SKHPS_CONFIG;
+    }).catch(function (error) {
+      setRuntimeConfig({
+        loaded: false,
+        source: source,
+        durationMs: Date.now() - startedAt
+      });
+      runtimeFail("config", error, {
+        source: source
+      });
+      traceFunction("loadConfig", "error", {
+        source: source,
+        error: error && error.message ? error.message : String(error)
+      });
+      throw error;
     });
 
     return cachedConfigPromise;

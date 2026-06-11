@@ -41,6 +41,43 @@
     console.log.apply(console, args);
   }
 
+  function runtime() {
+    return window.SKHPSRuntime || null;
+  }
+
+  function setRuntimeRequired() {
+    if (runtime() && typeof runtime().setLoadingRequired === "function") {
+      runtime().setLoadingRequired(requiredTasks());
+    }
+  }
+
+  function runtimeTaskDone(task) {
+    if (runtime() && typeof runtime().taskDone === "function") {
+      runtime().taskDone(task);
+    }
+  }
+
+  function runtimeTaskFailed(task, error) {
+    if (runtime() && typeof runtime().taskFailed === "function") {
+      runtime().taskFailed(task, error);
+    }
+  }
+
+  function traceFunction(functionName, status, data) {
+    if (runtime() && typeof runtime().log === "function") {
+      runtime().log({
+        level: status === "error" ? "error" : "debug",
+        module: "loading-gate.js",
+        message: "function-" + status,
+        data: Object.assign({
+          file: "loading-gate.js",
+          functionName: functionName,
+          status: status
+        }, data || {})
+      });
+    }
+  }
+
   function warn() {
     var args = Array.prototype.slice.call(arguments);
     args.unshift("[SKHPSLoading]");
@@ -105,6 +142,9 @@
 
   function release(reason) {
     if (state.released) return;
+    traceFunction("release", "start", {
+      reason: reason || "ready"
+    });
 
     state.released = true;
     state.releaseReason = reason || "ready";
@@ -124,7 +164,16 @@
     html.setAttribute("data-skhps-loading-released", "true");
     html.setAttribute("data-skhps-loading-release-reason", state.releaseReason);
 
+    if (runtime() && typeof runtime().done === "function") {
+      runtime().done("loadingGate", {
+        releaseReason: state.releaseReason
+      });
+    }
+
     log("released", getState());
+    traceFunction("release", "done", {
+      reason: state.releaseReason
+    });
   }
 
   function check() {
@@ -138,6 +187,9 @@
   function require(task) {
     task = normalizeTask(task);
     if (!task) return;
+    traceFunction("require", "start", {
+      task: task
+    });
 
     if (state.released) {
       log("require ignored after release:", task);
@@ -145,12 +197,16 @@
     }
 
     state.required[task] = true;
+    setRuntimeRequired();
 
     if (!state.done[task]) {
       setTaskAttr(task, "pending");
     }
 
     log("require", task, getState());
+    traceFunction("require", "done", {
+      task: task
+    });
     check();
   }
 
@@ -161,6 +217,9 @@
   function done(task) {
     task = normalizeTask(task);
     if (!task) return;
+    traceFunction("done", "start", {
+      task: task
+    });
 
     /*
       被動模式：
@@ -175,13 +234,20 @@
     delete state.failed[task];
 
     setTaskAttr(task, "done");
+    runtimeTaskDone(task);
     log("done", task, getState());
+    traceFunction("done", "done", {
+      task: task
+    });
     check();
   }
 
   function fail(task, error) {
     task = normalizeTask(task);
     if (!task) return;
+    traceFunction("fail", "start", {
+      task: task
+    });
 
     /*
       fail 的意思是：
@@ -196,7 +262,12 @@
     state.done[task] = true;
 
     setTaskAttr(task, "failed");
+    runtimeTaskFailed(task, error);
     warn("task failed:", task, error);
+    traceFunction("fail", "error", {
+      task: task,
+      error: error && error.message ? error.message : String(error || true)
+    });
     check();
   }
 
@@ -221,6 +292,7 @@
     });
 
     requireMany(tasks || []);
+    setRuntimeRequired();
     startTimeout();
   }
 
@@ -297,6 +369,7 @@
       "";
 
     requireMany(rawTasks);
+    setRuntimeRequired();
   }
 
   window.SKHPSLoading = {

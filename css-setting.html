@@ -3,69 +3,209 @@
 檔案位置：skhpsv2/css-setting.html
 時間戳記：2026-06-11 UTC+8
 用途：CSS Setting AJAX shell；樣式來源固定為 Google Sheet gid 0 / CSS總表。
+水庫理論：
+- 本頁是 skhpsv2 水庫本體頁面。
+- Header 由 assets/js/header.js 掛載。
+- Footer 只顯示 runtime 狀態，不參與 loading gate。
+- 主要畫面使用 CSS Sheet / 共用 CSS class，不寫 inline CSS。
 -->
-<html lang="zh-Hant">
+<html
+  lang="zh-Hant"
+  class="skhps-css-loading"
+  data-skhps-page-id="css-setting"
+  data-loading-title="CSS Setting"
+  data-skhps-loading-tasks="css-runtime"
+>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=20260611">
   <title>CSS Setting</title>
 </head>
-<body>
-  <main>
-    <section class="skhps-card">
-      <p class="skhps-muted">CSS / UI Setting</p>
-      <h1>CSS Setting AJAX Playground</h1>
-      <p>
-        這一頁固定作為 AJAX 調用頁。上方按鈕只負責載入 /CSS/ 目錄下的 HTML fragment。
-      </p>
 
-      <p>
-        CSS總表狀態：
-        <strong data-skhps-base-style-status data-skhps-css-main-status>CSS總表載入中...</strong>
-      </p>
+<body class="skhps-body">
+  <header id="header" class="skhps-header" data-skhps-header></header>
 
-      <p class="skhps-toolbar">
-        <a class="skhps-btn skhps-btn-secondary" href="admin.html">回系統後台</a>
-        <a class="skhps-btn skhps-btn-secondary" href="index.html">回首頁</a>
-      </p>
-    </section>
+  <main class="skhps-page skhps-css-setting-page">
+    <div class="skhps-container skhps-css-setting-shell">
+      <section class="skhps-hero skhps-css-setting-hero" aria-labelledby="cssSettingTitle">
+        <div class="skhps-hero-card skhps-css-setting-hero-card">
+          <div class="skhps-css-setting-hero-content">
+            <p class="skhps-eyebrow">CSS / UI Setting</p>
+            <h1 id="cssSettingTitle" class="skhps-page-title skhps-css-setting-title">
+              CSS Setting AJAX Playground
+            </h1>
+            <p class="skhps-page-subtitle skhps-css-setting-subtitle">
+              這一頁固定作為 AJAX 調用頁。上方按鈕只負責載入 /CSS/ 目錄下的 HTML fragment。
+            </p>
+          </div>
 
-    <section class="skhps-card">
-      <h2>Playground 分頁</h2>
-      <p>
-        目前先保留既有 Playground 入口；資料來源統一寫入 CSS總表，分類由 component 欄位決定。
-      </p>
+          <div class="skhps-meta-grid skhps-css-setting-meta-grid" aria-label="CSS Setting 狀態">
+            <div class="skhps-meta-item skhps-css-setting-meta-item">
+              <span class="skhps-meta-label">CSS總表</span>
+              <strong
+                class="skhps-meta-value"
+                data-skhps-base-style-status
+                data-skhps-css-main-status
+              >
+                CSS總表載入中...
+              </strong>
+            </div>
 
-      <p class="skhps-toolbar">
-        <button class="skhps-btn skhps-btn-primary" type="button" data-css-fragment="CSS/base-style-playground.html">基礎樣式</button>
-        <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/token-style-playground.html">Token</button>
-        <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/layout-style-playground.html">Layout</button>
-        <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/header-style-playground.html">Header</button>
-        <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/footer-style-playground.html">Footer</button>
-        <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/button-style-playground.html">按鈕</button>
-        <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/form-style-playground.html">表單</button>
-      </p>
+            <div class="skhps-meta-item skhps-css-setting-meta-item">
+              <span class="skhps-meta-label">資料來源</span>
+              <strong class="skhps-meta-value">
+                Google Sheet
+              </strong>
+            </div>
 
-      <p id="cssAjaxStatus" class="skhps-muted">尚未載入。</p>
-    </section>
+            <div class="skhps-meta-item skhps-css-setting-meta-item">
+              <span class="skhps-meta-label">模式</span>
+              <strong class="skhps-meta-value">
+                AJAX Shell
+              </strong>
+            </div>
+          </div>
 
-    <div id="cssAjaxContent"></div>
+          <nav class="skhps-action-grid skhps-css-setting-actions" aria-label="CSS Setting 頁面操作">
+            <a class="skhps-btn skhps-btn-secondary" href="admin.html">
+              回系統後台
+            </a>
+            <a class="skhps-btn skhps-btn-secondary" href="index.html">
+              回首頁
+            </a>
+          </nav>
+        </div>
+      </section>
+
+      <section class="skhps-section skhps-css-setting-section" aria-labelledby="cssPlaygroundTitle">
+        <div class="skhps-section-head skhps-css-setting-section-head">
+          <div>
+            <p class="skhps-eyebrow">Playground</p>
+            <h2 id="cssPlaygroundTitle" class="skhps-section-title">
+              Playground 分頁
+            </h2>
+          </div>
+          <p class="skhps-page-subtitle skhps-section-description">
+            目前先保留既有 Playground 入口；資料來源統一寫入 CSS總表，分類由 component 欄位決定。
+          </p>
+        </div>
+
+        <article class="skhps-hero-card skhps-css-setting-control-card">
+          <div class="skhps-toolbar skhps-css-setting-toolbar" aria-label="Playground 分頁">
+            <button class="skhps-btn skhps-btn-primary" type="button" data-css-fragment="CSS/base-style-playground.html">
+              基礎樣式
+            </button>
+            <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/token-style-playground.html">
+              Token
+            </button>
+            <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/layout-style-playground.html">
+              Layout
+            </button>
+            <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/header-style-playground.html">
+              Header
+            </button>
+            <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/footer-style-playground.html">
+              Footer
+            </button>
+            <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/button-style-playground.html">
+              按鈕
+            </button>
+            <button class="skhps-btn skhps-btn-secondary" type="button" data-css-fragment="CSS/form-style-playground.html">
+              表單
+            </button>
+          </div>
+
+          <p id="cssAjaxStatus" class="skhps-page-subtitle skhps-css-setting-status">
+            尚未載入。
+          </p>
+        </article>
+      </section>
+
+      <section class="skhps-section skhps-css-setting-fragment-section" aria-label="CSS Playground 內容">
+        <div id="cssAjaxContent" class="skhps-css-setting-content"></div>
+      </section>
+    </div>
   </main>
 
   <footer class="skhps-footer" data-skhps-footer>
     Footer 載入中...
   </footer>
 
-  <script src="assets/js/config.js?v=202606092034"></script>
-  <script src="assets/js/css-setting-sheet-apply.js"></script>
+  <script src="assets/js/loading-gate.js?v=20260611"></script>
+  <script src="assets/js/config.js?v=20260611"></script>
+  <script src="assets/js/route.js?v=20260611"></script>
+  <script src="assets/js/backend-client.js?v=20260611"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=20260611"></script>
+  <script src="assets/js/header.js?v=20260611"></script>
+
+  <script src="assets/js/css-setting-sheet-apply.js?v=20260611"></script>
+  <script src="assets/js/css-setting-style-editor.js?v=20260611"></script>
+  <script src="assets/js/css-setting-editor-core.js?v=20260611"></script>
+  <script src="assets/js/css-setting-sheet-save.js?v=20260611"></script>
+  <script src="assets/js/footer-style-editor.js?v=20260611"></script>
+  <script src="assets/js/footer.js?v=20260611"></script>
+
   <script>
     (function () {
+      "use strict";
+
       var statusEl = document.getElementById("cssAjaxStatus");
       var contentEl = document.getElementById("cssAjaxContent");
+
+      function escapeHtml(value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
 
       function setStatus(message) {
         if (statusEl) {
           statusEl.textContent = message;
+        }
+      }
+
+      function initLoadedFragment(path) {
+        window.setTimeout(function () {
+          if (
+            path === "CSS/footer-style-playground.html" &&
+            window.SKHPSFooterStyleEditor &&
+            typeof window.SKHPSFooterStyleEditor.init === "function"
+          ) {
+            window.SKHPSFooterStyleEditor.init();
+          }
+
+          if (
+            window.SKHPSCssSettingEditorCore &&
+            typeof window.SKHPSCssSettingEditorCore.init === "function"
+          ) {
+            window.SKHPSCssSettingEditorCore.init(contentEl);
+          }
+        }, 0);
+
+        if (window.SKHPSCssStyleEditState) {
+          window.SKHPSCssStyleEditState.init(contentEl);
+        }
+
+        if (window.SKHPSApplyBaseStyleFromSheet) {
+          window.SKHPSApplyBaseStyleFromSheet();
+        }
+
+        if (
+          window.SKHPSCssSettingEditorCore &&
+          typeof window.SKHPSCssSettingEditorCore.init === "function"
+        ) {
+          window.SKHPSCssSettingEditorCore.init(contentEl);
+        }
+
+        if (
+          window.SKHPSFooterStyleEditor &&
+          typeof window.SKHPSFooterStyleEditor.init === "function"
+        ) {
+          window.SKHPSFooterStyleEditor.init();
         }
       }
 
@@ -91,42 +231,20 @@
             contentEl.innerHTML = result.text;
             setStatus("已載入：" + path);
 
-            window.setTimeout(function () {
-              if (path === "CSS/footer-style-playground.html" &&
-                  window.SKHPSFooterStyleEditor &&
-                  typeof window.SKHPSFooterStyleEditor.init === "function") {
-                window.SKHPSFooterStyleEditor.init();
-              }
+            initLoadedFragment(path);
 
-              if (window.SKHPSCssSettingEditorCore &&
-                  typeof window.SKHPSCssSettingEditorCore.init === "function") {
-                window.SKHPSCssSettingEditorCore.init(contentEl);
-              }
-            }, 0);
-
-            if (window.SKHPSCssStyleEditState) {
-              window.SKHPSCssStyleEditState.init(contentEl);
-            }
-
-            if (window.SKHPSApplyBaseStyleFromSheet) {
-              window.SKHPSApplyBaseStyleFromSheet();
-            }
-
-            if (window.SKHPSCssSettingEditorCore) {
-              window.SKHPSCssSettingEditorCore.init(contentEl);
-            }
-
-            if (window.SKHPSFooterStyleEditor && typeof window.SKHPSFooterStyleEditor.init === "function") {
-              window.SKHPSFooterStyleEditor.init();
-            }
-
-            contentEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            contentEl.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
           })
           .catch(function (error) {
             contentEl.innerHTML =
-              '<section class="skhps-card">' +
-              '<h2>載入失敗</h2>' +
-              '<pre>' + String(error.message || error) + '</pre>' +
+              '<section class="skhps-card skhps-css-setting-error-card">' +
+              '<h2 class="skhps-section-title">載入失敗</h2>' +
+              '<pre class="skhps-code-block">' +
+              escapeHtml(error && error.message ? error.message : error) +
+              '</pre>' +
               '</section>';
 
             setStatus("載入失敗：" + path);
@@ -146,15 +264,5 @@
       loadFragment("CSS/base-style-playground.html");
     })();
   </script>
-  <script src="assets/js/backend-client.js?v=202606092034"></script>
-  <script src="assets/js/css-setting-style-editor.js"></script>
-  <script src="assets/js/css-setting-editor-core.js"></script>
-  <script src="assets/js/css-setting-sheet-save.js"></script>
-  <script src="assets/js/footer-style-editor.js"></script>
-
-
-
-
-  <script src="assets/js/footer.js?v=202606092034"></script>
 </body>
 </html>

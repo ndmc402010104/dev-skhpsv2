@@ -2,7 +2,7 @@
 <!--
 檔案位置：skhpsv2/index.html
 時間戳記：2026-06-11 UTC+8
-首頁調整：移除 QR 簽到卡片與頁面內 Runtime 診斷區；移除頁面後台大卡；後台改為 header 右側小入口。
+首頁調整：移除 QR 簽到卡片與頁面內 Runtime 診斷區；移除頁面後台大卡；本版暫時拆除頁面內寫死 header，保留 header 掛載點，下一步由 assets/js/header.js 掛載。
 用途：整外資訊系統首頁。
 
 Loading Gate：
@@ -33,24 +33,8 @@ Loading Gate：
 </head>
 
 <body class="skhps-body">
-  <header class="skhps-header">
-    <div class="skhps-header-inner">
-      <div class="skhps-brand">
-        <div class="skhps-brand-mark">SKH</div>
-        <div class="skhps-brand-text">
-          <div class="skhps-eyebrow">Plastic Surgery Information System</div>
-          <div class="skhps-header-title">整外資訊系統</div>
-        </div>
-      </div>
-
-      <div class="skhps-header-actions" aria-label="系統狀態與維護入口">
-        <span class="skhps-badge" data-skhps-runtime-label>Runtime 載入中</span>
-        <a class="skhps-header-admin-link" href="#" data-skhps-page-id="admin">
-          後台
-        </a>
-      </div>
-    </div>
-  </header>
+  <!-- Header 暫時拆除：改由 assets/js/header.js 掛載 -->
+  <header id="header" class="skhps-header" data-skhps-header></header>
 
   <main class="skhps-page skhps-index-page">
     <div class="skhps-container skhps-index-shell">
@@ -85,10 +69,6 @@ Loading Gate：
         </div>
       </section>
 
-
-
-
-
       <section class="skhps-section skhps-index-section skhps-system-entry-section" aria-labelledby="externalAppsTitle">
         <div class="skhps-section-head skhps-index-section-head">
           <div>
@@ -117,8 +97,6 @@ Loading Gate：
           </article>
         </div>
       </section>
-
-
     </div>
   </main>
 
@@ -288,6 +266,7 @@ Loading Gate：
   <script src="assets/js/route.js?v=20260611"></script>
   <script src="assets/js/backend-client.js?v=20260611"></script>
   <script src="assets/js/css-sheet-runtime.js?v=20260611"></script>
+  <script src="assets/js/header.js?v=20260611"></script>
   <script src="assets/js/footer.js?v=20260611"></script>
   <script src="assets/js/external-apps-runtime.js?v=20260611"></script>
 </body>

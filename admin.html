@@ -1,88 +1,80 @@
 <!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/admin.html
-時間戳記：2026-06-09 13:00 UTC+8
-用途：系統後台；套用 skhpsv2 最簡單版 loading gate 與共用 CSS runtime。
+時間戳記：2026-06-11 UTC+8
+用途：系統後台；套用 skhpsv2 loading gate、共用 header、共用 footer、CSS Sheet runtime。
+水庫理論：
+- 本頁是 skhpsv2 水庫本體頁面。
+- Header 由 assets/js/header.js 掛載。
+- Footer 只顯示 runtime 狀態，不參與 loading gate。
+- 樣式不寫 inline CSS，交給 CSS Sheet / 共用 CSS class。
 -->
-<html lang="zh-Hant" class="skhps-css-loading" data-loading-title="系統後台">
+<html
+  lang="zh-Hant"
+  class="skhps-css-loading"
+  data-skhps-page-id="admin"
+  data-loading-title="系統後台"
+  data-skhps-loading-tasks="css-runtime"
+>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <link rel="stylesheet" href="assets/css/skhps-loading.css">
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=20260611">
   <title>系統後台</title>
-
-  <style>
-    .skhps-admin-shell {
-      width: min(760px, calc(100% - 32px));
-      margin: 96px auto 120px;
-      display: grid;
-      gap: 20px;
-    }
-
-    .skhps-admin-card {
-      padding: 36px 40px;
-      text-align: center;
-    }
-
-    .skhps-admin-test-card {
-      padding: 28px 32px;
-    }
-
-    .skhps-admin-test-card h2 {
-      margin-top: 0;
-    }
-
-    .skhps-admin-actions {
-      justify-content: center;
-      margin-top: 26px;
-    }
-
-    .skhps-admin-result {
-      margin-top: 18px;
-      text-align: left;
-      white-space: pre-wrap;
-    }
-
-    @media (max-width: 640px) {
-      .skhps-admin-shell {
-        width: min(100% - 24px, 760px);
-        margin: 48px auto 96px;
-      }
-
-      .skhps-admin-card,
-      .skhps-admin-test-card {
-        padding: 28px 22px;
-      }
-    }
-  </style>
 </head>
+
 <body class="skhps-body">
-  <main class="skhps-page">
-    <div class="skhps-admin-shell">
-      <section class="skhps-card skhps-admin-card">
-        <p class="skhps-eyebrow">Admin</p>
-        <h1 class="skhps-page-title">系統後台</h1>
-        <p class="skhps-page-subtitle">後台連線測試與系統設定入口。</p>
+  <header id="header" class="skhps-header" data-skhps-header></header>
 
-        <nav class="skhps-action-grid skhps-admin-actions" aria-label="後台導覽">
-          <a class="skhps-btn skhps-btn-secondary skhps-btn-lg" href="index.html">
-            整外資訊系統首頁
-          </a>
+  <main class="skhps-page skhps-admin-page">
+    <div class="skhps-container skhps-admin-shell">
+      <section class="skhps-hero skhps-admin-hero" aria-labelledby="adminTitle">
+        <div class="skhps-hero-card skhps-admin-card">
+          <div class="skhps-admin-hero-content">
+            <p class="skhps-eyebrow">Admin</p>
+            <h1 id="adminTitle" class="skhps-page-title skhps-admin-title">
+              系統後台
+            </h1>
+            <p class="skhps-page-subtitle skhps-admin-subtitle">
+              後台連線測試與系統設定入口。
+            </p>
+          </div>
 
-          <a class="skhps-btn skhps-btn-primary skhps-btn-lg" href="css-setting.html">
-            進入 CSS Setting
-          </a>
-        </nav>
+          <nav class="skhps-action-grid skhps-admin-actions" aria-label="後台導覽">
+            <a class="skhps-btn skhps-btn-secondary skhps-btn-lg" href="index.html">
+              回首頁
+            </a>
+
+            <a class="skhps-btn skhps-btn-primary skhps-btn-lg" href="css-setting.html">
+              進入 CSS Setting
+            </a>
+          </nav>
+        </div>
       </section>
 
-      <section class="skhps-card skhps-admin-test-card">
-        <h2>後台連線測試</h2>
+      <section class="skhps-section skhps-admin-section" aria-labelledby="backendHealthTitle">
+        <div class="skhps-section-head skhps-admin-section-head">
+          <div>
+            <p class="skhps-eyebrow">Backend Health</p>
+            <h2 id="backendHealthTitle" class="skhps-section-title">
+              後台連線測試
+            </h2>
+          </div>
 
-        <button class="skhps-btn skhps-btn-primary" type="button" id="testBackendBtn">
-          測試後台 health
-        </button>
+          <p class="skhps-page-subtitle skhps-section-description">
+            測試目前頁面 runtime 對應的 Apps Script health。
+          </p>
+        </div>
 
-        <pre id="backendResult" class="skhps-admin-result">尚未測試。</pre>
+        <article class="skhps-hero-card skhps-admin-test-card">
+          <div class="skhps-toolbar skhps-admin-toolbar">
+            <button class="skhps-btn skhps-btn-primary" type="button" id="testBackendBtn">
+              測試後台 health
+            </button>
+          </div>
+
+          <pre id="backendResult" class="skhps-code-block skhps-admin-result">尚未測試。</pre>
+        </article>
       </section>
     </div>
   </main>
@@ -91,18 +83,50 @@
     Footer 載入中...
   </footer>
 
-  <script src="assets/js/config.js?v=202606092034"></script>
-  <script src="assets/js/backend-client.js?v=202606092034"></script>
-  <script src="assets/js/css-sheet-runtime.js?v=202606092034"></script>
-  <script src="assets/js/footer.js?v=202606092034"></script>
+  <script src="assets/js/loading-gate.js?v=20260611"></script>
+  <script src="assets/js/config.js?v=20260611"></script>
+  <script src="assets/js/route.js?v=20260611"></script>
+  <script src="assets/js/backend-client.js?v=20260611"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=20260611"></script>
+  <script src="assets/js/header.js?v=20260611"></script>
+  <script src="assets/js/footer.js?v=20260611"></script>
+
   <script>
-    if (window.SKHPSConfig) {
-      window.SKHPSConfig.loadConfig().then(function () {
-        if (window.SKHPSBackend) {
+    (function () {
+      "use strict";
+
+      function bindBackendHealth() {
+        if (
+          window.SKHPSBackend &&
+          typeof window.SKHPSBackend.bindHealthButton === "function"
+        ) {
           window.SKHPSBackend.bindHealthButton("testBackendBtn", "backendResult");
+          return;
         }
-      });
-    }
+
+        var result = document.getElementById("backendResult");
+        if (result) {
+          result.textContent = "SKHPSBackend.bindHealthButton 尚未載入。";
+        }
+      }
+
+      if (
+        window.SKHPSConfig &&
+        typeof window.SKHPSConfig.loadConfig === "function"
+      ) {
+        window.SKHPSConfig.loadConfig()
+          .then(bindBackendHealth)
+          .catch(function (error) {
+            var result = document.getElementById("backendResult");
+            if (result) {
+              result.textContent = "config.json 載入失敗：" + String(error && error.message ? error.message : error);
+            }
+          });
+        return;
+      }
+
+      bindBackendHealth();
+    })();
   </script>
 </body>
 </html>

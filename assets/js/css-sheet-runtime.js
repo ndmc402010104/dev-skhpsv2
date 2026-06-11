@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/css-sheet-runtime.js
-時間戳記：2026-06-10 00:20 UTC+8
-用途：統一 CSS Sheet runtime；第一次進入網域一定重新抓 Sheet，同一次瀏覽流程換頁才使用 localStorage cache；loading title 由 config.json / pages / document.title 自動帶入。正式預設走 CSV，避免後端 action 尚未完成時噴 JSONP failed。CSS 載入狀態被動回報給 SKHPSLoading gate。
+時間戳記：2026-06-11 UTC+8
+用途：統一 CSS Sheet runtime；固定使用 CSS總表 / gid 0 作為 CSS 來源。第一次進入網域一定重新抓 Sheet，同一次瀏覽流程換頁才使用 localStorage cache；loading title 由 config.json / pages / document.title 自動帶入。正式預設走 CSV，避免後端 action 尚未完成時噴 JSONP failed。CSS 載入狀態被動回報給 SKHPSLoading gate。
 */
 
 (function () {
@@ -175,18 +175,54 @@
 
 
   function getCssSheets(config) {
-    return config && config.sheets && config.sheets.cssSheets
+    var cssSheets = config && config.sheets && config.sheets.cssSheets
       ? config.sheets.cssSheets
-      : {};
+      : null;
+
+    /*
+      2026-06-11 固定版：
+      CSS Sheet 先收斂成單一 gid 0 / CSS總表。
+      如果 config.json 還沒補 cssSheets，也不要讓 runtime 直接失敗。
+    */
+    if (!cssSheets || !Object.keys(cssSheets).length) {
+      return {
+        cssMain: {
+          key: "cssMain",
+          title: "CSS總表",
+          tabName: "CSS總表",
+          tabGid: "0",
+          enabled: true
+        }
+      };
+    }
+
+    if (!cssSheets.cssMain && cssSheets.baseStyle) {
+      cssSheets.cssMain = {
+        key: "cssMain",
+        title: "CSS總表",
+        tabName: "CSS總表",
+        tabGid: "0",
+        enabled: true
+      };
+    }
+
+    return cssSheets;
   }
 
   function getEnabledSheetKeys(config) {
     var cssSheets = getCssSheets(config);
 
-    return Object.keys(cssSheets).filter(function (key) {
+    var keys = Object.keys(cssSheets).filter(function (key) {
       var sheet = cssSheets[key] || {};
       return sheet.enabled !== false;
     });
+
+    /* 固定版優先只讀 cssMain，避免舊多分頁 CSS 重複覆蓋。 */
+    if (keys.indexOf("cssMain") >= 0) {
+      return ["cssMain"];
+    }
+
+    return keys;
   }
 
   function csvUrl(config, sheetKey) {

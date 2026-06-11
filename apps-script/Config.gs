@@ -7,6 +7,15 @@ const SKHPS_SERVER_CONFIG = {
   sheets: {
     mainSpreadsheetId: '1Kd2T_XhkeAUyDzmdXvDUBcHKbmGII-7sky5nfJ8PY50',
     mainGid: '',
+    cssSheets: {
+      cssMain: {
+        key: 'cssMain',
+        title: 'CSS總表',
+        tabName: 'CSS總表',
+        tabGid: '0',
+        enabled: true
+      }
+    },
     dataSheets: {
       staffMaster: {
         key: 'staffMaster',

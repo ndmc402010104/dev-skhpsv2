@@ -1,15 +1,23 @@
 /*
-檔案位置：skhpsv2/assets/js/base-style-editor.js
-時間戳記：2026-06-08 20:00 UTC+8
-用途：baseStyle Theme Editor；前端讀 config.json + Google Sheet CSV，支援即時預覽、realtime 色票、本機暫存。
+檔案位置：skhpsv2/assets/js/css-setting-style-editor.js
+時間戳記：2026-06-11 UTC+8
+用途：CSS Setting Style Editor；固定讀取 Google Sheet gid 0 / CSS總表，使用 component 作為分類，支援即時預覽、realtime 色票、本機暫存。
 */
 
 (function () {
+  /*
+    目前 CSS/base-style-playground.html 可能仍使用舊 id。
+    所以 root/status 先保留舊 id 相容；檔案名稱與資料來源已改成 CSS總表。
+  */
   var ROOT_ID = "baseStyleEditorRoot";
   var STATUS_ID = "baseStyleEditorStatus";
-  var STYLE_ID = "baseStyleEditorStyle";
-  var STORAGE_KEY = "skhpsv2.baseStyle.localDraft.v1";
+  var ALT_STATUS_SELECTOR = "[data-skhps-css-main-status],[data-skhps-base-style-status]";
+  var STYLE_ID = "cssSettingStyleEditorStyle";
+  var STORAGE_KEY = "skhpsv2.cssSettingStyle.localDraft.v1";
   var RENDERED_ATTR = "data-css-setting-style-editor-rendered";
+  var CSS_MAIN_TAB_KEY = "cssMain";
+  var CSS_MAIN_TAB_GID = "0";
+  var CSS_MAIN_TAB_NAME = "CSS總表";
 
   var GROUPS = [
     {
@@ -144,7 +152,7 @@
   }
 
   function setStatus(text) {
-    var target = el(STATUS_ID);
+    var target = el(STATUS_ID) || document.querySelector(ALT_STATUS_SELECTOR);
     if (target) target.textContent = text;
   }
 
@@ -242,17 +250,15 @@
 
   function csvUrl(config) {
     var id = config && config.sheets && config.sheets.mainSpreadsheetId;
-    var tab = config && config.sheets && config.sheets.cssSheets && config.sheets.cssSheets.baseStyle;
 
     if (!id) throw new Error("config.json missing sheets.mainSpreadsheetId");
-    if (!tab || tab.tabGid === undefined || tab.tabGid === null || tab.tabGid === "") {
-      throw new Error("config.json missing sheets.cssSheets.baseStyle.tabGid");
-    }
 
     return "https://docs.google.com/spreadsheets/d/" +
       encodeURIComponent(id) +
       "/export?format=csv&gid=" +
-      encodeURIComponent(tab.tabGid);
+      encodeURIComponent(CSS_MAIN_TAB_GID) +
+      "&ts=" +
+      Date.now();
   }
 
   function parseCsv(text) {
@@ -328,7 +334,7 @@
       var description = String(row[idx.description] || "").trim();
       var updatedAt = String(row[idx.updatedAt] || "").trim();
 
-      if (component !== "base" || !className || !property) return;
+      if (!component || !className || !property) return;
 
       var key = className + "|" + property;
 
@@ -470,7 +476,7 @@
         : "<span></span>";
 
       return [
-        "<section class='base-control-item' data-css-setting-editor data-css-setting-core='on' data-css-setting-sheet-save='on' data-css-setting-component='base' data-css-setting-tab-key='baseStyle'>",
+        "<section class='base-control-item' data-css-setting-editor data-css-setting-core='on' data-css-setting-sheet-save='on' data-css-setting-component='" + escapeHtml(group.className) + "' data-css-setting-tab-key='" + CSS_MAIN_TAB_KEY + "'>",
         "<strong title='" + escapeHtml(desc) + "'>" + escapeHtml(label) + "</strong>",
         "<input type='" + type + "' readonly data-css-var='" + cssName + "' data-class-name='" + escapeHtml(group.className) + "' data-property='" + escapeHtml(key) + "' data-default='" + escapeHtml(def) + "' value='" + escapeHtml(value) + "'>",
         swatch,
@@ -526,7 +532,7 @@
     return [
       "<section class='skh-section skh-surface'>",
       "<h2>儲存狀態</h2>",
-      "<p class='base-save-note' id='baseSaveNote'>目前使用 Sheet effective values；儲存會寫回 Google Sheet。</p>",
+      "<p class='base-save-note' id='baseSaveNote'>目前使用 CSS總表 effective values；儲存會寫回 Google Sheet。</p>",
       "</section>"
     ].join("");
   }
@@ -549,7 +555,7 @@
   }
 
   function loadMaps() {
-    setStatus("讀取 baseStyle CSV 中...");
+    setStatus("讀取 CSS總表 CSV 中...");
 
     return fetchJson("config.json")
       .then(function (config) {
@@ -564,9 +570,17 @@
       .then(function (csv) {
         var rows = parseCsv(csv);
         var maps = buildMaps(rows);
-        setStatus("已套用 Sheet effective values。");
+        setStatus("已套用 CSS總表 effective values。");
         return maps;
       });
+  }
+
+  function clearLocalDraft() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn("CSS Setting Style local draft clear failed:", error);
+    }
   }
 
   function rerenderFromSheet() {
@@ -575,7 +589,7 @@
     var root = el(ROOT_ID);
     if (!root) return;
 
-    root.innerHTML = "<p class='skh-muted'>重新讀取 Sheet 中...</p>";
+    root.innerHTML = "<p class='skh-muted'>重新讀取 CSS總表中...</p>";
 
     loadMaps()
       .then(function (maps) {
@@ -583,13 +597,13 @@
         render(root, maps);
       })
       .catch(function (err) {
-        root.innerHTML = "<pre>baseStyle editor failed:\n" + escapeHtml(err.message || err) + "</pre>";
+        root.innerHTML = "<pre>CSS總表 editor failed:\n" + escapeHtml(err.message || err) + "</pre>";
       });
   }
 
   function bind() {
-    if (document.__skhpsBaseStyleInputBound) return;
-    document.__skhpsBaseStyleInputBound = true;
+    if (document.__skhpsCssSettingStyleInputBound) return;
+    document.__skhpsCssSettingStyleInputBound = true;
 
     document.addEventListener("input", function (event) {
       var input = event.target.closest("[data-css-var]");
@@ -607,7 +621,7 @@
       if (root.getAttribute(RENDERED_ATTR) === "1") return;
 
       root.setAttribute(RENDERED_ATTR, "1");
-      root.innerHTML = "<p class='skh-muted'>讀取 baseStyle 中...</p>";
+      root.innerHTML = "<p class='skh-muted'>讀取 CSS總表中...</p>";
 
       loadMaps()
         .then(function (maps) {
@@ -615,7 +629,7 @@
         })
         .catch(function (err) {
           setStatus("載入失敗。");
-          root.innerHTML = "<pre>baseStyle editor failed:\n" + escapeHtml(err.message || err) + "</pre>";
+          root.innerHTML = "<pre>CSS總表 editor failed:\n" + escapeHtml(err.message || err) + "</pre>";
         });
     });
 
@@ -624,7 +638,7 @@
     var root = el(ROOT_ID);
     if (root && root.getAttribute(RENDERED_ATTR) !== "1") {
       root.setAttribute(RENDERED_ATTR, "1");
-      root.innerHTML = "<p class='skh-muted'>讀取 baseStyle 中...</p>";
+      root.innerHTML = "<p class='skh-muted'>讀取 CSS總表中...</p>";
 
       loadMaps()
         .then(function (maps) {
@@ -632,10 +646,20 @@
         })
         .catch(function (err) {
           setStatus("載入失敗。");
-          root.innerHTML = "<pre>baseStyle editor failed:\n" + escapeHtml(err.message || err) + "</pre>";
+          root.innerHTML = "<pre>CSS總表 editor failed:\n" + escapeHtml(err.message || err) + "</pre>";
         });
     }
   }
+
+  window.SKHPSCssSettingStyleEditor = {
+    boot: boot,
+    rerenderFromSheet: rerenderFromSheet,
+    loadMaps: loadMaps,
+    csvUrl: csvUrl,
+    cssMainTabKey: CSS_MAIN_TAB_KEY,
+    cssMainTabGid: CSS_MAIN_TAB_GID,
+    cssMainTabName: CSS_MAIN_TAB_NAME
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

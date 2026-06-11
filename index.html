@@ -2,6 +2,7 @@
 <!--
 檔案位置：skhpsv2/index.html
 時間戳記：2026-06-11 UTC+8
+首頁調整：移除 QR 簽到卡片與頁面內 Runtime 診斷區；移除頁面後台大卡；後台改為 header 右側小入口。
 用途：整外資訊系統首頁。
 
 Loading Gate：
@@ -10,7 +11,7 @@ Loading Gate：
   1. css-runtime
   2. external-apps-runtime
 - 任何任務成功或失敗都必須回報 loading gate。
-- 8 秒後若仍未 all-ready，首頁 fallback 強制解除，並保留診斷資訊。
+- 8 秒後若仍未 all-ready，首頁 fallback 強制解除，診斷資訊先由 script 保留，之後交給 footer 顯示。
 
 重要規則：
 - 首頁不是外部專案，不載入 app-entry.js。
@@ -42,8 +43,11 @@ Loading Gate：
         </div>
       </div>
 
-      <div class="skhps-header-actions" aria-label="系統狀態">
+      <div class="skhps-header-actions" aria-label="系統狀態與維護入口">
         <span class="skhps-badge" data-skhps-runtime-label>Runtime 載入中</span>
+        <a class="skhps-header-admin-link" href="#" data-skhps-page-id="admin">
+          後台
+        </a>
       </div>
     </div>
   </header>
@@ -58,7 +62,7 @@ Loading Gate：
               整外資訊系統首頁
             </h1>
             <p class="skhps-page-subtitle skhps-index-subtitle">
-              這裡是整形外科共用入口。核心功能由 skhpsv2 提供，外部專案會依目前環境與啟用狀態自動顯示。
+              這裡是整形外科共用入口。系統入口會依目前環境與啟用狀態自動顯示。
             </p>
           </div>
 
@@ -81,104 +85,40 @@ Loading Gate：
         </div>
       </section>
 
-      <section class="skhps-section skhps-index-section" aria-labelledby="coreAppsTitle">
+
+
+
+
+      <section class="skhps-section skhps-index-section skhps-system-entry-section" aria-labelledby="externalAppsTitle">
         <div class="skhps-section-head skhps-index-section-head">
           <div>
-            <p class="skhps-eyebrow">Core Apps</p>
-            <h2 id="coreAppsTitle" class="skhps-section-title">核心系統入口</h2>
+            <p class="skhps-eyebrow">System Entrances</p>
+            <h2 id="externalAppsTitle" class="skhps-section-title">系統入口</h2>
           </div>
           <p class="skhps-page-subtitle skhps-section-description">
-            skhpsv2 內建與核心維護功能。
+            已啟用的功能與外部系統會以卡片顯示在這裡。
           </p>
         </div>
 
-        <div class="skhps-card-grid skhps-index-card-grid">
-          <article class="skhps-hero-card skhps-app-card skhps-index-card">
-            <div class="skhps-app-card-body">
-              <p class="skhps-eyebrow">Meeting</p>
-              <h3 class="skhps-section-title">晨會 QR 簽到</h3>
-              <p class="skhps-page-subtitle">
-                產生會議簽到 QR Code，提供住院醫師、NP、PGY 與相關人員快速簽到。
-              </p>
-            </div>
+        <div class="skhps-system-entry-grid">
+          <article class="skhps-hero-card skhps-system-entry-card">
+            <p
+              class="skhps-page-subtitle skhps-system-entry-status"
+              data-skhps-external-apps-status
+            >
+              系統入口載入中...
+            </p>
 
-            <div class="skhps-app-card-actions">
-              <a
-                class="skhps-btn skhps-btn-primary skhps-btn-lg"
-                href="#"
-                data-skhps-page-id="qr-signin"
-              >
-                進入 QR 簽到
-              </a>
-            </div>
-          </article>
-
-          <article class="skhps-hero-card skhps-app-card skhps-index-card">
-            <div class="skhps-app-card-body">
-              <p class="skhps-eyebrow">Admin</p>
-              <h3 class="skhps-section-title">系統後台</h3>
-              <p class="skhps-page-subtitle">
-                管理系統設定、CSS Sheet、runtime 狀態、外部專案與診斷資訊。
-              </p>
-            </div>
-
-            <div class="skhps-app-card-actions">
-              <a
-                class="skhps-btn skhps-btn-secondary skhps-btn-lg"
-                href="#"
-                data-skhps-page-id="admin"
-              >
-                進入後台
-              </a>
-            </div>
+            <nav
+              class="skhps-action-grid skhps-external-apps-grid"
+              aria-label="系統入口"
+              data-skhps-external-apps
+            ></nav>
           </article>
         </div>
       </section>
 
-      <section class="skhps-section skhps-index-section" aria-labelledby="externalAppsTitle">
-        <div class="skhps-section-head skhps-index-section-head">
-          <div>
-            <p class="skhps-eyebrow">External Apps</p>
-            <h2 id="externalAppsTitle" class="skhps-section-title">外部系統入口</h2>
-          </div>
-          <p class="skhps-page-subtitle skhps-section-description">
-            外部專案自行報到，並由 Sheet 啟用後顯示。
-          </p>
-        </div>
 
-        <div class="skhps-hero-card skhps-external-apps-card skhps-index-external-card">
-          <p
-            class="skhps-page-subtitle"
-            data-skhps-external-apps-status
-          >
-            外部專案清單載入中...
-          </p>
-
-          <nav
-            class="skhps-action-grid skhps-external-apps-grid"
-            aria-label="外部系統入口"
-            data-skhps-external-apps
-          ></nav>
-        </div>
-      </section>
-
-      <section class="skhps-section skhps-index-section" aria-label="Runtime 診斷">
-        <details class="skhps-hero-card skhps-diagnostics-card skhps-index-diagnostics">
-          <summary class="skhps-section-title">Runtime 診斷</summary>
-
-          <div class="skhps-diagnostics-grid">
-            <div>
-              <p class="skhps-eyebrow">Loading Tasks</p>
-              <pre class="skhps-code-block" data-skhps-loading-state>等待 runtime 回報...</pre>
-            </div>
-
-            <div>
-              <p class="skhps-eyebrow">External Apps Runtime</p>
-              <pre class="skhps-code-block" data-skhps-external-apps-debug>等待外部專案 runtime...</pre>
-            </div>
-          </div>
-        </details>
-      </section>
     </div>
   </main>
 

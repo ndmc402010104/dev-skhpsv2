@@ -1,11 +1,74 @@
 ﻿/**
  * 檔案位置：skhpsv2/apps-script/CssSheetApi.gs
- * 時間戳記：2026-06-09 20:00 UTC+8
- * 用途：CSS Sheet 讀取 API；支援單一 tab preview 與 runtime 全量讀取。
+ * 時間戳記：2026-06-11 UTC+8
+ * 用途：CSS Sheet 讀取 API；固定讀取 gid 0 / CSS總表，並相容舊 tabKey=baseStyle。
  */
 
-function getCssSheetPreview_(tabKey) {
+var CSS_MAIN_TAB_KEY_ = typeof CSS_MAIN_TAB_KEY_ !== 'undefined' ? CSS_MAIN_TAB_KEY_ : 'cssMain';
+var CSS_MAIN_TAB_NAME_ = typeof CSS_MAIN_TAB_NAME_ !== 'undefined' ? CSS_MAIN_TAB_NAME_ : 'CSS總表';
+var CSS_MAIN_TAB_GID_ = typeof CSS_MAIN_TAB_GID_ !== 'undefined' ? CSS_MAIN_TAB_GID_ : '0';
+
+function normalizeCssSheetTabKeyForRead_(tabKey) {
   tabKey = String(tabKey || '').trim();
+
+  // 舊前端/舊資料仍可能送 baseStyle；先相容導到 CSS總表。
+  if (!tabKey || tabKey === 'baseStyle') {
+    return CSS_MAIN_TAB_KEY_;
+  }
+
+  return tabKey;
+}
+
+function getCssSheetConfig_(tabKey) {
+  tabKey = normalizeCssSheetTabKeyForRead_(tabKey);
+
+  var config = typeof getServerConfig_ === 'function' ? getServerConfig_() : null;
+  var fromConfig =
+    config &&
+    config.sheets &&
+    config.sheets.cssSheets &&
+    config.sheets.cssSheets[tabKey];
+
+  if (fromConfig) {
+    return {
+      key: fromConfig.key || tabKey,
+      title: fromConfig.title || CSS_MAIN_TAB_NAME_,
+      tabName: fromConfig.tabName || fromConfig.title || CSS_MAIN_TAB_NAME_,
+      tabGid: String(fromConfig.tabGid === undefined || fromConfig.tabGid === null ? CSS_MAIN_TAB_GID_ : fromConfig.tabGid),
+      enabled: fromConfig.enabled !== false
+    };
+  }
+
+  if (tabKey === CSS_MAIN_TAB_KEY_) {
+    return {
+      key: CSS_MAIN_TAB_KEY_,
+      title: CSS_MAIN_TAB_NAME_,
+      tabName: CSS_MAIN_TAB_NAME_,
+      tabGid: CSS_MAIN_TAB_GID_,
+      enabled: true
+    };
+  }
+
+  return null;
+}
+
+function getEnabledCssSheetKeys_() {
+  var config = typeof getServerConfig_ === 'function' ? getServerConfig_() : null;
+  var cssSheets = config && config.sheets && config.sheets.cssSheets ? config.sheets.cssSheets : null;
+
+  if (!cssSheets) {
+    return [CSS_MAIN_TAB_KEY_];
+  }
+
+  var keys = Object.keys(cssSheets).filter(function(key) {
+    return cssSheets[key] && cssSheets[key].enabled !== false;
+  });
+
+  return keys.length ? keys : [CSS_MAIN_TAB_KEY_];
+}
+
+function getCssSheetPreview_(tabKey) {
+  tabKey = normalizeCssSheetTabKeyForRead_(tabKey);
 
   var cssSheetConfig = getCssSheetConfig_(tabKey);
 
@@ -86,8 +149,13 @@ function getCssSheetPreview_(tabKey) {
 
 function getCssSheetRuntime_(sheetKeys) {
   sheetKeys = Array.isArray(sheetKeys) && sheetKeys.length
-    ? sheetKeys
+    ? sheetKeys.map(normalizeCssSheetTabKeyForRead_)
     : getEnabledCssSheetKeys_();
+
+  // 現階段 CSS 來源固定為單一 CSS總表，避免舊多分頁設定混進來。
+  sheetKeys = sheetKeys.filter(function(key, index, arr) {
+    return key && arr.indexOf(key) === index;
+  });
 
   var spreadsheetId = getSpreadsheetId_();
 
@@ -99,11 +167,11 @@ function getCssSheetRuntime_(sheetKeys) {
   var rows = [];
 
   sheetKeys.forEach(function(sheetKey) {
-    sheetKey = String(sheetKey || '').trim();
+    sheetKey = normalizeCssSheetTabKeyForRead_(sheetKey);
     if (!sheetKey) return;
 
     var cssSheetConfig = getCssSheetConfig_(sheetKey);
-    if (!cssSheetConfig) return;
+    if (!cssSheetConfig || cssSheetConfig.enabled === false) return;
 
     if (cssSheetConfig.tabGid === undefined || cssSheetConfig.tabGid === null || String(cssSheetConfig.tabGid) === '') {
       return;

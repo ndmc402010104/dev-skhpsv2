@@ -1,11 +1,28 @@
 /*
 檔案位置：skhpsv2/assets/js/css-setting-sheet-save.js
-時間戳記：2026-06-09 21:45 UTC+8
-用途：CSS Setting 共用 Sheet save；依 data-css-setting-component / data-css-setting-tab-key 寫回對應 CSS Sheet。儲存成功後清除 css-sheet-runtime.js 快取，確保其他頁下次會讀取最新 CSS。
+時間戳記：2026-06-11 UTC+8
+用途：CSS Setting 共用 Sheet save；固定寫回 CSS總表（cssMain / gid 0）。後端採 upsert，同一組 component + className + property 不再無限 append。
 */
 
 (function () {
   "use strict";
+
+  var DEFAULT_TAB_KEY = "cssMain";
+  var LEGACY_TAB_KEY_MAP = {
+    baseStyle: "cssMain",
+    tokenStyle: "cssMain",
+    layoutStyle: "cssMain",
+    headerStyle: "cssMain",
+    footerStyle: "cssMain",
+    buttonStyle: "cssMain",
+    formStyle: "cssMain"
+  };
+
+  function normalizeTabKey(tabKey) {
+    var key = String(tabKey || "").trim();
+    if (!key) return DEFAULT_TAB_KEY;
+    return LEGACY_TAB_KEY_MAP[key] || key;
+  }
 
   function clearCssRuntimeCache() {
     if (
@@ -19,7 +36,13 @@
     try {
       localStorage.removeItem("skhpsv2.cssSheetRuntimeCache.v1");
     } catch (error) {
-      console.warn("CSS runtime cache clear failed:", error);
+      console.warn("CSS runtime local cache clear failed:", error);
+    }
+
+    try {
+      sessionStorage.removeItem("skhpsv2.cssSheetRuntimeSessionReady.v1");
+    } catch (error) {
+      console.warn("CSS runtime session cache clear failed:", error);
     }
   }
 
@@ -29,6 +52,7 @@
   }
 
   function setBusy(button, busy) {
+    if (!button) return;
     button.disabled = !!busy;
     button.textContent = busy ? "儲存中..." : "儲存";
   }
@@ -44,19 +68,28 @@
     return "";
   }
 
+  function getComponent(scope, input) {
+    return String(
+      scope.getAttribute("data-css-setting-component") ||
+      input.getAttribute("data-css-setting-component") ||
+      input.getAttribute("data-class-name") ||
+      ""
+    ).trim();
+  }
+
   function collectRows(scope) {
     return Array.prototype.slice.call(scope.querySelectorAll("[data-class-name][data-property]"))
       .map(function (input) {
         return {
-          component: scope.getAttribute("data-css-setting-component") || "",
-          className: input.getAttribute("data-class-name") || "",
-          property: input.getAttribute("data-property") || "",
-          value: input.value || "",
-          description: getDescription(input)
+          component: getComponent(scope, input),
+          className: String(input.getAttribute("data-class-name") || "").trim(),
+          property: String(input.getAttribute("data-property") || "").trim(),
+          value: String(input.value || "").trim(),
+          description: String(getDescription(input) || "").trim()
         };
       })
       .filter(function (row) {
-        return row.component && row.className && row.property;
+        return row.component && row.className && row.property && row.value !== "";
       });
   }
 
@@ -68,12 +101,8 @@
   }
 
   function saveToSheet(scope, button) {
-    var tabKey = scope.getAttribute("data-css-setting-tab-key") || "";
-
-    if (!tabKey) {
-      setStatus(scope, "儲存失敗：缺少 data-css-setting-tab-key。");
-      return;
-    }
+    var rawTabKey = scope.getAttribute("data-css-setting-tab-key") || "";
+    var tabKey = normalizeTabKey(rawTabKey);
 
     if (!window.SKHPSBackend || typeof window.SKHPSBackend.call !== "function") {
       setStatus(scope, "儲存失敗：找不到 SKHPSBackend.call，請確認 backend-client.js 已載入。");
@@ -88,10 +117,14 @@
     }
 
     setBusy(button, true);
-    setStatus(scope, "寫回 Google Sheet 中...");
+    setStatus(scope, "寫回 CSS總表 中...");
 
     window.SKHPSBackend.call("saveCssSheetRows", {
       tabKey: tabKey,
+      sheetKey: tabKey,
+      sheetName: "CSS總表",
+      saveMode: "upsert",
+      upsertKey: ["component", "className", "property"],
       rows: rows
     })
       .then(function (response) {
@@ -101,11 +134,22 @@
 
         clearCssRuntimeCache();
 
-        setStatus(scope, "已寫回 Sheet：" + response.appendedRows + " 筆，updatedAt=" + response.updatedAt + "；CSS 快取已清除。");
+        var inserted = Number(response.insertedRows || response.appendedRows || 0);
+        var updated = Number(response.updatedRows || 0);
+
+        setStatus(
+          scope,
+          "已寫回 CSS總表：更新 " + updated +
+          " 筆 / 新增 " + inserted +
+          " 筆，updatedAt=" +
+          (response.updatedAt || "unknown") +
+          "；CSS 快取已清除。"
+        );
 
         dispatch(scope, "skhps-css-setting-save-success", {
           response: response,
-          rows: rows
+          rows: rows,
+          tabKey: tabKey
         });
       })
       .catch(function (error) {
@@ -113,7 +157,8 @@
         setStatus(scope, "儲存失敗：" + message);
 
         dispatch(scope, "skhps-css-setting-save-error", {
-          error: message
+          error: message,
+          tabKey: tabKey
         });
       })
       .finally(function () {
@@ -138,4 +183,11 @@
 
     saveToSheet(scope, button);
   }, true);
+
+  window.SKHPSCssSettingSheetSave = {
+    normalizeTabKey: normalizeTabKey,
+    collectRows: collectRows,
+    clearCssRuntimeCache: clearCssRuntimeCache,
+    saveToSheet: saveToSheet
+  };
 })();

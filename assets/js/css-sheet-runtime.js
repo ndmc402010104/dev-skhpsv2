@@ -27,6 +27,24 @@
     return window.SKHPSRuntime || null;
   }
 
+  function rlog(status, action, detail, durationMs) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "css-sheet-runtime.js",
+          category: "css",
+          action: action,
+          status: status,
+          detail: detail || "",
+          durationMs: durationMs
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "css-sheet-runtime.js");
+  rlog("RUN", "cssRuntimeStart", "css-sheet-runtime.js");
+
   function runtimeStart() {
     cssRuntimeStartedAt = Date.now();
 
@@ -104,6 +122,7 @@
 
   function markCssRuntimePending() {
     traceFunction("markCssRuntimePending", "start");
+    rlog("RUN", "markCssRuntimePending", "css-runtime");
     document.documentElement.setAttribute("data-skhps-css-ready", "false");
     runtimeStart();
 
@@ -116,9 +135,13 @@
     traceFunction("markCssRuntimeDone", "done", {
       source: window.SKHPSCssSheetRuntime && window.SKHPSCssSheetRuntime.source || ""
     });
+    rlog("OK", "cssRuntimeLoaded", {
+      source: window.SKHPSCssSheetRuntime && window.SKHPSCssSheetRuntime.source || ""
+    }, cssRuntimeStartedAt ? Date.now() - cssRuntimeStartedAt : null);
     document.documentElement.setAttribute("data-skhps-css-ready", "true");
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
+      rlog("OK", "done", "css-runtime");
       window.SKHPSLoading.done("css-runtime");
       return;
     }
@@ -130,12 +153,19 @@
     */
     document.documentElement.classList.remove(LOADING_CLASS);
     document.documentElement.classList.remove("skhps-loading");
+    document.documentElement.classList.remove("skhps-shell-loading");
+    document.documentElement.classList.remove("skhps-main-loading");
+    document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+    document.documentElement.setAttribute("data-skhps-page-ready", "true");
   }
 
   function markCssRuntimeFailed(error) {
     traceFunction("markCssRuntimeFailed", "error", {
       error: error && error.message ? error.message : String(error)
     });
+    rlog("FAIL", "cssRuntimeLoaded", {
+      error: error && error.message ? error.message : String(error)
+    }, cssRuntimeStartedAt ? Date.now() - cssRuntimeStartedAt : null);
     document.documentElement.setAttribute("data-skhps-css-ready", "false");
     runtimeFail(error);
 
@@ -147,10 +177,15 @@
     /* Fallback: do not leave old pages permanently hidden when CSS failed. */
     document.documentElement.classList.remove(LOADING_CLASS);
     document.documentElement.classList.remove("skhps-loading");
+    document.documentElement.classList.remove("skhps-shell-loading");
+    document.documentElement.classList.remove("skhps-main-loading");
+    document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+    document.documentElement.setAttribute("data-skhps-page-ready", "true");
   }
 
   function keepLoading() {
     traceFunction("keepLoading", "start");
+    rlog("RUN", "keepLoading", LOADING_CLASS);
     document.documentElement.classList.add(LOADING_CLASS);
     markCssRuntimePending();
   }
@@ -391,6 +426,10 @@
   }
 
   function loadRowsFromCsv(config, sheetKeys) {
+    var startedAt = Date.now();
+    rlog("RUN", "loadCsv", {
+      sheetKeys: sheetKeys
+    });
     return Promise.all(sheetKeys.map(function (sheetKey) {
       return fetch(csvUrl(config, sheetKey), { cache: "no-store" })
         .then(function (res) {
@@ -403,6 +442,18 @@
       return groups.reduce(function (acc, rows) {
         return acc.concat(rows);
       }, []);
+    }).then(function (rows) {
+      rlog("OK", "loadCsv", {
+        sheetKeys: sheetKeys,
+        rowsCount: rows.length
+      }, Date.now() - startedAt);
+      return rows;
+    }).catch(function (error) {
+      rlog("FAIL", "loadCsv", {
+        sheetKeys: sheetKeys,
+        error: error && error.message ? error.message : String(error)
+      }, Date.now() - startedAt);
+      throw error;
     });
   }
 
@@ -439,6 +490,10 @@
       return Promise.reject(new Error("SKHPSBackend.call not available"));
     }
 
+    rlog("RUN", "loadSheetBackend", {
+      sheetKeys: sheetKeys
+    });
+
     return window.SKHPSBackend.call("getCssSheetRuntime", {
       sheetKeys: sheetKeys,
       sheets: sheetKeys
@@ -449,6 +504,10 @@
 
       var rows = normalizeBackendRows(res, sheetKeys);
       if (!rows.length) throw new Error("getCssSheetRuntime returned no rows");
+      rlog("OK", "loadSheetBackend", {
+        sheetKeys: sheetKeys,
+        rowsCount: rows.length
+      });
       return rows;
     });
   }
@@ -468,6 +527,11 @@
     if (shouldUseBackend(config)) {
       return loadRowsFromBackend(sheetKeys).catch(function (error) {
         console.warn("CSS Sheet backend failed, fallback to CSV:", error);
+        rlog("WARN", "loadSheetBackend", {
+          sheetKeys: sheetKeys,
+          error: error && error.message ? error.message : String(error),
+          fallback: "csv"
+        });
         return loadRowsFromCsv(config, sheetKeys);
       });
     }
@@ -743,6 +807,12 @@
       });
     }).then(function (result) {
       var built = buildCss(result.rows);
+      rlog("OK", "applyRows", {
+        source: result.source,
+        sheetKeys: result.sheetKeys,
+        rowsCount: result.rows.length,
+        latestRowsCount: built.latestRows.length
+      });
 
       injectCss(built.cssText);
       markCssRuntimeDone();
@@ -762,6 +832,7 @@
       traceFunction("load", "done", {
         source: result.source
       });
+      rlog("OK", "done", "css-runtime", cssRuntimeStartedAt ? Date.now() - cssRuntimeStartedAt : null);
 
       writeCache(window.SKHPSCssSheetRuntime);
       setSessionReady();
@@ -799,6 +870,9 @@
       traceFunction("load", "error", {
         error: error && error.message ? error.message : String(error)
       });
+      rlog("FAIL", "load", {
+        error: error && error.message ? error.message : String(error)
+      });
       throw error;
     });
   }
@@ -827,4 +901,5 @@
     cacheKey: CACHE_KEY,
     sessionReadyKey: SESSION_READY_KEY
   };
+  rlog("OK", "moduleReady", "css-sheet-runtime.js");
 })();

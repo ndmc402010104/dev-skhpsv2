@@ -16,6 +16,32 @@ Loading Gate：
   var STATUS_SELECTOR = "[data-skhps-external-apps-status]";
   var WAIT_BACKEND_TIMEOUT_MS = 8000;
   var WAIT_BACKEND_INTERVAL_MS = 100;
+  var loadStartedAt = Date.now();
+
+  function rlog(status, action, detail, durationMs) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "external-apps-runtime.js",
+          category: "external-app",
+          action: action,
+          status: status,
+          detail: detail || "",
+          durationMs: durationMs
+        });
+      }
+    } catch (error) {}
+  }
+
+  function setRuntimeExternalApps(data) {
+    try {
+      if (window.SKHPSRuntime && typeof window.SKHPSRuntime.setExternalApps === "function") {
+        window.SKHPSRuntime.setExternalApps(data || {});
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "external-apps-runtime.js");
 
   function $(selector) {
     return document.querySelector(selector);
@@ -23,6 +49,7 @@ Loading Gate：
 
   function markReady() {
     document.documentElement.setAttribute("data-skhps-external-apps-runtime-ready", "true");
+    rlog("OK", "moduleReady", "external-apps-runtime.js", Date.now() - loadStartedAt);
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
       window.SKHPSLoading.done(TASK_NAME);
@@ -35,6 +62,14 @@ Loading Gate：
       "data-skhps-external-apps-runtime-error",
       error && error.message ? error.message : String(error || "unknown")
     );
+    rlog("FAIL", "moduleReady", {
+      error: error && error.message ? error.message : String(error || "unknown")
+    }, Date.now() - loadStartedAt);
+    setRuntimeExternalApps({
+      loaded: false,
+      error: error && error.message ? error.message : String(error || "unknown"),
+      durationMs: Date.now() - loadStartedAt
+    });
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
       window.SKHPSLoading.fail(TASK_NAME, error);
@@ -170,6 +205,9 @@ Loading Gate：
 
     document.documentElement.setAttribute("data-skhps-runtime", runtime);
     setStatus("外部專案清單載入中...");
+    rlog("RUN", "listExternalApps", {
+      env: runtime
+    });
 
     callBackend("listExternalApps", {
       activeOnly: true,
@@ -177,11 +215,27 @@ Loading Gate：
     })
       .then(function (response) {
         console.info("[SKHPSExternalAppsRuntime] listExternalApps response:", response);
-        renderApps(normalizeApps(response), runtime);
+        var apps = normalizeApps(response);
+        renderApps(apps, runtime);
+        setRuntimeExternalApps({
+          loaded: true,
+          count: apps.length,
+          env: runtime,
+          error: "",
+          durationMs: Date.now() - loadStartedAt
+        });
+        rlog("OK", "listExternalApps", {
+          env: runtime,
+          count: apps.length
+        }, Date.now() - loadStartedAt);
         markReady();
       })
       .catch(function (error) {
         renderError(error);
+        rlog("FAIL", "listExternalApps", {
+          env: runtime,
+          error: error && error.message ? error.message : String(error)
+        }, Date.now() - loadStartedAt);
         markFailed(error);
       });
   }

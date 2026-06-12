@@ -12,7 +12,7 @@
   - 不要圈圈
   - 不要膠囊
   - 不要外框
-  - loading 階段只隱藏 gated content，不隱藏 header/footer/body
+  - loading 階段分層隱藏 shell / main，不隱藏 body
   - loading 文案由 <html data-loading-title="..."> 控制
 */
 
@@ -39,27 +39,80 @@ html.skhps-css-loading {
   animation: skhps-loading-bg 9s ease-in-out infinite;
 }
 
+html.skhps-shell-loading [data-skhps-header],
+html.skhps-shell-loading [data-skhps-footer],
+html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-header],
+html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-footer],
+html.skhps-main-loading main,
+html.skhps-main-loading [data-skhps-main],
+html.skhps-css-loading:not([data-skhps-page-ready="true"]) main,
+html.skhps-css-loading:not([data-skhps-page-ready="true"]) [data-skhps-main],
 html.skhps-css-loading .skhps-loading-gated,
-html.skhps-loading .skhps-loading-gated {
+html.skhps-loading .skhps-loading-gated,
+html.skhps-main-loading .skhps-loading-gated {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
 }
 
-html:not(.skhps-css-loading):not(.skhps-loading) .skhps-loading-gated {
+html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-header],
+html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-footer],
+html:not(.skhps-main-loading)[data-skhps-page-ready="true"] main,
+html:not(.skhps-main-loading)[data-skhps-page-ready="true"] [data-skhps-main],
+html:not(.skhps-css-loading):not(.skhps-loading):not(.skhps-main-loading) .skhps-loading-gated {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
 }
 
+[data-skhps-header],
+[data-skhps-footer],
+main,
+[data-skhps-main],
 .skhps-loading-gated {
-  transition: opacity .18s ease;
+  transition:
+    opacity .28s ease,
+    transform .28s ease,
+    visibility 0s linear .28s;
+  will-change: opacity, transform;
+}
+
+[data-skhps-header],
+[data-skhps-footer] {
+  transform: translateY(-6px);
+}
+
+main,
+[data-skhps-main],
+.skhps-loading-gated {
+  transform: translateY(8px);
+}
+
+html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-header],
+html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-footer],
+html:not(.skhps-main-loading)[data-skhps-page-ready="true"] main,
+html:not(.skhps-main-loading)[data-skhps-page-ready="true"] [data-skhps-main],
+html:not(.skhps-css-loading):not(.skhps-loading):not(.skhps-main-loading) .skhps-loading-gated {
+  transform: translateY(0);
+  transition:
+    opacity .32s ease,
+    transform .32s ease,
+    visibility 0s linear 0s;
 }
 
 .skhps-loading-spared {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
+}
+
+html.skhps-shell-loading [data-skhps-header].skhps-loading-spared,
+html.skhps-shell-loading [data-skhps-footer].skhps-loading-spared,
+html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-header].skhps-loading-spared,
+html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-footer].skhps-loading-spared {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .skhps-footer {

@@ -19,6 +19,23 @@
     return window.SKHPSRuntime || null;
   }
 
+  function rlog(status, action, detail, durationMs) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "config.js",
+          category: "runtime",
+          action: action,
+          status: status,
+          detail: detail || "",
+          durationMs: durationMs
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "config.js");
+
   function runtimeStart(name) {
     if (runtime() && typeof runtime().start === "function") {
       runtime().start(name);
@@ -145,11 +162,22 @@
       effective: config.runtimeEnv
     });
 
+    rlog("INFO", "runtimeEffective", {
+      requested: document.documentElement.getAttribute("data-skhps-runtime") || "auto",
+      effective: config.runtimeEnv,
+      host: window.location.hostname || "",
+      hostEnv: inferEnvFromLocation() || config.env || "prod"
+    });
+
     return config;
   }
 
   function loadConfig(force) {
+    var loadStartedAt = Date.now();
     traceFunction("loadConfig", "start", {
+      force: Boolean(force)
+    });
+    rlog("RUN", "loadConfig", {
       force: Boolean(force)
     });
 
@@ -163,6 +191,10 @@
         source: getConfigUrl(),
         cached: true
       });
+      rlog("OK", "loadConfig", {
+        source: getConfigUrl(),
+        cached: true
+      }, 0);
       traceFunction("loadConfig", "done", {
         source: getConfigUrl(),
         cached: true
@@ -178,6 +210,7 @@
     var source = getConfigUrl();
 
     runtimeStart("config");
+    rlog("INFO", "configUrl", source);
 
     cachedConfigPromise = fetch(getConfigUrl(), {
       cache: "no-store"
@@ -197,6 +230,11 @@
       runtimeDone("config", {
         source: source
       });
+      rlog("OK", "loadConfig", {
+        source: source,
+        host: window.location.hostname || "",
+        hostEnv: inferEnvFromLocation() || window.SKHPS_CONFIG.env || ""
+      }, Date.now() - loadStartedAt);
       traceFunction("loadConfig", "done", {
         source: source
       });
@@ -210,6 +248,10 @@
       runtimeFail("config", error, {
         source: source
       });
+      rlog("FAIL", "loadConfig", {
+        source: source,
+        error: error && error.message ? error.message : String(error)
+      }, Date.now() - loadStartedAt);
       traceFunction("loadConfig", "error", {
         source: source,
         error: error && error.message ? error.message : String(error)
@@ -292,4 +334,5 @@
   window.SKHPSConfig.getEnvValue = getEnvValue;
   window.SKHPSConfig.getSiteBaseUrl = getSiteBaseUrl;
   window.SKHPSConfig.joinUrl = joinConfigUrl;
+  rlog("OK", "moduleReady", "config.js");
 })();

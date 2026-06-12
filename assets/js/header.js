@@ -20,6 +20,22 @@
 (function () {
   "use strict";
 
+  function rlog(status, action, detail) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "header.js",
+          category: "dom",
+          action: action,
+          status: status,
+          detail: detail || ""
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "header.js");
+
   var HEADER_ID = "header";
   var BRAND_MARK = "SKHPS";
   var BRAND_MAIN = "SKHPS";
@@ -132,6 +148,7 @@
     var root = getHeaderRoot();
 
     if (!root) {
+      rlog("WARN", "renderHeader", "missing header root");
       return;
     }
 
@@ -170,6 +187,11 @@
         '</nav>',
       '</div>'
     ].join("");
+    rlog("OK", "renderHeader", {
+      mode: mode,
+      homeHref: homeHref,
+      loginHref: loginHref
+    });
   }
 
   function boot() {
@@ -181,4 +203,5 @@
   } else {
     boot();
   }
+  rlog("OK", "moduleReady", "header.js");
 })();

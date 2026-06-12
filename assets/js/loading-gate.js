@@ -14,6 +14,10 @@
 
   var html = document.documentElement;
   var LOADING_CLASSES = ["skhps-css-loading", "skhps-loading"];
+  var SHELL_LOADING_CLASS = "skhps-shell-loading";
+  var MAIN_LOADING_CLASS = "skhps-main-loading";
+  var CSS_RUNTIME_CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v1";
+  var CSS_RUNTIME_SESSION_READY_KEY = "skhpsv2.cssSheetRuntimeSessionReady.v1";
   var DEFAULT_TIMEOUT_MS = 12000;
 
   var state = {
@@ -21,6 +25,8 @@
     done: {},
     failed: {},
     released: false,
+    shellReady: false,
+    pageReady: false,
     openedAt: Date.now(),
     releaseReason: "",
     timer: null
@@ -45,6 +51,84 @@
     return window.SKHPSRuntime || null;
   }
 
+  function rlog(status, action, detail, durationMs) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "loading-gate.js",
+          category: "loading",
+          action: action,
+          status: status,
+          detail: detail || "",
+          durationMs: durationMs
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "loading-gate.js");
+  rlog("RUN", "loadingGateStart", {
+    loadingClasses: LOADING_CLASSES.concat([SHELL_LOADING_CLASS, MAIN_LOADING_CLASS]),
+    timeoutMs: DEFAULT_TIMEOUT_MS
+  });
+
+  try {
+    if (window.history && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+  } catch (error) {}
+
+  function hasUsableCssRuntimeCache() {
+    try {
+      if (sessionStorage.getItem(CSS_RUNTIME_SESSION_READY_KEY) !== "1") {
+        return false;
+      }
+
+      var raw = localStorage.getItem(CSS_RUNTIME_CACHE_KEY);
+      if (!raw) return false;
+
+      var cache = JSON.parse(raw);
+      return Boolean(cache && cache.cssText);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function setInitialLayerState() {
+    var hasDeclaredTasks =
+      html.hasAttribute("data-skhps-loading-tasks") ||
+      html.hasAttribute("data-loading-tasks");
+    var shouldUseLayeredGate =
+      hasLoadingClass() ||
+      hasDeclaredTasks ||
+      html.classList.contains(SHELL_LOADING_CLASS) ||
+      html.classList.contains(MAIN_LOADING_CLASS);
+
+    if (!shouldUseLayeredGate) {
+      return;
+    }
+
+    if (html.getAttribute("data-skhps-shell-ready") !== "true" && hasUsableCssRuntimeCache()) {
+      state.shellReady = true;
+      html.classList.remove(SHELL_LOADING_CLASS);
+      html.setAttribute("data-skhps-shell-ready", "true");
+      html.setAttribute("data-skhps-shell-ready-reason", "css-runtime-cache");
+      setRuntimeGatePatch({
+        shellReady: true,
+        shellReadyReason: "css-runtime-cache"
+      });
+      rlog("INFO", "shellCacheReady", "css-runtime-cache");
+    } else if (html.getAttribute("data-skhps-shell-ready") !== "true") {
+      html.classList.add(SHELL_LOADING_CLASS);
+      html.setAttribute("data-skhps-shell-ready", "false");
+    }
+
+    if (html.getAttribute("data-skhps-page-ready") !== "true") {
+      html.classList.add(MAIN_LOADING_CLASS);
+      html.setAttribute("data-skhps-page-ready", "false");
+    }
+  }
+
   function setRuntimeRequired() {
     if (runtime() && typeof runtime().setLoadingRequired === "function") {
       runtime().setLoadingRequired(requiredTasks());
@@ -66,6 +150,12 @@
   function runtimeTaskFailed(task, error) {
     if (runtime() && typeof runtime().taskFailed === "function") {
       runtime().taskFailed(task, error);
+    }
+  }
+
+  function setRuntimeGatePatch(data) {
+    if (runtime() && typeof runtime().setLoadingGate === "function") {
+      runtime().setLoadingGate(data || {});
     }
   }
 
@@ -141,13 +231,71 @@
         };
       }),
       released: state.released,
+      shellReady: state.shellReady,
+      pageReady: state.pageReady,
       releaseReason: state.releaseReason,
       openedAt: state.openedAt
     };
   }
 
+  function markShellReady(reason, status) {
+    if (state.shellReady) return;
+
+    state.shellReady = true;
+    html.classList.remove(SHELL_LOADING_CLASS);
+    if (document.body) {
+      document.body.classList.remove(SHELL_LOADING_CLASS);
+    }
+    html.setAttribute("data-skhps-shell-ready", "true");
+    html.setAttribute("data-skhps-shell-ready-reason", reason || "css-runtime");
+    setRuntimeGatePatch({
+      shellReady: true,
+      shellReadyReason: reason || "css-runtime"
+    });
+    rlog(status || "OK", "releaseShell", reason || "css-runtime");
+  }
+
+  function markPageReady(reason, status) {
+    if (state.pageReady) return;
+
+    state.pageReady = true;
+    html.classList.remove(MAIN_LOADING_CLASS);
+    if (document.body) {
+      document.body.classList.remove(MAIN_LOADING_CLASS);
+    }
+    html.setAttribute("data-skhps-page-ready", "true");
+    html.setAttribute("data-skhps-page-ready-reason", reason || "all-ready");
+    setRuntimeGatePatch({
+      pageReady: true,
+      pageReadyReason: reason || "all-ready"
+    });
+    rlog(status || "OK", "releaseMain", reason || "all-ready");
+    scrollPageToTopAfterReady();
+  }
+
+  function scrollPageToTopAfterReady() {
+    if (html.getAttribute("data-skhps-preserve-scroll") === "true") {
+      return;
+    }
+
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        try {
+          window.scrollTo({
+            top: 0,
+            left: 0,
+            behavior: "auto"
+          });
+        } catch (error) {
+          window.scrollTo(0, 0);
+        }
+      });
+    });
+  }
+
   function release(reason) {
     if (state.released) return;
+    var durationMs = Date.now() - state.openedAt;
     traceFunction("release", "start", {
       reason: reason || "ready"
     });
@@ -159,6 +307,9 @@
       window.clearTimeout(state.timer);
       state.timer = null;
     }
+
+    markShellReady(state.releaseReason, state.releaseReason === "timeout-fallback" ? "WARN" : "OK");
+    markPageReady(state.releaseReason, state.releaseReason === "timeout-fallback" ? "WARN" : "OK");
 
     LOADING_CLASSES.forEach(function (className) {
       html.classList.remove(className);
@@ -183,6 +334,7 @@
     }
 
     log("released", getState());
+    rlog("OK", "releasePage", state.releaseReason, durationMs);
     traceFunction("release", "done", {
       reason: state.releaseReason
     });
@@ -240,6 +392,7 @@
     traceFunction("require", "start", {
       task: task
     });
+    rlog("RUN", "require", task);
 
     if (state.released) {
       log("require ignored after release:", task);
@@ -285,6 +438,10 @@
 
     setTaskAttr(task, "done");
     runtimeTaskDone(task);
+    rlog("OK", "taskDone", task);
+    if (task === "css-runtime") {
+      markShellReady("css-runtime", "OK");
+    }
     log("done", task, getState());
     traceFunction("done", "done", {
       task: task
@@ -314,6 +471,13 @@
     setTaskAttr(task, "failed");
     runtimeTaskFailed(task, error);
     warn("task failed:", task, error);
+    if (task === "css-runtime") {
+      markShellReady("css-runtime-failed", "WARN");
+    }
+    rlog("WARN", "taskDone", {
+      task: task,
+      error: error && error.message ? error.message : String(error || true)
+    });
     traceFunction("fail", "error", {
       task: task,
       error: error && error.message ? error.message : String(error || true)
@@ -331,15 +495,30 @@
     state.done = {};
     state.failed = {};
     state.released = false;
+    state.shellReady = false;
+    state.pageReady = false;
     state.releaseReason = "";
     state.openedAt = Date.now();
 
     html.removeAttribute("data-skhps-loading-released");
     html.removeAttribute("data-skhps-loading-release-reason");
+    html.setAttribute("data-skhps-shell-ready", "false");
+    html.setAttribute("data-skhps-page-ready", "false");
 
     LOADING_CLASSES.forEach(function (className) {
       html.classList.add(className);
     });
+
+    if (hasUsableCssRuntimeCache()) {
+      state.shellReady = true;
+      html.classList.remove(SHELL_LOADING_CLASS);
+      html.setAttribute("data-skhps-shell-ready", "true");
+      html.setAttribute("data-skhps-shell-ready-reason", "css-runtime-cache");
+    } else {
+      html.classList.add(SHELL_LOADING_CLASS);
+    }
+
+    html.classList.add(MAIN_LOADING_CLASS);
 
     requireMany(tasks || []);
     setRuntimeRequired();
@@ -408,6 +587,7 @@
       if (state.released) return;
 
       warn("timeout fallback release", getState());
+      rlog("WARN", "timeoutRelease", getState(), Date.now() - state.openedAt);
       release("timeout-fallback");
     }, DEFAULT_TIMEOUT_MS);
   }
@@ -418,6 +598,7 @@
       html.getAttribute("data-loading-tasks") ||
       "";
 
+    rlog("INFO", "requiredTasks", rawTasks || "(none)");
     requireMany(rawTasks);
     setRuntimeRequired();
   }
@@ -431,9 +612,13 @@
     receive: receive,
     check: check,
     release: release,
+    releaseShell: markShellReady,
+    releaseMain: markPageReady,
     reset: reset,
     getState: getState
   };
+
+  setInitialLayerState();
 
   if (document.body) {
     initSpareLoadingElements();
@@ -447,7 +632,15 @@
     它會等模組傳入 require/done/fail。
     若真的沒有任何模組回報，timeout fallback 會避免正式環境永遠白畫面。
   */
-  if (hasLoadingClass()) {
+  if (
+    hasLoadingClass() ||
+    html.classList.contains(SHELL_LOADING_CLASS) ||
+    html.classList.contains(MAIN_LOADING_CLASS) ||
+    html.hasAttribute("data-skhps-loading-tasks") ||
+    html.hasAttribute("data-loading-tasks")
+  ) {
     startTimeout();
   }
+
+  rlog("OK", "moduleReady", "loading-gate.js");
 })();

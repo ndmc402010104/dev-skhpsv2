@@ -10,6 +10,24 @@
   var booted = false;
   var versionLoadStarted = false;
   var panelOpen = false;
+  var STYLE_ID = "skhps-footer-runtime-guard-style";
+  var resizeObserver = null;
+
+  function rlog(status, action, detail) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "footer.js",
+          category: "dom",
+          action: action,
+          status: status,
+          detail: detail || ""
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "footer.js");
 
   var INFRA_TASKS = {
     "css-runtime": true,
@@ -28,6 +46,50 @@
 
   function findFooter() {
     return document.querySelector("[data-skhps-footer]");
+  }
+
+  function ensureFooterGuardStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    if (!document.head) return;
+
+    var style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = [
+      ".skhps-footer{max-width:100%;overflow-x:hidden}",
+      ".skhps-footer-left,.skhps-footer-center,.skhps-footer-right{min-width:0}",
+      ".skhps-footer-left{overflow:hidden}",
+      ".skhps-footer-page{overflow:hidden;text-overflow:ellipsis}",
+      ".skhps-footer-right{min-width:0;flex-wrap:wrap}",
+      ".skhps-footer-lamp,.skhps-footer-env,.skhps-footer-runtime-toggle{flex:0 0 auto}",
+      "html[data-skhps-footer-fixed='true'][data-skhps-footer-reserve='true'] body{padding-bottom:var(--skhps-footer-safe-bottom,0px)}"
+    ].join("\n");
+    document.head.appendChild(style);
+  }
+
+  function updateFooterSafeArea() {
+    var footer = findFooter();
+    if (!footer || !document.body) return;
+
+    try {
+      var style = window.getComputedStyle ? window.getComputedStyle(footer) : null;
+      var isFixed = style && style.position === "fixed";
+      var shouldReserve = Boolean(panelOpen && isFixed);
+      var height = shouldReserve ? Math.ceil(footer.getBoundingClientRect().height || footer.offsetHeight || 0) : 0;
+
+      document.documentElement.setAttribute("data-skhps-footer-fixed", isFixed ? "true" : "false");
+      document.documentElement.setAttribute("data-skhps-footer-reserve", shouldReserve ? "true" : "false");
+      document.documentElement.style.setProperty("--skhps-footer-safe-bottom", height ? height + "px" : "0px");
+    } catch (error) {}
+  }
+
+  function observeFooterSize() {
+    var footer = findFooter();
+    if (!footer || resizeObserver || typeof ResizeObserver !== "function") return;
+
+    resizeObserver = new ResizeObserver(function () {
+      updateFooterSafeArea();
+    });
+    resizeObserver.observe(footer);
   }
 
   function getState() {
@@ -136,8 +198,15 @@
     var script = document.createElement("script");
     script.src = "version.js?v=" + encodeURIComponent(String(Date.now()));
     script.async = true;
-    script.onload = render;
-    script.onerror = render;
+    rlog("RUN", "loadScript", script.src);
+    script.onload = function () {
+      rlog("OK", "scriptLoaded", script.src);
+      render();
+    };
+    script.onerror = function () {
+      rlog("WARN", "scriptError", script.src);
+      render();
+    };
     document.head.appendChild(script);
   }
 
@@ -267,17 +336,77 @@
     }
   }
 
-  function toggleRuntimePanel() {
-    panelOpen = !panelOpen;
-    ensureRuntimePanel(panelOpen);
-    render();
+  function focusRuntimeToggle() {
+    var footer = findFooter();
+    var toggle = footer ? footer.querySelector(".skhps-footer-runtime-toggle") : null;
+    var scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+    var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    if (!toggle || typeof toggle.focus !== "function") return;
+
+    try {
+      toggle.focus({
+        preventScroll: true
+      });
+    } catch (error) {
+      toggle.focus();
+      try {
+        window.scrollTo(scrollX, scrollY);
+      } catch (scrollError) {}
+    }
   }
 
-  function render() {
+  function scrollRuntimePanelIntoView() {
+    var panel = document.getElementById("skhps-runtime-panel");
+    var target = document.querySelector("[data-skhps-runtime-section='environment']") || panel;
+    var footer = findFooter();
+    if (!panel) return;
+
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        var top = 0;
+
+        try {
+          var targetRect = target.getBoundingClientRect();
+          var footerRect = footer ? footer.getBoundingClientRect() : null;
+          var footerTop = footerRect ? footerRect.top : 0;
+          top = (window.pageYOffset || document.documentElement.scrollTop || 0) +
+            targetRect.top -
+            footerTop;
+
+          window.scrollTo({
+            top: Math.max(0, top),
+            left: 0,
+            behavior: "smooth",
+          });
+        } catch (error) {
+          try {
+            window.scrollTo(0, Math.max(0, top));
+          } catch (scrollError) {}
+        }
+      });
+    });
+  }
+
+  function toggleRuntimePanel(event) {
+    if (event && typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
+
+    panelOpen = !panelOpen;
+    ensureRuntimePanel(panelOpen);
+    render({
+      restoreToggleFocus: true,
+      scrollPanel: panelOpen
+    });
+  }
+
+  function render(options) {
+    options = options || {};
     var footer = findFooter();
     var state = getState();
     if (!footer) return;
 
+    ensureFooterGuardStyle();
     loadVersionJsIfNeeded();
     footer.classList.add("skhps-footer");
     footer.innerHTML = "";
@@ -323,6 +452,8 @@
     toggle.type = "button";
     toggle.textContent = panelOpen ? "▼" : "▲";
     toggle.title = panelOpen ? "收合 runtime panel" : "展開 runtime panel";
+    toggle.setAttribute("aria-expanded", panelOpen ? "true" : "false");
+    toggle.setAttribute("aria-controls", "skhps-runtime-panel");
     toggle.addEventListener("click", toggleRuntimePanel);
     right.appendChild(toggle);
 
@@ -330,6 +461,16 @@
     footer.appendChild(center);
     footer.appendChild(right);
     ensureRuntimePanel(panelOpen);
+    updateFooterSafeArea();
+    observeFooterSize();
+
+    if (options.restoreToggleFocus) {
+      focusRuntimeToggle();
+    }
+
+    if (options.scrollPanel) {
+      scrollRuntimePanelIntoView();
+    }
   }
 
   function logViaRuntime(level, key, value, detail) {
@@ -373,6 +514,8 @@
     document.addEventListener("skhps-runtime-updated", render);
     document.addEventListener("skhps-css-sheet-runtime-ready", render);
     document.addEventListener("skhps-external-app-loader-ready", render);
+    window.addEventListener("resize", updateFooterSafeArea);
+    rlog("OK", "moduleReady", "footer.js");
   }
 
   window.SKHPSFooter = {

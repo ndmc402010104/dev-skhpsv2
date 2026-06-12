@@ -158,6 +158,10 @@
 
     document.documentElement.classList.remove("skhps-css-loading");
     document.documentElement.classList.remove("skhps-loading");
+    document.documentElement.classList.remove("skhps-shell-loading");
+    document.documentElement.classList.remove("skhps-main-loading");
+    document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+    document.documentElement.setAttribute("data-skhps-page-ready", "true");
   }
 
   function mergeObjects(base, override) {

@@ -10,6 +10,9 @@
   var MAX_LOGS = 200;
   var PANEL_ID = "skhps-runtime-panel";
   var STYLE_ID = "skhps-runtime-panel-style";
+  var preRuntimeLogQueue = window.SKHPSRuntimeLog && Array.isArray(window.SKHPSRuntimeLog.__queue)
+    ? window.SKHPSRuntimeLog.__queue.slice()
+    : [];
 
   function nowIso() {
     return new Date().toISOString();
@@ -27,6 +30,62 @@
     if (!error) return "";
     if (error.message) return String(error.message);
     return String(error);
+  }
+
+  function inferCategory(source) {
+    source = String(source || "").toLowerCase();
+    if (source.indexOf("backend") >= 0) return "backend";
+    if (source.indexOf("css") >= 0) return "css";
+    if (source.indexOf("loading") >= 0) return "loading";
+    if (source.indexOf("config") >= 0) return "runtime";
+    if (source.indexOf("external-app") >= 0) return "external-app";
+    if (source.indexOf("bootstrap") >= 0 || source.indexOf("loader") >= 0) return "script";
+    return "runtime";
+  }
+
+  function normalizeStatus(status, level, message) {
+    status = String(status || "").trim().toUpperCase();
+    if (status === "RUNNING" || status === "PENDING" || status === "START") return "RUN";
+    if (status === "DONE" || status === "LOADED" || status === "SUCCESS") return "OK";
+    if (status === "ERROR" || status === "FAILED") return "FAIL";
+    if (status === "INFO") return "INFO";
+    if (status === "RUN" || status === "OK" || status === "FAIL" || status === "WARN") return status;
+
+    level = String(level || "").toLowerCase();
+    message = String(message || "").toLowerCase();
+    if (level === "error" || message.indexOf("error") >= 0 || message.indexOf("failed") >= 0) return "FAIL";
+    if (level === "warn" || message.indexOf("warn") >= 0 || message.indexOf("fallback") >= 0) return "WARN";
+    if (message === "done" || message.indexOf("-done") >= 0 || message.indexOf("ready") >= 0 || message.indexOf("loaded") >= 0) return "OK";
+    if (message === "started" || message.indexOf("start") >= 0 || message.indexOf("pending") >= 0) return "RUN";
+    return "INFO";
+  }
+
+  function normalizeRuntimeEntry(payload) {
+    payload = payload || {};
+    var data = payload.data || payload.detail || null;
+    var dataObject = data && typeof data === "object" ? data : {};
+    var source = payload.source || dataObject.source || dataObject.file || payload.module || "runtime";
+    var action = payload.action || dataObject.action || payload.message || "";
+    var status = normalizeStatus(payload.status || dataObject.status, payload.level, payload.message || action);
+    var detail = payload.detail !== undefined ? payload.detail : data;
+
+    if (detail && typeof detail === "object" && detail.detail !== undefined) {
+      detail = detail.detail;
+    }
+
+    return {
+      timestamp: payload.timestamp || nowIso(),
+      level: payload.level || (status === "FAIL" ? "error" : status === "WARN" ? "warn" : status === "RUN" ? "debug" : "info"),
+      module: payload.module || source,
+      message: payload.message || action || "",
+      data: data,
+      source: source,
+      category: payload.category || dataObject.category || inferCategory(source),
+      action: action || payload.message || "",
+      status: status,
+      detail: detail === undefined ? null : detail,
+      durationMs: payload.durationMs !== undefined ? payload.durationMs : dataObject.durationMs
+    };
   }
 
   function hostEnvFromLocation() {
@@ -110,6 +169,13 @@
       source: "",
       durationMs: null
     },
+    externalApps: {
+      loaded: false,
+      count: null,
+      env: "",
+      error: "",
+      durationMs: null
+    },
     loadingGate: {
       requiredTasks: [],
       completedTasks: [],
@@ -133,15 +199,25 @@
   }
 
   function log(payload) {
-    payload = payload || {};
+    var entry;
 
-    var entry = {
-      timestamp: payload.timestamp || nowIso(),
-      level: payload.level || "info",
-      module: payload.module || "runtime",
-      message: payload.message || "",
-      data: payload.data || payload.detail || null
-    };
+    try {
+      entry = normalizeRuntimeEntry(payload || {});
+    } catch (error) {
+      entry = {
+        timestamp: nowIso(),
+        level: "error",
+        module: "runtime",
+        message: "runtime log normalize failed",
+        data: normalizeError(error),
+        source: "runtime.js",
+        category: "runtime",
+        action: "log",
+        status: "FAIL",
+        detail: normalizeError(error),
+        durationMs: null
+      };
+    }
 
     state.logs.push(entry);
 
@@ -168,7 +244,11 @@
     log({
       level: "info",
       module: moduleName,
-      message: "started"
+      message: "started",
+      source: moduleName,
+      category: inferCategory(moduleName),
+      action: "moduleStart",
+      status: "RUN"
     });
   }
 
@@ -191,7 +271,11 @@
       level: "info",
       module: moduleName,
       message: "done",
-      data: extraData || null
+      data: extraData || null,
+      source: moduleName,
+      category: inferCategory(moduleName),
+      action: "moduleReady",
+      status: "OK"
     });
   }
 
@@ -215,7 +299,11 @@
       level: "error",
       module: moduleName,
       message: message || "failed",
-      data: extraData || null
+      data: extraData || null,
+      source: moduleName,
+      category: inferCategory(moduleName),
+      action: "moduleFail",
+      status: "FAIL"
     });
   }
 
@@ -310,6 +398,10 @@
     mergeSection("cssRuntime", data);
   }
 
+  function setExternalApps(data) {
+    mergeSection("externalApps", data);
+  }
+
   function uniqueList(items) {
     var out = [];
     (Array.isArray(items) ? items : String(items || "").split(",")).forEach(function (item) {
@@ -398,20 +490,25 @@
       ".skhps-runtime-checkbody{min-width:0}",
       ".skhps-runtime-checkname{font-weight:700;color:#fff;word-break:break-word}",
       ".skhps-runtime-checkmeta{color:#aebbd0;font-size:12px;word-break:break-word}",
-      ".skhps-runtime-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}",
-      ".skhps-runtime-flow-card{position:relative;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);border-radius:8px;padding:10px}",
-      ".skhps-runtime-flow-card::before{content:'';position:absolute;left:17px;top:48px;bottom:12px;width:1px;background:rgba(255,255,255,.16)}",
+      ".skhps-runtime-flow{display:flex;flex-direction:column;gap:10px}",
+      ".skhps-runtime-flow-card{position:relative;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);border-radius:8px;padding:10px;width:100%;box-sizing:border-box}",
       ".skhps-runtime-flow-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:7px;margin-bottom:7px}",
       ".skhps-runtime-flow-number{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:20px;border-radius:999px;background:rgba(184,215,255,.16);color:#b8d7ff;font-size:12px;font-weight:700;margin-right:6px}",
       ".skhps-runtime-flow-title{font-weight:700;color:#fff;word-break:break-word}",
       ".skhps-runtime-flow-meta{color:#aebbd0;font-size:12px;word-break:break-word;margin-top:2px}",
       ".skhps-runtime-flow-status{font-weight:700;white-space:nowrap}",
-      ".skhps-runtime-flow-steps{display:flex;flex-direction:column;gap:5px}",
-      ".skhps-runtime-flow-step{position:relative;display:grid;grid-template-columns:42px 1fr;gap:8px;align-items:start}",
-      ".skhps-runtime-flow-step-status{position:relative;z-index:1;background:#101820;font-weight:700;font-size:12px}",
-      ".skhps-runtime-flow-step-name{color:#eef4ff;word-break:break-word}",
+      ".skhps-runtime-flow-steps{position:relative;display:flex;flex-direction:column;gap:0;padding:4px 0 2px}",
+      ".skhps-runtime-flow-step{position:relative;display:grid;grid-template-columns:84px minmax(0,1fr);gap:16px;align-items:start;padding:8px 0}",
+      ".skhps-runtime-flow-step::before{content:'';position:absolute;left:15px;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18)}",
+      ".skhps-runtime-flow-step:first-child::before{top:16px}",
+      ".skhps-runtime-flow-step:last-child::before{bottom:calc(100% - 16px)}",
+      ".skhps-runtime-flow-step:only-child::before{display:none}",
+      ".skhps-runtime-flow-step-status{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;min-width:70px;width:max-content;padding:0 10px;border-radius:0;background:#101820;font-weight:800;font-size:12px;white-space:nowrap}",
+      ".skhps-runtime-flow-step-body{min-width:0}",
+      ".skhps-runtime-flow-step-name{color:#eef4ff;word-break:break-word;font-weight:700;font-size:14px}",
       ".skhps-runtime-flow-step-detail{color:#aebbd0;font-size:12px;word-break:break-word}",
       ".skhps-runtime-flow-note{color:#aebbd0;font-size:12px;margin:-4px 0 8px}",
+      "@media (max-width:720px){.skhps-runtime-flow-step{grid-template-columns:70px minmax(0,1fr);gap:10px}.skhps-runtime-flow-step-status{min-width:58px;padding:0 6px}.skhps-runtime-flow-step::before{left:13px}}",
       ".skhps-runtime-call-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}",
       ".skhps-runtime-call{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);border-radius:8px;padding:9px}",
       ".skhps-runtime-call-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}",
@@ -530,6 +627,11 @@
   function addSection(panel, title) {
     var section = document.createElement("section");
     section.className = "skhps-runtime-section";
+    section.setAttribute("data-skhps-runtime-section", String(title || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, ""));
 
     var heading = document.createElement("h2");
     heading.className = "skhps-runtime-title";
@@ -651,9 +753,11 @@
 
     state.logs.forEach(function (entry, index) {
       var data = entry && entry.data ? entry.data : {};
-      var scriptPath = data.scriptPath || "";
+      var scriptPath = data.scriptPath || data.scriptUrl || data.url || "";
 
-      if (!scriptPath) return;
+      if (entry.category !== "script" && !scriptPath) return;
+      if (!scriptPath && entry.detail) scriptPath = String(entry.detail || "");
+      if (!scriptPath || entry.action === "bootstrapStart" || entry.action === "bootstrapDone") return;
 
       scripts[scriptPath] = scripts[scriptPath] || {
         path: scriptPath,
@@ -661,22 +765,24 @@
         optional: Boolean(data.optional),
         status: "waiting",
         error: "",
+        durationMs: null,
         firstIndex: index,
         lastIndex: index
       };
 
       scripts[scriptPath].lastIndex = index;
 
-      if (entry.message.indexOf("-start ") >= 0) {
+      if (entry.action === "loadScript" || entry.status === "RUN" || entry.message.indexOf("-start ") >= 0) {
         scripts[scriptPath].status = "waiting";
       }
 
-      if (entry.message.indexOf("-loaded ") >= 0) {
+      if (entry.action === "scriptLoaded" || entry.status === "OK" || entry.message.indexOf("-loaded ") >= 0) {
         scripts[scriptPath].status = "ok";
         scripts[scriptPath].error = "";
+        scripts[scriptPath].durationMs = entry.durationMs;
       }
 
-      if (entry.message.indexOf("-error") >= 0 || data.error) {
+      if (entry.action === "scriptError" || entry.status === "FAIL" || entry.message.indexOf("-error") >= 0 || data.error) {
         scripts[scriptPath].status = data.optional ? "warn" : "fail";
         scripts[scriptPath].error = data.error || entry.message;
       }
@@ -685,6 +791,38 @@
     return Object.keys(scripts).map(function (key) {
       return scripts[key];
     });
+  }
+
+  function getDomState() {
+    var html = document.documentElement;
+    var body = document.body;
+    var header = document.querySelector("header, #header, [data-skhps-header]");
+    var footer = document.querySelector("footer, [data-skhps-footer]");
+
+    function visible(el) {
+      if (!el) return false;
+      var style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (!style) return true;
+      return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+    }
+
+    return {
+      readyState: document.readyState,
+      htmlCssLoading: html.classList.contains("skhps-css-loading"),
+      htmlLoading: html.classList.contains("skhps-loading"),
+      shellLoading: html.classList.contains("skhps-shell-loading"),
+      mainLoading: html.classList.contains("skhps-main-loading"),
+      bodyVisible: visible(body),
+      headerExists: Boolean(header),
+      headerVisible: visible(header),
+      footerExists: Boolean(footer),
+      footerVisible: visible(footer),
+      loadingReleased: html.getAttribute("data-skhps-loading-released") === "true",
+      loadingReleaseReason: html.getAttribute("data-skhps-loading-release-reason") || "",
+      shellReady: html.getAttribute("data-skhps-shell-ready") === "true",
+      pageReady: html.getAttribute("data-skhps-page-ready") === "true",
+      cssRuntimeReady: html.getAttribute("data-skhps-css-ready") === "true" || Boolean(state.cssRuntime.loaded)
+    };
   }
 
   function actionStatusFromLogs() {
@@ -963,6 +1101,7 @@
     status.textContent = statusLabel(step.status);
 
     var body = document.createElement("div");
+    body.className = "skhps-runtime-flow-step-body";
 
     var name = document.createElement("div");
     name.className = "skhps-runtime-flow-step-name";
@@ -1063,85 +1202,46 @@
   }
 
   function buildFlowCards() {
-    var scripts = scriptStatusFromLogs();
-    var actions = actionStatusFromLogs();
-    var functions = functionStatusFromLogs();
-    var cards = [];
-    var usedFunctions = {};
+    var cardsBySource = {};
 
-    scripts.forEach(function (script) {
-      var scriptFile = baseName(script.path);
-      var steps = [{
-        name: "load script",
-        status: script.status,
-        detail: script.path,
-        error: script.error,
-        firstIndex: script.firstIndex
-      }];
-      var cardStatus = script.status;
-      var firstIndex = script.firstIndex;
+    state.logs.forEach(function (entry, index) {
+      var source = entry.source || entry.module || "";
+      var action = entry.action || entry.message || "";
+      var category = entry.category || inferCategory(source);
+      var detail = entry.detail;
 
-      functions.forEach(function (fn) {
-        if (fn.file !== scriptFile) return;
-        usedFunctions[fn.path] = true;
-        cardStatus = mergeFlowStatus(cardStatus, fn.status);
-        firstIndex = Math.min(firstIndex, fn.firstIndex);
-        steps.push({
-          name: fn.functionName,
-          status: fn.status,
-          detail: fn.detail,
-          error: fn.error,
-          firstIndex: fn.firstIndex
-        });
+      if (!source || !action) return;
+      if (source === "runtime" && action === "runtime initialized") return;
+
+      cardsBySource[source] = cardsBySource[source] || {
+        title: source,
+        meta: category,
+        status: "ok",
+        firstIndex: index,
+        steps: []
+      };
+
+      cardsBySource[source].firstIndex = Math.min(cardsBySource[source].firstIndex, index);
+      cardsBySource[source].status = mergeFlowStatus(cardsBySource[source].status, entry.status === "INFO" ? "ok" : entry.status.toLowerCase());
+      cardsBySource[source].steps.push({
+        name: action,
+        status: entry.status === "INFO" ? "ok" : entry.status.toLowerCase(),
+        detail: [
+          detail && typeof detail !== "object" ? detail : compactText(detail, 120),
+          entry.durationMs !== null && entry.durationMs !== undefined ? entry.durationMs + "ms" : ""
+        ].filter(Boolean).join(" | "),
+        error: entry.status === "FAIL" ? compactText(detail || entry.data || "", 140) : "",
+        firstIndex: index
       });
+    });
 
-      steps.sort(function (a, b) {
+    return Object.keys(cardsBySource).map(function (key) {
+      var card = cardsBySource[key];
+      card.steps.sort(function (a, b) {
         return (a.firstIndex || 0) - (b.firstIndex || 0);
       });
-
-      cards.push({
-        title: script.path,
-        meta: script.url,
-        status: cardStatus,
-        firstIndex: firstIndex,
-        steps: steps
-      });
-    });
-
-    actions.forEach(function (action) {
-      cards.push({
-        title: "action: " + action.path,
-        meta: action.url,
-        status: action.status,
-        firstIndex: action.firstIndex,
-        steps: [{
-          name: action.path,
-          status: action.status,
-          detail: action.error || action.url,
-          firstIndex: action.firstIndex
-        }]
-      });
-    });
-
-    functions.forEach(function (fn) {
-      if (usedFunctions[fn.path]) return;
-
-      cards.push({
-        title: fn.file,
-        meta: "runtime function",
-        status: fn.status,
-        firstIndex: fn.firstIndex,
-        steps: [{
-          name: fn.functionName,
-          status: fn.status,
-          detail: fn.detail,
-          error: fn.error,
-          firstIndex: fn.firstIndex
-        }]
-      });
-    });
-
-    return cards.sort(function (a, b) {
+      return card;
+    }).sort(function (a, b) {
       return (a.firstIndex || 0) - (b.firstIndex || 0);
     });
   }
@@ -1191,12 +1291,44 @@
     addRow(env, "Backend", state.backend.endpoint || "not loaded", statusClass(state.backend.healthy === false ? "fail" : state.backend.loaded ? "ok" : "waiting"));
     addRow(env, "CSS Runtime", state.cssRuntime.loaded ? state.cssRuntime.source : "not loaded", statusClass(String(state.cssRuntime.loaded)));
 
+    var domState = getDomState();
+    var dom = addSection(panel, "DOM State");
+    addRow(dom, "document.readyState", domState.readyState);
+    addRow(dom, "html.skhps-css-loading", String(domState.htmlCssLoading), statusClass(String(!domState.htmlCssLoading)));
+    addRow(dom, "shell ready", domState.shellReady ? "ready" : "loading", statusClass(domState.shellReady ? "ok" : "waiting"));
+    addRow(dom, "main ready", domState.pageReady ? "ready" : "loading", statusClass(domState.pageReady ? "ok" : "waiting"));
+    addRow(dom, "body visible", String(domState.bodyVisible), statusClass(String(domState.bodyVisible)));
+    addRow(dom, "header", domState.headerExists ? (domState.headerVisible ? "exists / visible" : "exists / hidden") : "missing", statusClass(domState.headerExists && domState.headerVisible ? "ok" : "waiting"));
+    addRow(dom, "footer", domState.footerExists ? (domState.footerVisible ? "exists / visible" : "exists / hidden") : "missing", statusClass(domState.footerExists && domState.footerVisible ? "ok" : "waiting"));
+    addRow(dom, "loading gate release", domState.loadingReleased ? ("released: " + (domState.loadingReleaseReason || "ready")) : "not released", statusClass(String(domState.loadingReleased)));
+    addRow(dom, "css-runtime", domState.cssRuntimeReady ? "done" : "pending", statusClass(domState.cssRuntimeReady ? "ok" : "waiting"));
+
     var gate = addSection(panel, "Loading Gate");
     addRow(gate, "Required", state.loadingGate.requiredTasks.join(", ") || "-");
     addRow(gate, "Completed", state.loadingGate.completedTasks.join(", ") || "-");
     addRow(gate, "Failed", state.loadingGate.failedTasks.map(function (item) {
       return item.task + ": " + item.error;
     }).join(" | ") || "-", state.loadingGate.failedTasks.length ? "skhps-runtime-fail" : "skhps-runtime-ok");
+
+    var scriptRows = scriptStatusFromLogs();
+    if (scriptRows.length) {
+      var scriptSection = addSection(panel, "Script Loader");
+      var scriptList = document.createElement("div");
+      scriptList.className = "skhps-runtime-checklist";
+      scriptRows.forEach(function (script) {
+        addChecklistItem(scriptList, {
+          path: script.path,
+          status: script.status,
+          detail: [
+            script.url && script.url !== script.path ? script.url : "",
+            script.durationMs !== null && script.durationMs !== undefined ? script.durationMs + "ms" : "",
+            script.optional ? "optional" : "",
+            script.error || ""
+          ].filter(Boolean).join(" | ")
+        });
+      });
+      scriptSection.appendChild(scriptList);
+    }
 
     var modules = addSection(panel, "Module Status");
     Object.keys(state.modules).sort().forEach(function (name) {
@@ -1213,6 +1345,11 @@
       });
       backendCalls.appendChild(callList);
     }
+
+    var externalApps = addSection(panel, "External Apps");
+    addRow(externalApps, "listExternalApps", state.externalApps.loaded ? (state.externalApps.count + " app(s)") : state.externalApps.error ? state.externalApps.error : "not loaded", statusClass(state.externalApps.error ? "fail" : state.externalApps.loaded ? "ok" : "waiting"));
+    addRow(externalApps, "runtime env", state.externalApps.env || state.runtime.effective || "-");
+    addRow(externalApps, "duration", state.externalApps.durationMs !== null && state.externalApps.durationMs !== undefined ? state.externalApps.durationMs + "ms" : "-");
 
     var flowCards = buildFlowCards();
     if (flowCards.length) {
@@ -1256,30 +1393,65 @@
   }
 
   function mark(name, detail) {
-    log({
-      level: "debug",
-      module: detail && detail.file ? detail.file : "runtime",
-      message: name,
-      data: detail || null
-    });
+    try {
+      log({
+        level: "debug",
+        module: detail && detail.file ? detail.file : "runtime",
+        message: name,
+        data: detail || null
+      });
+    } catch (error) {}
   }
 
   function warn(name, detail) {
-    log({
-      level: "warn",
-      module: detail && detail.file ? detail.file : "runtime",
-      message: name,
-      data: detail || null
-    });
+    try {
+      log({
+        level: "warn",
+        module: detail && detail.file ? detail.file : "runtime",
+        message: name,
+        data: detail || null
+      });
+    } catch (error) {}
   }
 
   function error(name, detail) {
-    log({
-      level: "error",
-      module: detail && detail.file ? detail.file : "runtime",
-      message: name,
-      data: detail || null
+    try {
+      log({
+        level: "error",
+        module: detail && detail.file ? detail.file : "runtime",
+        message: name,
+        data: detail || null
+      });
+    } catch (error) {}
+  }
+
+  function runtimeLogMethod(status) {
+    return function (payload) {
+      try {
+        payload = payload || {};
+        if (typeof payload === "string") {
+          payload = {
+            source: "runtime",
+            category: "runtime",
+            action: payload,
+            detail: ""
+          };
+        }
+        payload.status = payload.status || status;
+        return log(payload);
+      } catch (error) {
+        return null;
+      }
+    };
+  }
+
+  function flushQueuedRuntimeLogs() {
+    preRuntimeLogQueue.forEach(function (payload) {
+      try {
+        log(payload);
+      } catch (error) {}
     });
+    preRuntimeLogQueue = [];
   }
 
   window.SKHPSRuntime = {
@@ -1293,6 +1465,7 @@
     setBackend: setBackend,
     setBackendCall: setBackendCall,
     setCssRuntime: setCssRuntime,
+    setExternalApps: setExternalApps,
     setLoadingRequired: setLoadingRequired,
     setLoadingGate: setLoadingGate,
     taskDone: taskDone,
@@ -1304,10 +1477,41 @@
     error: error
   };
 
+  window.SKHPSRuntimeLog = {
+    start: runtimeLogMethod("RUN"),
+    pending: runtimeLogMethod("RUN"),
+    ok: runtimeLogMethod("OK"),
+    done: runtimeLogMethod("OK"),
+    fail: runtimeLogMethod("FAIL"),
+    warn: runtimeLogMethod("WARN"),
+    info: runtimeLogMethod("INFO"),
+    log: function (payload) {
+      try {
+        return log(payload || {});
+      } catch (error) {
+        return null;
+      }
+    },
+    getEntries: function () {
+      try {
+        return getState().logs || [];
+      } catch (error) {
+        return [];
+      }
+    },
+    __queue: []
+  };
+
+  flushQueuedRuntimeLogs();
+
   log({
     level: "info",
     module: "runtime",
-    message: "runtime initialized"
+    message: "runtime initialized",
+    source: "runtime.js",
+    category: "runtime",
+    action: "moduleReady",
+    status: "OK"
   });
 
   if (document.readyState === "loading") {

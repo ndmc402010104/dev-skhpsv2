@@ -13,6 +13,42 @@ Purpose: include loader for SKHPS external child apps.
 (function () {
   "use strict";
 
+  var BOOTSTRAP_SOURCE = "skhps-bootstrap.js";
+
+  function earlyRuntimeLog(status, action, detail, durationMs) {
+    try {
+      window.SKHPSRuntimeLog = window.SKHPSRuntimeLog || {
+        __queue: [],
+        log: function (payload) {
+          try {
+            this.__queue.push(payload);
+          } catch (error) {}
+          return payload;
+        }
+      };
+
+      ["start", "ok", "fail", "warn", "info", "pending", "done"].forEach(function (method) {
+        if (typeof window.SKHPSRuntimeLog[method] === "function") return;
+        window.SKHPSRuntimeLog[method] = function (payload) {
+          payload = payload || {};
+          payload.status = payload.status || (method === "fail" ? "FAIL" : method === "warn" ? "WARN" : method === "ok" || method === "done" ? "OK" : method === "info" ? "INFO" : "RUN");
+          return window.SKHPSRuntimeLog.log(payload);
+        };
+      });
+
+      window.SKHPSRuntimeLog.log({
+        source: BOOTSTRAP_SOURCE,
+        category: "script",
+        action: action,
+        status: status,
+        detail: detail || "",
+        durationMs: durationMs
+      });
+    } catch (error) {}
+  }
+
+  earlyRuntimeLog("RUN", "bootstrapStart", window.location.href || "");
+
   var CORE_SCRIPTS = [
     "assets/js/runtime.js",
     "assets/js/loading-gate.js",
@@ -24,18 +60,21 @@ Purpose: include loader for SKHPS external child apps.
   ];
 
   function mark(name, detail) {
+    earlyRuntimeLog("INFO", name, detail || "");
     if (window.SKHPSRuntime && typeof window.SKHPSRuntime.mark === "function") {
       window.SKHPSRuntime.mark(name, detail);
     }
   }
 
   function warn(name, detail) {
+    earlyRuntimeLog("WARN", name, detail || "");
     if (window.SKHPSRuntime && typeof window.SKHPSRuntime.warn === "function") {
       window.SKHPSRuntime.warn(name, detail);
     }
   }
 
   function runtimeError(name, detail) {
+    earlyRuntimeLog("FAIL", name, detail || "");
     if (window.SKHPSRuntime && typeof window.SKHPSRuntime.error === "function") {
       window.SKHPSRuntime.error(name, detail);
     }
@@ -120,15 +159,20 @@ Purpose: include loader for SKHPS external child apps.
 
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
+      var startedAt = Date.now();
+      earlyRuntimeLog("RUN", "loadScript", src);
+
       var script = document.createElement("script");
       script.src = src;
       script.async = false;
 
       script.onload = function () {
+        earlyRuntimeLog("OK", "scriptLoaded", src, Date.now() - startedAt);
         resolve(src);
       };
 
       script.onerror = function () {
+        earlyRuntimeLog("FAIL", "scriptError", src, Date.now() - startedAt);
         reject(new Error("external app loader script load failed: " + src));
       };
 
@@ -232,6 +276,10 @@ Purpose: include loader for SKHPS external child apps.
 
     document.documentElement.classList.remove("skhps-css-loading");
     document.documentElement.classList.remove("skhps-loading");
+    document.documentElement.classList.remove("skhps-shell-loading");
+    document.documentElement.classList.remove("skhps-main-loading");
+    document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+    document.documentElement.setAttribute("data-skhps-page-ready", "true");
   }
 
   function normalizeRegisterPayload(options) {
@@ -419,5 +467,7 @@ Purpose: include loader for SKHPS external child apps.
   */
   window.SKHPSBootstrap = window.SKHPSExternalAppLoader;
 
-  load().catch(markFailed);
+  load().then(function () {
+    earlyRuntimeLog("OK", "bootstrapDone", "scheduled");
+  }).catch(markFailed);
 })();

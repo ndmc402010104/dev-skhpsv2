@@ -8,6 +8,22 @@
 (function () {
   "use strict";
 
+  function rlog(status, action, detail) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "route.js",
+          category: "runtime",
+          action: action,
+          status: status,
+          detail: detail || ""
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "route.js");
+
   var MAX_WAIT_MS = 5000;
   var CHECK_INTERVAL_MS = 100;
 
@@ -123,11 +139,18 @@
     function tick() {
       if (hasPagesReady()) {
         applyPageLinks(document);
+        rlog("OK", "applyPageLinks", {
+          pages: getPages().length
+        });
         return;
       }
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
         applyPageLinks(document);
+        rlog("WARN", "applyPageLinks", {
+          reason: "timeout",
+          pages: getPages().length
+        });
         return;
       }
 
@@ -153,4 +176,5 @@
   } else {
     waitForConfigThenApply();
   }
+  rlog("OK", "moduleReady", "route.js");
 })();

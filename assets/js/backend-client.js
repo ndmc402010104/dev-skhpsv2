@@ -14,6 +14,23 @@
     return window.SKHPSRuntime || null;
   }
 
+  function rlog(status, action, detail, durationMs) {
+    try {
+      if (window.SKHPSRuntimeLog && typeof window.SKHPSRuntimeLog.log === "function") {
+        window.SKHPSRuntimeLog.log({
+          source: "backend-client.js",
+          category: "backend",
+          action: action,
+          status: status,
+          detail: detail || "",
+          durationMs: durationMs
+        });
+      }
+    } catch (error) {}
+  }
+
+  rlog("RUN", "moduleStart", "backend-client.js");
+
   function runtimeStart(name) {
     if (runtime() && typeof runtime().start === "function") {
       runtime().start(name);
@@ -241,9 +258,14 @@
 
   function callJsonp(endpoint, action, payload, options) {
     options = options || {};
+    var jsonpStartedAt = Date.now();
     traceFunction("callJsonp", "start", {
       action: action,
       url: endpoint
+    });
+    rlog("RUN", "jsonpAppend", {
+      action: action,
+      endpoint: endpoint
     });
 
     return new Promise(function (resolve, reject) {
@@ -268,6 +290,11 @@
 
       var timer = setTimeout(function () {
         cleanup();
+        rlog("FAIL", "jsonpTimeout", {
+          action: action,
+          endpoint: endpoint,
+          error: "JSONP timeout"
+        }, Date.now() - jsonpStartedAt);
         reject(new Error("JSONP timeout: " + action + " @ " + endpoint));
       }, timeoutMs);
 
@@ -287,6 +314,10 @@
 
       window[callbackName] = function (result) {
         cleanup();
+        rlog("OK", "jsonpResponse", {
+          action: action,
+          endpoint: endpoint
+        }, Date.now() - jsonpStartedAt);
         traceFunction("callJsonp", "done", {
           action: action,
           url: endpoint
@@ -296,6 +327,11 @@
 
       script.onerror = function () {
         cleanup();
+        rlog("FAIL", "jsonpError", {
+          action: action,
+          endpoint: endpoint,
+          error: "JSONP failed"
+        }, Date.now() - jsonpStartedAt);
         traceFunction("callJsonp", "error", {
           action: action,
           url: endpoint,
@@ -325,6 +361,11 @@
       resourceName: resource.resourceName,
       status: "running",
       startedAt: new Date(startedAt).toISOString()
+    });
+
+    rlog("RUN", "call", {
+      action: action,
+      endpoint: getEndpoint() || "(pending config)"
     });
 
     traceFunction("call", "start", {
@@ -358,6 +399,12 @@
         status: "running",
         durationMs: Date.now() - startedAt
       });
+
+      rlog("INFO", "endpoint", {
+        action: action,
+        endpoint: endpoint,
+        env: env
+      }, Date.now() - startedAt);
 
       return callJsonp(endpoint, action, payload, options);
     }).then(function (response) {
@@ -393,6 +440,14 @@
         error: response && response.ok === false && response.error ? response.error : ""
       });
 
+      rlog(response && response.ok === false ? "FAIL" : "OK", "response", {
+        action: action,
+        endpoint: getEndpoint(),
+        ok: !(response && response.ok === false),
+        httpStatus: response && response.status ? response.status : "",
+        error: response && response.ok === false && response.error ? response.error : ""
+      }, Date.now() - startedAt);
+
       traceFunction("call", "done", {
         action: action
       });
@@ -422,6 +477,12 @@
         finishedAt: new Date().toISOString(),
         error: error && error.message ? error.message : String(error)
       });
+      rlog("FAIL", "response", {
+        action: action,
+        endpoint: getEndpoint(),
+        httpStatus: error && error.status ? error.status : "",
+        error: error && error.message ? error.message : String(error)
+      }, Date.now() - startedAt);
       throw error;
     });
   }
@@ -466,4 +527,5 @@
     call: call,
     bindHealthButton: bindHealthButton
   };
+  rlog("OK", "moduleReady", "backend-client.js");
 })();

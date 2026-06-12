@@ -130,8 +130,9 @@ function saveCssSheetRows_(payload) {
  *   component + className + property
  *
  * 規則：
- * - 若已有同 key 且 updatedAt 不是 default：更新最後一筆非 default row。
- * - 若只有 default row：保留 default，另外新增一筆 override row。
+ * - 寫入 default row 時：更新最後一筆 default row。
+ * - 寫入 override row 時：更新最後一筆非 default row。
+ * - 寫入 override row 但只有 default row：保留 default，另外新增一筆 override row。
  * - 若完全沒有：新增一筆。
  *
  * 這樣可以保留 DEFAULT 種子資料，同時避免同一設定一直無限 append。
@@ -172,7 +173,16 @@ function upsertCssSheetRowsByKey_(sheet, values) {
   values.forEach(function(valueRow) {
     var key = cssSheetUpsertKey_(valueRow.component, valueRow.className, valueRow.property);
     var hit = index[key];
-    var targetRow = hit && hit.overrideRowNumber ? hit.overrideRowNumber : 0;
+    var isDefaultWrite = String(valueRow.updatedAt || '').trim().toLowerCase() === 'default';
+    var targetRow = 0;
+
+    if (hit) {
+      if (isDefaultWrite && hit.defaultRowNumber) {
+        targetRow = hit.defaultRowNumber;
+      } else if (!isDefaultWrite && hit.overrideRowNumber) {
+        targetRow = hit.overrideRowNumber;
+      }
+    }
 
     if (targetRow) {
       writeCssSheetValueRow_(sheet, targetRow, valueRow, columns);

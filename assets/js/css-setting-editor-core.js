@@ -134,8 +134,6 @@
     if (replaceDefault) return replaceDefault;
 
     var def = btn(scope, "default");
-    var replaceDefault = btn(scope, "replace-default");
-    var replaceDefault = btn(scope, "replace-default");
     var save = btn(scope, "save");
     var anchor = def || save || btn(scope, "edit");
 
@@ -171,7 +169,6 @@
     var save = btn(scope, "save");
     var def = btn(scope, "default");
     var replaceDefault = btn(scope, "replace-default");
-    var replaceDefault = btn(scope, "replace-default");
 
     var current = snapshot(scope);
     var isDirty = s.editing && !same(current, s.editMoment);
@@ -188,7 +185,6 @@
       show(save, false);
       show(def, false);
       show(replaceDefault, false);
-      show(replaceDefault, false);
 
       scope.setAttribute("data-css-setting-edit-mode", "readonly");
       setEditable(scope, false);
@@ -202,7 +198,6 @@
     show(undo, s.undoStack.length > 1);
     show(redo, s.redoStack.length > 0);
     show(def, !isDefault);
-    show(replaceDefault, !isDefault);
     show(replaceDefault, !isDefault);
 
     scope.setAttribute("data-css-setting-edit-mode", isDirty ? "dirty" : "editing");
@@ -356,9 +351,6 @@
     rows.forEach(function (row) {
       row.updatedAt = "default";
     });
-    rows.forEach(function (row) {
-      row.updatedAt = "default";
-    });
     var tabKey = scope.getAttribute("data-css-setting-tab-key") || "";
 
     if (!tabKey || !rows.length) {
@@ -432,7 +424,6 @@
     if (!scope || scope.__skhpsCssSettingCoreBound) return;
 
     ensureUndoRedo(scope);
-    ensureReplaceDefault(scope);
     ensureReplaceDefault(scope);
 
     scope.__skhpsCssSettingCoreBound = true;

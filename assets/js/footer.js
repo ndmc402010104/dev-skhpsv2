@@ -60,7 +60,8 @@
       ".skhps-footer-left{overflow:hidden}",
       ".skhps-footer-page{overflow:hidden;text-overflow:ellipsis}",
       ".skhps-footer-right{min-width:0;flex-wrap:wrap}",
-      ".skhps-footer-lamp,.skhps-footer-env,.skhps-footer-runtime-toggle{flex:0 0 auto}",
+      ".skhps-footer-lamp,.skhps-footer-env,.skhps-footer-css-refresh,.skhps-footer-runtime-toggle{flex:0 0 auto}",
+      ".skhps-footer-css-refresh{border:0;background:transparent;color:inherit;font:inherit;font-weight:750;cursor:pointer;padding:2px 4px;white-space:nowrap}",
       "html[data-skhps-footer-fixed='true'][data-skhps-footer-reserve='true'] body{padding-bottom:var(--skhps-footer-safe-bottom,0px)}"
     ].join("\n");
     document.head.appendChild(style);
@@ -74,11 +75,13 @@
       var style = window.getComputedStyle ? window.getComputedStyle(footer) : null;
       var isFixed = style && style.position === "fixed";
       var shouldReserve = Boolean(panelOpen && isFixed);
-      var height = shouldReserve ? Math.ceil(footer.getBoundingClientRect().height || footer.offsetHeight || 0) : 0;
+      var footerHeight = Math.ceil(footer.getBoundingClientRect().height || footer.offsetHeight || 0);
+      var height = shouldReserve ? footerHeight : 0;
 
       document.documentElement.setAttribute("data-skhps-footer-fixed", isFixed ? "true" : "false");
       document.documentElement.setAttribute("data-skhps-footer-reserve", shouldReserve ? "true" : "false");
       document.documentElement.style.setProperty("--skhps-footer-safe-bottom", height ? height + "px" : "0px");
+      document.documentElement.style.setProperty("--skhps-footer-height", footerHeight ? footerHeight + "px" : "48px");
     } catch (error) {}
   }
 
@@ -329,10 +332,59 @@
     return span;
   }
 
+  function forceReloadCssSheet(event) {
+    if (event && typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
+
+    try {
+      if (
+        window.SKHPSCssSheetRuntimeLoader &&
+        typeof window.SKHPSCssSheetRuntimeLoader.clearCache === "function"
+      ) {
+        window.SKHPSCssSheetRuntimeLoader.clearCache();
+      } else {
+        localStorage.removeItem("skhpsv2.cssSheetRuntimeCache.v1");
+        sessionStorage.removeItem("skhpsv2.cssSheetRuntimeSessionReady.v1");
+      }
+    } catch (error) {
+      console.warn("CSS Sheet force reload cache clear failed:", error);
+    }
+
+    try {
+      if (runtime() && typeof runtime().log === "function") {
+        runtime().log({
+          level: "info",
+          module: "footer",
+          message: "force-css-sheet-reload",
+          data: {
+            source: "footer CSS button"
+          }
+        });
+      }
+    } catch (error) {}
+
+    window.location.reload();
+  }
+
+  function createCssRefreshButton(item) {
+    var button = document.createElement("button");
+    button.className = "skhps-footer-css-refresh skhps-footer-lamp skhps-footer-lamp-" + item.status;
+    button.type = "button";
+    button.title = "清除 CSS cache 並重新從 CSS總表讀取";
+    button.textContent = item.icon + " " + item.label;
+    button.addEventListener("click", forceReloadCssSheet);
+    return button;
+  }
+
   function ensureRuntimePanel(open) {
     document.documentElement.setAttribute("data-skhps-runtime-panel-open", open ? "true" : "false");
     if (runtime() && typeof runtime().renderPanel === "function") {
       runtime().renderPanel();
+    }
+
+    if (!open) {
+      resetRuntimePanelOffset();
     }
   }
 
@@ -355,34 +407,83 @@
     }
   }
 
-  function scrollRuntimePanelIntoView() {
+  function resetRuntimePanelOffset() {
     var panel = document.getElementById("skhps-runtime-panel");
-    var target = document.querySelector("[data-skhps-runtime-section='environment']") || panel;
+    if (panel) panel.style.marginTop = "";
+  }
+
+  function runtimePanelAnchor(panel) {
+    if (!panel) return null;
+
+    return panel.querySelector(".skhps-runtime-summary + .skhps-runtime-section") ||
+      panel.querySelector(".skhps-runtime-section") ||
+      panel.querySelector(".skhps-runtime-summary") ||
+      panel;
+  }
+
+  function anchorEdgeTop(anchor) {
+    if (!anchor) return 0;
+    return anchor.getBoundingClientRect().top;
+  }
+
+  function placeRuntimeAnchorAtFooter() {
+    var panel = document.getElementById("skhps-runtime-panel");
     var footer = findFooter();
     if (!panel) return;
 
-    window.requestAnimationFrame(function () {
-      window.requestAnimationFrame(function () {
-        var top = 0;
+    try {
+      panel.style.marginTop = "";
 
+      var anchor = runtimePanelAnchor(panel);
+      var footerRect = footer ? footer.getBoundingClientRect() : null;
+      var footerTop = footerRect ? footerRect.top : window.innerHeight;
+      var gap = Math.max(0, Math.ceil(footerTop - anchorEdgeTop(anchor)));
+
+      panel.style.marginTop = gap ? gap + "px" : "";
+    } catch (error) {
+      panel.style.marginTop = "";
+    }
+  }
+
+  function scrollRuntimePanelIntoView() {
+    var panel = document.getElementById("skhps-runtime-panel");
+    var footer = findFooter();
+    if (!panel) return;
+
+    function alignRuntimeAnchorToFooterTop(behavior) {
+      var top = window.pageYOffset || document.documentElement.scrollTop || 0;
+
+      try {
+        var anchor = runtimePanelAnchor(panel);
+        var footerRect = footer ? footer.getBoundingClientRect() : null;
+        var footerTop = footerRect ? footerRect.top : window.innerHeight;
+        top = top + anchorEdgeTop(anchor) - footerTop;
+
+        window.scrollTo({
+          top: Math.max(0, top),
+          left: 0,
+          behavior: behavior || "auto"
+        });
+      } catch (error) {
         try {
-          var targetRect = target.getBoundingClientRect();
-          var footerRect = footer ? footer.getBoundingClientRect() : null;
-          var footerTop = footerRect ? footerRect.top : 0;
-          top = (window.pageYOffset || document.documentElement.scrollTop || 0) +
-            targetRect.top -
-            footerTop;
+          window.scrollTo(0, Math.max(0, top));
+        } catch (scrollError) {}
+      }
+    }
 
-          window.scrollTo({
-            top: Math.max(0, top),
-            left: 0,
-            behavior: "smooth",
-          });
-        } catch (error) {
-          try {
-            window.scrollTo(0, Math.max(0, top));
-          } catch (scrollError) {}
-        }
+    window.requestAnimationFrame(function () {
+      updateFooterSafeArea();
+      placeRuntimeAnchorAtFooter();
+      alignRuntimeAnchorToFooterTop("smooth");
+      window.requestAnimationFrame(function () {
+        updateFooterSafeArea();
+        placeRuntimeAnchorAtFooter();
+        alignRuntimeAnchorToFooterTop("auto");
+        window.setTimeout(function () {
+          updateFooterSafeArea();
+          placeRuntimeAnchorAtFooter();
+          alignRuntimeAnchorToFooterTop("auto");
+        }, 120);
       });
     });
   }
@@ -444,7 +545,7 @@
     right.className = "skhps-footer-right";
 
     getFooterRuntimeSummary(state).forEach(function (lamp) {
-      right.appendChild(createStatusLamp(lamp));
+      right.appendChild(lamp.label === "CSS" ? createCssRefreshButton(lamp) : createStatusLamp(lamp));
     });
 
     var toggle = document.createElement("button");

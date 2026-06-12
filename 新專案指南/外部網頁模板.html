@@ -4,7 +4,8 @@
 用途：建立新的 SKHPS 外部 App 時可複製的最小 HTML 模板。
 
 此檔不是 skhpsv2 主站頁面，也不是要直接在 skhpsv2 裡正式使用。
-請複製到新的外部專案後，再依 body 內 checklist 建立必要檔案。
+此檔本身是 viewer 文件，不要整檔複製到外部專案。
+請依 body 內的 index.html head / body script / app-card / app.js 範本建立必要檔案。
 標準模式是：HTML 只設定 runtime 與 app-card.json 位置；App 資訊、afterScripts、href 交給 app-card.json，版本交給 version.js。
 -->
 <html
@@ -19,8 +20,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>外部 App</title>
 
-  <script src="assets/js/loading-cache-probe.js?v=20260611"></script>
-  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=20260611">
+  <script src="assets/js/loading-cache-probe.js?v=20260612"></script>
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=20260612">
 </head>
 
 <body class="skhps-body">
@@ -49,15 +50,17 @@
         <div class="skhps-hero-card">
           <ol>
             <li>建立新的外部專案資料夾，例如 your-app。</li>
-            <li>複製此模板為外部專案的 index.html。</li>
-            <li>在 HTML 裡只設定 SKHPS_ENTRY_BASE_URL、SKHPS_ENTRY_VERSION、SKHPS_APP_CARD_URL。</li>
+            <li>依本頁 index.html head / body script 範本建立外部專案的 index.html，不要整檔複製此 viewer 文件。</li>
+            <li>在 HTML 裡只設定 runtime resolver、SKHPS_ENTRY_BASE_URL、SKHPS_ENTRY_VERSION、SKHPS_APP_CARD_URL。</li>
             <li>在 app-card.json 裡設定 appId、title、group、order、href、afterScripts、registerExternalApp。</li>
             <li>確認 data-skhps-loading-tasks 內的 app-ready 和 app.js 呼叫的 loading task 名稱一致。</li>
             <li>建立 assets/js/app.js，內容可先使用下方最小範本。</li>
             <li>建立 version.js，透過 window.SKHPS_VERSION 提供目前外部 App 版本。</li>
+            <li>外部 App 只直接載入 app-entry.js；不要直接載入 external-app-loader.js。</li>
             <li>不要在外部 App 自己再載入 config.js、loading-gate.js、backend-client.js、css-sheet-runtime.js、header.js、footer.js。</li>
             <li>如果需要後端功能，新增 Apps Script action，前端用 SKHPSBackend.call("actionName", payload)。</li>
-            <li>部署後確認 external-app-loader.js、header、footer、CSS runtime、backend、afterScripts 都有載入成功。</li>
+            <li>部署後確認 app-entry.js、external-app-loader.js、header、footer、CSS runtime、backend、afterScripts 都有載入成功。</li>
+            <li>CSS 如果還在吃 cache，可點 footer 的 CSS 狀態燈強迫重讀 Sheet。</li>
           </ol>
         </div>
       </section>
@@ -90,20 +93,45 @@
         </div>
 
         <div class="skhps-hero-card">
-          <pre class="skhps-code-block">&lt;script src="https://dev-skhps.jonaminz.com/assets/js/loading-cache-probe.js?v=20260611"&gt;&lt;/script&gt;
+          <pre class="skhps-code-block">&lt;script&gt;
+  (function () {
+    "use strict";
 
-&lt;link
-  rel="stylesheet"
-  href="https://dev-skhps.jonaminz.com/assets/css/skhps-loading.css?v=20260611"
-&gt;
+    var host = String(location.hostname || "").toLowerCase();
+    var params = new URLSearchParams(location.search || "");
+    var runtime = String(params.get("skhpsRuntime") || "").trim();
+    var isLocal = host === "127.0.0.1" || host === "localhost" || host === "";
+    var allowedRuntime = { "local-dev": true, dev: true, prod: true };
 
-&lt;script&gt;
-  window.SKHPS_ENTRY_BASE_URL = "https://dev-skhps.jonaminz.com/";
-  window.SKHPS_ENTRY_VERSION = "20260611";
-  window.SKHPS_APP_CARD_URL = "app-card.json";
-&lt;/script&gt;
+    function runtimeBaseUrl(value) {
+      if (value === "local-dev") return "http://127.0.0.1:5500/skhpsv2/";
+      if (value === "dev") return "https://dev-skhps.jonaminz.com/";
+      return "https://skhps.jonaminz.com/";
+    }
 
-&lt;script src="https://dev-skhps.jonaminz.com/assets/js/app-entry.js?v=20260611"&gt;&lt;/script&gt;</pre>
+    function currentRuntime() {
+      if (isLocal) return "local-dev";
+      if (allowedRuntime[runtime]) return runtime;
+      return "prod";
+    }
+
+    var resolvedRuntime = currentRuntime();
+
+    window.SKHPS_ENTRY_VERSION = "20260612";
+    window.SKHPS_ENTRY_BASE_URL = runtimeBaseUrl(resolvedRuntime);
+    window.SKHPS_APP_CARD_URL = "app-card.json";
+
+    document.documentElement.setAttribute("data-skhps-runtime", resolvedRuntime);
+
+    document.write(
+      '&lt;link rel="stylesheet" href="' +
+      window.SKHPS_ENTRY_BASE_URL +
+      'assets/css/skhps-loading.css?v=' +
+      encodeURIComponent(window.SKHPS_ENTRY_VERSION) +
+      '"&gt;'
+    );
+  })();
+&lt;/script&gt;</pre>
         </div>
       </section>
 
@@ -175,12 +203,12 @@
         <div class="skhps-hero-card">
           <pre class="skhps-code-block">window.SKHPS_VERSION = {
   appId: "your-app-id",
-  version: "v0.1.0-20260611",
+  version: "v0.1.0-20260612",
   major: 0,
   minor: 1,
   patch: 0,
-  buildTime: "20260611",
-  updatedAt: "2026-06-11",
+  buildTime: "20260612",
+  updatedAt: "2026-06-12T00:00:00+08:00",
   source: "version.js"
 };</pre>
         </div>
@@ -216,6 +244,31 @@
 }</pre>
         </div>
       </section>
+
+      <section class="skhps-section" aria-labelledby="bodyScriptTitle">
+        <div class="skhps-section-head">
+          <div>
+            <p class="skhps-eyebrow">index.html body script</p>
+            <h2 id="bodyScriptTitle" class="skhps-section-title">body 最小載入 app-entry.js</h2>
+          </div>
+        </div>
+
+        <div class="skhps-hero-card">
+          <pre class="skhps-code-block">&lt;script&gt;
+  (function () {
+    "use strict";
+
+    var script = document.createElement("script");
+    script.src =
+      window.SKHPS_ENTRY_BASE_URL +
+      "assets/js/app-entry.js?v=" +
+      encodeURIComponent(window.SKHPS_ENTRY_VERSION);
+    script.async = false;
+    document.head.appendChild(script);
+  })();
+&lt;/script&gt;</pre>
+        </div>
+      </section>
     </div>
   </main>
 
@@ -228,12 +281,12 @@
     這幾支 script 只讓此模板檔在 skhpsv2 裡可以用共用樣式閱讀。
     複製成真正外部 App 時，不要複製這段；請使用上方「head 最小呼叫範本」裡的 app-entry.js。
   -->
-  <script src="assets/js/runtime.js?v=20260611"></script>
-  <script src="assets/js/loading-gate.js?v=20260611"></script>
-  <script src="assets/js/config.js?v=20260611"></script>
-  <script src="assets/js/backend-client.js?v=20260611"></script>
-  <script src="assets/js/css-sheet-runtime.js?v=20260611"></script>
-  <script src="assets/js/header.js?v=20260611"></script>
-  <script src="assets/js/footer.js?v=20260611"></script>
+  <script src="assets/js/runtime.js?v=20260612"></script>
+  <script src="assets/js/loading-gate.js?v=20260612"></script>
+  <script src="assets/js/config.js?v=20260612"></script>
+  <script src="assets/js/backend-client.js?v=20260612"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=20260612"></script>
+  <script src="assets/js/header.js?v=20260612"></script>
+  <script src="assets/js/footer.js?v=20260612"></script>
 </body>
 </html>

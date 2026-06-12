@@ -159,11 +159,13 @@ html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-foot
 .skhps-footer-page,
 .skhps-footer-env,
 .skhps-footer-lamp,
+.skhps-footer-css-refresh,
 .skhps-footer-runtime-toggle {
   white-space: nowrap;
 }
 
 .skhps-footer-env,
+.skhps-footer-css-refresh,
 .skhps-footer-runtime-toggle {
   border: 0;
   background: transparent;

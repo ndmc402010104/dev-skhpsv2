@@ -111,15 +111,11 @@
       return "local-dev";
     }
 
-    if (
-      host === "dev-skhps.jonaminz.com" ||
-      host.indexOf("dev-") === 0 ||
-      host.indexOf("dev.") === 0
-    ) {
+    if (host === "dev-skhps.jonaminz.com" || host === "dev-quick-login.skhps.jonaminz.com") {
       return "dev";
     }
 
-    if (host === "skhps.jonaminz.com") {
+    if (host === "skhps.jonaminz.com" || host === "quick-login.skhps.jonaminz.com") {
       return "prod";
     }
 
@@ -159,7 +155,9 @@
     config.runtimeEnv = getEnv(config);
 
     setRuntimeEnv({
-      effective: config.runtimeEnv
+      requested: getRuntimeParam() || "auto",
+      effective: config.runtimeEnv,
+      defaultRuntime: config.defaultRuntime || config.env || "prod"
     });
 
     rlog("INFO", "runtimeEffective", {
@@ -267,12 +265,18 @@
 
     /*
       優先順序：
-      1. window.SKHPS_FORCE_ENV：手動強制測試用
-      2. window.SKHPS_APP_ENV.env：子專案 app-entry 已建立時使用
-      3. 目前網址 hostname 推論：skhpsv2 主頁主要靠這個
-      4. config.env：只當 fallback
-      5. prod
+      1. URL ?skhpsRuntime=dev/prod/local-dev/local
+      2. window.SKHPS_FORCE_ENV：手動強制測試用
+      3. window.SKHPS_APP_ENV.env：子專案 app-entry 已建立時使用，代表 Runtime Effective
+      4. 目前網址 hostname 推論 Host Env
+      5. config.defaultRuntime / config.env：只當 Host Env UNKNOWN fallback
+      6. prod
     */
+    var runtimeParam = getRuntimeParam();
+    if (runtimeParam) {
+      return runtimeParam;
+    }
+
     if (window.SKHPS_FORCE_ENV) {
       return window.SKHPS_FORCE_ENV;
     }
@@ -287,7 +291,18 @@
       return inferred;
     }
 
-    return config.env || "prod";
+    return config.defaultRuntime || config.env || "prod";
+  }
+
+  function getRuntimeParam() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var runtime = String(params.get("skhpsRuntime") || params.get("runtime") || "").trim().toLowerCase();
+      if (runtime === "local") return "local-dev";
+      if (runtime === "local-dev" || runtime === "dev" || runtime === "prod") return runtime;
+    } catch (error) {}
+
+    return "";
   }
 
   function getEnvValue(value, config) {

@@ -6,8 +6,8 @@
 設計：
 - 不依賴 app-registry.js。
 - 支援 window.SKHPS_APP_CARD_URL，例如 app-card.json。
-- app-card.json 可用 versionUrl 指向 version.json。
-- version.json.version 會回填到 SKHPS_APP_CONFIG.version。
+- app-card.json 可用 versionUrl 指向 version.js。
+- version.js 的 window.SKHPS_VERSION.version 會回填到 SKHPS_APP_CONFIG.version。
 - index.html 仍可用 window.SKHPS_APP_CONFIG 做臨時覆蓋。
 */
 
@@ -107,12 +107,12 @@
       return "local-dev";
     }
 
-    if (
-      host.indexOf("dev-") === 0 ||
-      host.indexOf("dev.") === 0 ||
-      host.indexOf("dev-skhps") >= 0
-    ) {
+    if (host === "dev-skhps.jonaminz.com" || host === "dev-quick-login.skhps.jonaminz.com") {
       return "dev";
+    }
+
+    if (host === "skhps.jonaminz.com" || host === "quick-login.skhps.jonaminz.com") {
+      return "prod";
     }
 
     return "prod";
@@ -220,14 +220,15 @@
     var baseUrl = window.SKHPS_APP_CARD_URL_RESOLVED || window.location.href;
     var resolvedVersionUrl = resolveRelativeUrl(baseUrl, versionUrl);
 
-    return fetchJson(resolvedVersionUrl)
-      .then(function (versionInfo) {
+    return loadScript(resolvedVersionUrl)
+      .then(function () {
+        var versionInfo = window.SKHPS_VERSION || {};
         window.SKHPS_APP_VERSION_INFO = versionInfo || {};
         window.SKHPS_APP_VERSION_URL_RESOLVED = resolvedVersionUrl;
         return versionInfo || {};
       })
       .catch(function (error) {
-        console.warn("[SKHPSAppEntry] version.json load failed:", error);
+        console.warn("[SKHPSAppEntry] version.js load failed:", error);
         return null;
       });
   }
@@ -236,13 +237,13 @@
     var inlineConfig = window.SKHPS_APP_CONFIG || {};
     var config = mergeObjects(card || {}, inlineConfig || {});
 
-    var versionFromJson = "";
+    var versionFromScript = "";
     if (versionInfo && versionInfo.version) {
-      versionFromJson = String(versionInfo.version || "").trim();
+      versionFromScript = String(versionInfo.version || "").trim();
     }
 
-    if (versionFromJson) {
-      config.version = versionFromJson;
+    if (versionFromScript) {
+      config.version = versionFromScript;
     } else if (!config.version) {
       config.version = getVersion();
     }

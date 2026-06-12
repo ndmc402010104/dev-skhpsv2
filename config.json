@@ -2,7 +2,7 @@
   "app": "skhpsv2",
   "env": "dev",
   "title": "整外資訊系統首頁",
-  "versionUrl": "version.json",
+  "versionUrl": "version.js",
   "api": {
     "webAppUrl": "https://script.google.com/macros/s/AKfycbx4mAdLeVPKbkuEo0LZZGDalBTZE7PB8AJ4OFKGld7HoVt7iJHYrk4tI6QovFjn6eoWRQ/exec",
     "deploymentId": "AKfycbx4mAdLeVPKbkuEo0LZZGDalBTZE7PB8AJ4OFKGld7HoVt7iJHYrk4tI6QovFjn6eoWRQ"

@@ -10,7 +10,7 @@
 
 skhpsv2 是水庫 / 共通地基 / runtime platform，提供 config loader、backend-client、loading gate、CSS Sheet runtime、footer、version / diagnostics / status，以及 external app registry / activation 接入能力。
 
-QR、Dressing、Quick Login、HIS patient list、Staff maintain 等都應保持為外部 App。外部 App 只專注自己的 HTML、業務 JS、version.json、後端 action，以及必要時透過 skhpsv2 共用 runtime 接 config / backend / css / loading / footer。
+QR、Dressing、Quick Login、HIS patient list、Staff maintain 等都應保持為外部 App。外部 App 只專注自己的 HTML、業務 JS、version.js、後端 action，以及必要時透過 skhpsv2 共用 runtime 接 config / backend / css / loading / footer。
 
 ## 最小 HTML 範例
 

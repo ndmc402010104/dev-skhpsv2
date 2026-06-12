@@ -96,11 +96,11 @@
       return "LOCAL";
     }
 
-    if (host === "skhps.jonaminz.com") {
+    if (host === "skhps.jonaminz.com" || host === "quick-login.skhps.jonaminz.com") {
       return "PROD";
     }
 
-    if (host === "dev-skhps.jonaminz.com") {
+    if (host === "dev-skhps.jonaminz.com" || host === "dev-quick-login.skhps.jonaminz.com") {
       return "DEV";
     }
 
@@ -131,14 +131,31 @@
     return normalizeRuntime(queryRuntime()) || "auto";
   }
 
-  function initialEffectiveRuntime(hostEnv, requested) {
+  function runtimeDecision(hostEnv, requested, defaultRuntime) {
     var requestedRuntime = normalizeRuntime(requested);
+    var fallback = normalizeRuntime(defaultRuntime) || "PROD";
 
     if (requestedRuntime) {
-      return requestedRuntime;
+      return {
+        effective: requestedRuntime,
+        overrideReason: "URL parameter override",
+        fallbackReason: ""
+      };
     }
 
-    return hostEnv || "UNKNOWN";
+    if (hostEnv && hostEnv !== "UNKNOWN") {
+      return {
+        effective: hostEnv,
+        overrideReason: "",
+        fallbackReason: ""
+      };
+    }
+
+    return {
+      effective: fallback,
+      overrideReason: "",
+      fallbackReason: "Host Env UNKNOWN; fallback to " + fallback
+    };
   }
 
   var state = {
@@ -149,7 +166,9 @@
     },
     runtime: {
       requested: initialRequestedRuntime(),
-      effective: ""
+      effective: "",
+      overrideReason: "",
+      fallbackReason: ""
     },
     config: {
       loaded: false,
@@ -186,7 +205,10 @@
     logs: []
   };
 
-  state.runtime.effective = initialEffectiveRuntime(state.host.env, state.runtime.requested);
+  state.runtime = Object.assign(
+    state.runtime,
+    runtimeDecision(state.host.env, state.runtime.requested, "")
+  );
 
   function emitUpdated() {
     try {
@@ -324,14 +346,25 @@
 
     var requested = normalizeRuntime(patch.requested || state.runtime.requested);
     var proposedEffective = normalizeRuntime(patch.effective);
+    var defaultRuntime = normalizeRuntime(patch.defaultRuntime || patch.fallback || "");
+    var decision;
 
     if (requested) {
-      patch.effective = requested;
+      decision = runtimeDecision(state.host && state.host.env, requested, defaultRuntime);
     } else if (proposedEffective) {
-      patch.effective = proposedEffective;
+      decision = {
+        effective: proposedEffective,
+        overrideReason: patch.overrideReason || "",
+        fallbackReason: patch.fallbackReason ||
+          (state.host && state.host.env === "UNKNOWN" ? "Host Env UNKNOWN; fallback to " + proposedEffective : state.runtime.fallbackReason || "")
+      };
     } else {
-      patch.effective = state.host && state.host.env || "UNKNOWN";
+      decision = runtimeDecision(state.host && state.host.env, "", defaultRuntime);
     }
+
+    patch.effective = decision.effective;
+    patch.overrideReason = patch.overrideReason || decision.overrideReason || "";
+    patch.fallbackReason = patch.fallbackReason || decision.fallbackReason || "";
 
     mergeSection("runtime", patch);
   }
@@ -474,29 +507,36 @@
     var style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = [
-      ".skhps-runtime-panel{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#101820;color:#f5f7fb;border-top:1px solid rgba(255,255,255,.14);padding:16px;line-height:1.5;font-size:13px}",
+      ".skhps-runtime-panel{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#101820;color:#f5f7fb;border-top:1px solid rgba(255,255,255,.14);padding:16px;line-height:1.5;font-size:13px;max-width:100%;box-sizing:border-box;overflow-x:hidden}",
+      ".skhps-runtime-panel *{box-sizing:border-box;min-width:0}",
+      ".skhps-runtime-panel a,.skhps-runtime-panel span,.skhps-runtime-panel div,.skhps-runtime-panel p{max-width:100%;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-panel pre,.skhps-runtime-panel code{max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}",
+      ".skhps-runtime-panel table{width:100%;table-layout:fixed}",
+      ".skhps-runtime-panel td,.skhps-runtime-panel th{overflow-wrap:anywhere;word-break:break-word}",
       ".skhps-runtime-panel.is-hidden{display:none}",
       ".skhps-runtime-section{margin:0 0 14px}",
       ".skhps-runtime-title{font-weight:700;margin:0 0 6px;color:#ffffff}",
-      ".skhps-runtime-row{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid rgba(255,255,255,.08);padding:3px 0}",
-      ".skhps-runtime-row strong{min-width:140px;color:#b8d7ff}",
-      ".skhps-runtime-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:0 0 14px}",
-      ".skhps-runtime-card{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);border-radius:8px;padding:10px}",
+      ".skhps-runtime-row{display:grid;grid-template-columns:minmax(120px,auto) minmax(0,1fr);gap:8px;border-bottom:1px solid rgba(255,255,255,.08);padding:3px 0;align-items:start}",
+      ".skhps-runtime-row strong{color:#b8d7ff;overflow-wrap:anywhere;word-break:break-word}",
+      ".skhps-runtime-row-value{display:block;max-width:100%;min-width:0;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr));gap:8px;margin:0 0 14px}",
+      ".skhps-runtime-card{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);border-radius:8px;padding:10px;min-width:0;max-width:100%}",
       ".skhps-runtime-card-label{display:block;color:#9fb1c7;font-size:12px;margin:0 0 3px}",
-      ".skhps-runtime-card-value{display:block;font-weight:700;color:#fff}",
-      ".skhps-runtime-checklist{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px}",
-      ".skhps-runtime-checkitem{display:flex;align-items:flex-start;gap:8px;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px;background:rgba(255,255,255,.035)}",
+      ".skhps-runtime-card-value{display:block;font-weight:700;color:#fff;max-width:100%;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-checklist{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:6px}",
+      ".skhps-runtime-checkitem{display:flex;align-items:flex-start;gap:8px;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:7px;background:rgba(255,255,255,.035);min-width:0;max-width:100%}",
       ".skhps-runtime-checkmark{flex:0 0 auto;width:22px;text-align:center;font-weight:700}",
-      ".skhps-runtime-checkbody{min-width:0}",
-      ".skhps-runtime-checkname{font-weight:700;color:#fff;word-break:break-word}",
-      ".skhps-runtime-checkmeta{color:#aebbd0;font-size:12px;word-break:break-word}",
-      ".skhps-runtime-flow{display:flex;flex-direction:column;gap:10px}",
+      ".skhps-runtime-checkbody{min-width:0;max-width:100%;flex:1 1 auto}",
+      ".skhps-runtime-checkname{font-weight:700;color:#fff;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-checkmeta{color:#aebbd0;font-size:12px;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-flow{display:flex;flex-direction:column;gap:10px;min-width:0;max-width:100%}",
       ".skhps-runtime-flow-card{position:relative;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);border-radius:8px;padding:10px;width:100%;box-sizing:border-box}",
       ".skhps-runtime-flow-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:7px;margin-bottom:7px}",
+      ".skhps-runtime-flow-head>div:first-child{min-width:0;max-width:100%;flex:1 1 auto}",
       ".skhps-runtime-flow-number{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:20px;border-radius:999px;background:rgba(184,215,255,.16);color:#b8d7ff;font-size:12px;font-weight:700;margin-right:6px}",
-      ".skhps-runtime-flow-title{font-weight:700;color:#fff;word-break:break-word}",
-      ".skhps-runtime-flow-meta{color:#aebbd0;font-size:12px;word-break:break-word;margin-top:2px}",
-      ".skhps-runtime-flow-status{font-weight:700;white-space:nowrap}",
+      ".skhps-runtime-flow-title{font-weight:700;color:#fff;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-flow-meta{color:#aebbd0;font-size:12px;overflow-wrap:anywhere;word-break:break-word;white-space:normal;margin-top:2px}",
+      ".skhps-runtime-flow-status{font-weight:700;white-space:nowrap;flex:0 0 auto}",
       ".skhps-runtime-flow-steps{position:relative;display:flex;flex-direction:column;gap:0;padding:4px 0 2px}",
       ".skhps-runtime-flow-step{position:relative;display:grid;grid-template-columns:84px minmax(0,1fr);gap:16px;align-items:start;padding:8px 0}",
       ".skhps-runtime-flow-step::before{content:'';position:absolute;left:15px;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18)}",
@@ -505,20 +545,20 @@
       ".skhps-runtime-flow-step:only-child::before{display:none}",
       ".skhps-runtime-flow-step-status{position:relative;z-index:1;display:inline-flex;align-items:center;justify-content:center;min-width:70px;width:max-content;padding:0 10px;border-radius:0;background:#101820;font-weight:800;font-size:12px;white-space:nowrap}",
       ".skhps-runtime-flow-step-body{min-width:0}",
-      ".skhps-runtime-flow-step-name{color:#eef4ff;word-break:break-word;font-weight:700;font-size:14px}",
-      ".skhps-runtime-flow-step-detail{color:#aebbd0;font-size:12px;word-break:break-word}",
+      ".skhps-runtime-flow-step-name{color:#eef4ff;overflow-wrap:anywhere;word-break:break-word;white-space:normal;font-weight:700;font-size:14px}",
+      ".skhps-runtime-flow-step-detail{color:#aebbd0;font-size:12px;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
       ".skhps-runtime-flow-note{color:#aebbd0;font-size:12px;margin:-4px 0 8px}",
-      "@media (max-width:720px){.skhps-runtime-flow-step{grid-template-columns:70px minmax(0,1fr);gap:10px}.skhps-runtime-flow-step-status{min-width:58px;padding:0 6px}.skhps-runtime-flow-step::before{left:13px}}",
-      ".skhps-runtime-call-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px}",
-      ".skhps-runtime-call{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);border-radius:8px;padding:9px}",
+      "@media (max-width:720px){.skhps-runtime-row{grid-template-columns:1fr;gap:2px}.skhps-runtime-flow-step{grid-template-columns:70px minmax(0,1fr);gap:10px}.skhps-runtime-flow-step-status{min-width:58px;padding:0 6px}.skhps-runtime-flow-step::before{left:13px}}",
+      ".skhps-runtime-call-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:8px}",
+      ".skhps-runtime-call{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);border-radius:8px;padding:9px;min-width:0;max-width:100%}",
       ".skhps-runtime-call-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}",
-      ".skhps-runtime-call-title{font-weight:700;color:#fff;word-break:break-word}",
-      ".skhps-runtime-call-status{font-weight:700;white-space:nowrap}",
-      ".skhps-runtime-call-meta{color:#aebbd0;font-size:12px;word-break:break-word}",
+      ".skhps-runtime-call-title{font-weight:700;color:#fff;min-width:0;flex:1 1 auto;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
+      ".skhps-runtime-call-status{font-weight:700;white-space:nowrap;flex:0 0 auto}",
+      ".skhps-runtime-call-meta{color:#aebbd0;font-size:12px;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
       ".skhps-runtime-ok{color:#8ee69f}",
       ".skhps-runtime-fail{color:#ff9a9a}",
       ".skhps-runtime-waiting{color:#ffd479}",
-      ".skhps-runtime-log{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:#d8e1ef;white-space:pre-wrap;word-break:break-word}"
+      ".skhps-runtime-log{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:#d8e1ef;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}"
     ].join("\n");
     document.head.appendChild(style);
   }
@@ -616,7 +656,7 @@
     key.textContent = label;
 
     var val = document.createElement("span");
-    val.className = className || "";
+    val.className = "skhps-runtime-row-value" + (className ? " " + className : "");
     val.textContent = text(value);
 
     row.appendChild(key);
@@ -1287,8 +1327,10 @@
     addRow(env, "Host Env", state.host.env, statusClass(state.host.env));
     addRow(env, "Runtime Requested", state.runtime.requested);
     addRow(env, "Runtime Effective", state.runtime.effective, statusClass(state.runtime.effective));
-    addRow(env, "Config", state.config.loaded ? state.config.source : "not loaded", statusClass(String(state.config.loaded)));
-    addRow(env, "Backend", state.backend.endpoint || "not loaded", statusClass(state.backend.healthy === false ? "fail" : state.backend.loaded ? "ok" : "waiting"));
+    addRow(env, "Override Reason", state.runtime.overrideReason || "-");
+    addRow(env, "Fallback Reason", state.runtime.fallbackReason || "-");
+    addRow(env, "Config URL", state.config.source || "not loaded", statusClass(String(state.config.loaded)));
+    addRow(env, "Backend URL", state.backend.endpoint || "not loaded", statusClass(state.backend.healthy === false ? "fail" : state.backend.loaded ? "ok" : "waiting"));
     addRow(env, "CSS Runtime", state.cssRuntime.loaded ? state.cssRuntime.source : "not loaded", statusClass(String(state.cssRuntime.loaded)));
 
     var domState = getDomState();

@@ -105,8 +105,8 @@
     var protocol = String(window.location.protocol || "").toLowerCase();
 
     if (protocol === "file:" || host === "127.0.0.1" || host === "localhost" || host === "") return "LOCAL";
-    if (host === "skhps.jonaminz.com") return "PROD";
-    if (host === "dev-skhps.jonaminz.com") return "DEV";
+    if (host === "skhps.jonaminz.com" || host === "quick-login.skhps.jonaminz.com") return "PROD";
+    if (host === "dev-skhps.jonaminz.com" || host === "dev-quick-login.skhps.jonaminz.com") return "DEV";
     return "UNKNOWN";
   }
 

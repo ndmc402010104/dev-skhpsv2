@@ -254,7 +254,10 @@ function Get-VersionJsValue {
 }
 
 function Update-VersionJs {
-  param([string]$Path)
+  param(
+    [string]$Path,
+    [string]$UpdateType = "patch"
+  )
 
   if (!(Test-Path $Path)) {
     Write-Host "找不到 version.js，略過版本更新：$Path" -ForegroundColor Yellow
@@ -266,12 +269,32 @@ function Update-VersionJs {
   $major = [int](Get-VersionJsValue -Text $text -Name "major" -Default 0)
   $minor = [int](Get-VersionJsValue -Text $text -Name "minor" -Default 1)
   $patch = [int](Get-VersionJsValue -Text $text -Name "patch" -Default 0)
-  $build = [int](Get-VersionJsValue -Text $text -Name "build" -Default 0)
 
-  $build += 1
-  $buildAt = Get-Date -Format "yyyyMMddHHmm"
-  $updatedAt = Get-Date -Format "yyyy-MM-dd HH:mm"
-  $version = "v.$major.$minor.$patch.$build-$buildAt"
+  $UpdateType = if ([string]::IsNullOrWhiteSpace($UpdateType)) { "patch" } else { $UpdateType.Trim().ToLowerInvariant() }
+
+  if ($UpdateType -eq "none") {
+    Write-Host "version.js：不更新。" -ForegroundColor Yellow
+    return [pscustomobject]@{ Changed = $false; Version = [string](Get-VersionJsValue -Text $text -Name "version" -Default ""); UpdateType = "none" }
+  }
+
+  if ($UpdateType -eq "major") {
+    $major += 1
+    $minor = 0
+    $patch = 0
+  } elseif ($UpdateType -eq "minor") {
+    $minor += 1
+    $patch = 0
+  } elseif ($UpdateType -eq "time-only") {
+    # keep semantic version numbers
+  } else {
+    $UpdateType = "patch"
+    $patch += 1
+  }
+
+  $buildTime = Get-Date -Format "yyyyMMddHHmm"
+  $updatedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:00") + "+08:00"
+  $oldVersion = [string](Get-VersionJsValue -Text $text -Name "version" -Default "")
+  $version = "v$major.$minor.$patch-$buildTime"
 
   $content = @"
 window.SKHPS_VERSION = {
@@ -280,8 +303,7 @@ window.SKHPS_VERSION = {
   major: $major,
   minor: $minor,
   patch: $patch,
-  build: $build,
-  buildAt: "$buildAt",
+  buildTime: "$buildTime",
   updatedAt: "$updatedAt",
   source: "version.js"
 };
@@ -294,96 +316,45 @@ window.SKHPS_VERSION = {
   )
 
   git add $Path
+  Write-Host "目前版本：$oldVersion" -ForegroundColor Cyan
+  Write-Host "更新類型：$UpdateType" -ForegroundColor Cyan
+  Write-Host "新版本：$version" -ForegroundColor Green
   Write-Host "version.js -> $version" -ForegroundColor Green
+  return [pscustomobject]@{ Changed = $true; Version = $version; UpdateType = $UpdateType }
 }
 
 function Update-VersionJsForRepo {
+  param([string]$UpdateType = "patch")
   $versionJsPath = Join-Path $repoRoot "version.js"
-  Update-VersionJs -Path $versionJsPath
+  Update-VersionJs -Path $versionJsPath -UpdateType $UpdateType
 }
 
-function Update-VersionJsonForTarget {
-  param(
-    [hashtable]$Target,
-    [switch]$AskVersion
-  )
-
-  $versionPath = Join-Path $repoRoot "version.json"
-  if (!(Test-Path $versionPath)) {
-    Write-Host "找不到 version.json，略過版本更新。" -ForegroundColor Yellow
-    return
-  }
-
-  $json = Read-JsonFile -Path $versionPath
-  $targetEnv = [string]$Target.Env
+function Ask-VersionUpdateType {
+  $versionJsPath = Join-Path $repoRoot "version.js"
   $current = ""
-
-  if ($json.PSObject.Properties.Name -contains "version") {
-    $current = [string]$json.version
+  if (Test-Path $versionJsPath) {
+    $versionText = Get-Content $versionJsPath -Raw -Encoding UTF8
+    $current = [string](Get-VersionJsValue -Text $versionText -Name "version" -Default "")
   }
 
-  $parts = Get-VersionParts -VersionText $current
-  $major = [int]$parts.Major
-  $minor = [int]$parts.Minor
-  $patch = [int]$parts.Patch
-
-  $choice = "4"
-
-  if ($AskVersion) {
-    Write-Host "" -ForegroundColor Cyan
-    Write-Host "目前版本：$current" -ForegroundColor Cyan
-    Write-Host "版本更新："
-    Write-Host "1. patch：小修改，版號 +0.0.1，並更新時間"
-    Write-Host "2. minor：新增功能，版號 +0.1.0，並更新時間"
-    Write-Host "3. major：大改版，版號 +1.0.0，並更新時間"
-    Write-Host "4. none：不改版號，只更新時間，預設"
-    Write-Host ""
-
-    $choice = Read-Host "輸入 1/2/3/4，Enter = 4 none"
-    if ([string]::IsNullOrWhiteSpace($choice)) { $choice = "4" }
-    $choice = $choice.Trim().ToLowerInvariant()
-  }
-
-  if ($choice -eq "1" -or $choice -eq "patch") {
-    $patch++
-  } elseif ($choice -eq "2" -or $choice -eq "minor") {
-    $minor++
-    $patch = 0
-  } elseif ($choice -eq "3" -or $choice -eq "major") {
-    $major++
-    $minor = 0
-    $patch = 0
-  } elseif ($choice -eq "4" -or $choice -eq "none") {
-    Write-Host "選擇 none：保留 v$major.$minor.$patch，只更新 version 時間。" -ForegroundColor Yellow
-  } else {
-    Write-Host "不支援的選項，視為 none。" -ForegroundColor Yellow
-  }
-
-  $timestamp = Get-Date -Format "yyyyMMddHHmm"
-  $updatedAt = (Get-Date -Format "yyyy-MM-dd HH:mm") + " UTC+8"
-  $newVersion = "$targetEnv v$major.$minor.$patch-$targetEnv-$timestamp"
-
-  if ($json.PSObject.Properties.Name -contains "env") {
-    $json.env = $targetEnv
-  } else {
-    $json | Add-Member -NotePropertyName "env" -NotePropertyValue $targetEnv
-  }
-
-  if ($json.PSObject.Properties.Name -contains "version") {
-    $json.version = $newVersion
-  } else {
-    $json | Add-Member -NotePropertyName "version" -NotePropertyValue $newVersion
-  }
-
-  if ($json.PSObject.Properties.Name -contains "updatedAt") {
-    $json.updatedAt = $updatedAt
-  } else {
-    $json | Add-Member -NotePropertyName "updatedAt" -NotePropertyValue $updatedAt
-  }
-
-  Write-JsonFile -Path $versionPath -Object $json
-
-  Write-Host "version.json -> $newVersion" -ForegroundColor Green
+  Write-Host ""
+  Write-Host "版本更新：" -ForegroundColor Cyan
+  Write-Host "目前版本：$current"
+  Write-Host "1. major"
+  Write-Host "2. minor"
+  Write-Host "3. patch，預設"
+  Write-Host "4. time-only"
+  Write-Host "5. none"
+  $choice = Read-Host "選擇 1/2/3/4/5 或 major/minor/patch/time-only/none [Enter = patch]"
+  if ([string]::IsNullOrWhiteSpace($choice)) { return "patch" }
+  $choice = $choice.Trim().ToLowerInvariant()
+  if ($choice -eq "1" -or $choice -eq "major") { return "major" }
+  if ($choice -eq "2" -or $choice -eq "minor") { return "minor" }
+  if ($choice -eq "3" -or $choice -eq "patch") { return "patch" }
+  if ($choice -eq "4" -or $choice -eq "time-only" -or $choice -eq "time") { return "time-only" }
+  if ($choice -eq "5" -or $choice -eq "none") { return "none" }
+  Write-Host "不支援的選項，改用 patch。" -ForegroundColor Yellow
+  return "patch"
 }
 
 function Prepare-FrontendTargetState {
@@ -396,8 +367,8 @@ function Prepare-FrontendTargetState {
   Write-Host "==== 套用前端目標狀態：$($Target.Label) ====" -ForegroundColor Cyan
   Set-CNameForTarget -Target $Target
   Set-ConfigEnvForTarget -Target $Target
-  Update-VersionJsonForTarget -Target $Target -AskVersion:$AskVersion
-  Update-VersionJsForRepo
+  $versionUpdateType = if ($AskVersion) { Ask-VersionUpdateType } else { "patch" }
+  return Update-VersionJsForRepo -UpdateType $versionUpdateType
 }
 
 function Show-Status {
@@ -427,13 +398,19 @@ function Show-Status {
     Write-Host "config.json 讀取失敗：$($_.Exception.Message)" -ForegroundColor Red
   }
 
-  try {
-    $version = Read-JsonFile -Path (Join-Path $repoRoot "version.json")
-    Write-Host "version.env：$($version.env)"
-    Write-Host "version：$($version.version)"
-    Write-Host "updatedAt：$($version.updatedAt)"
-  } catch {
-    Write-Host "version.json 讀取失敗或不存在。" -ForegroundColor Yellow
+  $versionJsPath = Join-Path $repoRoot "version.js"
+  if (Test-Path $versionJsPath) {
+    $versionText = Get-Content $versionJsPath -Raw -Encoding UTF8
+    $versionAppId = Get-VersionJsValue -Text $versionText -Name "appId" -Default ""
+    $versionValue = Get-VersionJsValue -Text $versionText -Name "version" -Default ""
+    $versionUpdatedAt = Get-VersionJsValue -Text $versionText -Name "updatedAt" -Default ""
+    $versionSource = Get-VersionJsValue -Text $versionText -Name "source" -Default "version.js"
+    Write-Host "version.appId：$versionAppId"
+    Write-Host "version：$versionValue"
+    Write-Host "updatedAt：$versionUpdatedAt"
+    Write-Host "source：$versionSource"
+  } else {
+    Write-Host "version.js 讀取失敗或不存在。" -ForegroundColor Yellow
   }
 
   Write-Host ""
@@ -648,12 +625,6 @@ function Invoke-GitSingleTargetWorkflow {
   Write-Host "Commit：$commitMessage"
   if ($WithAppsScript) { Write-Host "Deploy description：$deployDescription" }
   Write-Host ""
-
-  $confirm = Ask-Default "確定執行？Y/N" "Y"
-  if (!(Test-Yes $confirm)) {
-    Write-Host "已取消。" -ForegroundColor Yellow
-    return
-  }
 
   if ($WithAppsScript) {
     Invoke-ClaspDeploy -DeployDescription $deployDescription

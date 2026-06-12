@@ -5,7 +5,7 @@
 
 此檔不是 skhpsv2 主站頁面，也不是要直接在 skhpsv2 裡正式使用。
 請複製到新的外部專案後，再依 body 內 checklist 建立必要檔案。
-標準模式是：HTML 只設定 runtime 與 app-card.json 位置；App 資訊、afterScripts、href、version 交給 JSON。
+標準模式是：HTML 只設定 runtime 與 app-card.json 位置；App 資訊、afterScripts、href 交給 app-card.json，版本交給 version.js。
 -->
 <html
   lang="zh-Hant"
@@ -33,7 +33,7 @@
           <p class="skhps-eyebrow">External App</p>
           <h1 id="appTitle" class="skhps-page-title">外部 App</h1>
           <p class="skhps-page-subtitle">
-            這是一份外部 App 起手模板。請先複製到新專案，再建立 app-card.json、version.json 和 assets/js/app.js。
+            這是一份外部 App 起手模板。請先複製到新專案，再建立 app-card.json、version.js 和 assets/js/app.js。
           </p>
         </div>
       </section>
@@ -54,7 +54,7 @@
             <li>在 app-card.json 裡設定 appId、title、group、order、href、afterScripts、registerExternalApp。</li>
             <li>確認 data-skhps-loading-tasks 內的 app-ready 和 app.js 呼叫的 loading task 名稱一致。</li>
             <li>建立 assets/js/app.js，內容可先使用下方最小範本。</li>
-            <li>建立 version.json，記錄目前外部 App 版本。</li>
+            <li>建立 version.js，透過 window.SKHPS_VERSION 提供目前外部 App 版本。</li>
             <li>不要在外部 App 自己再載入 config.js、loading-gate.js、backend-client.js、css-sheet-runtime.js、header.js、footer.js。</li>
             <li>如果需要後端功能，新增 Apps Script action，前端用 SKHPSBackend.call("actionName", payload)。</li>
             <li>部署後確認 external-app-loader.js、header、footer、CSS runtime、backend、afterScripts 都有載入成功。</li>
@@ -74,7 +74,7 @@
           <pre class="skhps-code-block">your-app/
   index.html
   app-card.json
-  version.json
+  version.js
   assets/
     js/
       app.js</pre>
@@ -164,20 +164,25 @@
         </div>
       </section>
 
-      <section class="skhps-section" aria-labelledby="versionJsonTitle">
+      <section class="skhps-section" aria-labelledby="versionJsTitle">
         <div class="skhps-section-head">
           <div>
-            <p class="skhps-eyebrow">version.json</p>
-            <h2 id="versionJsonTitle" class="skhps-section-title">最小 version.json 範本</h2>
+            <p class="skhps-eyebrow">version.js</p>
+            <h2 id="versionJsTitle" class="skhps-section-title">最小 version.js 範本</h2>
           </div>
         </div>
 
         <div class="skhps-hero-card">
-          <pre class="skhps-code-block">{
-  "app": "your-app-id",
-  "version": "your-app v0.1.0-20260611",
-  "env": "prod"
-}</pre>
+          <pre class="skhps-code-block">window.SKHPS_VERSION = {
+  appId: "your-app-id",
+  version: "v0.1.0-20260611",
+  major: 0,
+  minor: 1,
+  patch: 0,
+  buildTime: "20260611",
+  updatedAt: "2026-06-11",
+  source: "version.js"
+};</pre>
         </div>
       </section>
 
@@ -199,7 +204,7 @@
   "group": "未分類",
   "order": 9999,
   "registerExternalApp": true,
-  "versionUrl": "version.json",
+  "versionUrl": "version.js",
   "afterScripts": [
     "assets/js/app.js"
   ],

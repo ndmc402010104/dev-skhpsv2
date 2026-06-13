@@ -1,7 +1,7 @@
 ﻿/*
 檔案位置：skhpsv2/assets/js/backend-client.js
-時間戳記：2026-06-09 20:00 UTC+8
-用途：全站唯一 Apps Script API 呼叫入口；所有頁面、footer、CSS runtime 都只能透過 SKHPSBackend.call(action, payload) 呼叫後端，並且會先等待 config.json 載入完成，避免 config 尚未完成時 health 誤判 failed。
+時間戳記：2026-06-13 00:00 UTC+8
+用途：全站唯一 Apps Script API 呼叫入口；所有頁面、footer、CSS runtime 都只能透過 SKHPSBackend.call(action, payload) 呼叫後端，並提供通用外部專案 registry 讀寫 wrapper。
 */
 
 (function () {
@@ -521,10 +521,20 @@
     });
   }
 
+  function listExternalProjects(payload, options) {
+    return call("listExternalProjects", payload || {}, options);
+  }
+
+  function updateExternalProjectActivation(payload, options) {
+    return call("updateExternalProjectActivation", payload || {}, options);
+  }
+
   window.SKHPSBackend = {
     loadConfig: loadConfig,
     getEndpoint: getEndpoint,
     call: call,
+    listExternalProjects: listExternalProjects,
+    updateExternalProjectActivation: updateExternalProjectActivation,
     bindHealthButton: bindHealthButton
   };
   rlog("OK", "moduleReady", "backend-client.js");

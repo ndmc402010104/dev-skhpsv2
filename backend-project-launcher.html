@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<!--
+檔案位置：skhpsv2/backend-project-launcher.html
+時間戳：2026-06-14 01:10 UTC+8
+用途：後台專案啟動器；以四象限拖曳方式管理外部專案 registry 的啟用狀態、顯示位置與卡片順序，並提供入口網址檢視。
+開發階段樣式策略：
+- 本頁暫時允許頁面專用 <style>，方便快速調整 UI。
+- 所有新增 selector 均以 skhps-backend-project-launcher-* 命名，穩定後可搬入 CSS Sheet。
+水庫理論：
+- 本頁是 skhpsv2 後台共通管理能力。
+- 不承載 QR / Dressing / HIS 等業務邏輯。
+- 外部專案仍透過 registry / activation 接入，後台顯示由「顯示位置」決定。
+- 外部小專案不決定 enabled / displayPosition / sort；這些欄位由 skhpsv2 後台 registry 管理，sort 由整個四象限看板的卡片位置自動編號。
+-->
+<html
+  lang="zh-Hant"
+  class="skhps-css-loading"
+  data-skhps-page-id="backend-project-launcher"
+  data-skhps-header-mode="admin"
+  data-skhps-page-map-parent-label="系統後台"
+  data-skhps-page-map-parent-href="admin.html"
+  data-skhps-page-map-current="後台專案啟動器"
+  data-loading-title="後台專案啟動器"
+  data-skhps-loading-tasks="css-runtime,backend-project-launcher"
+>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <script src="assets/js/loading-cache-probe.js?v=20260611"></script>
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=202606131245">
+  <title>後台專案啟動器</title>
+
+  <style>
+    /*
+      backend-project-launcher page-only CSS.
+      開發期先放在本頁；穩定後可搬到 CSS Sheet。
+      命名規則：skhps-backend-project-launcher-*。
+    */
+
+    .skhps-backend-project-launcher-page {
+      --launcher-ink: var(--skhps-ink, #172033);
+      --launcher-muted: var(--skhps-muted, #607086);
+      --launcher-faint: rgba(96, 112, 134, 0.72);
+      --launcher-line: rgba(77, 96, 128, 0.16);
+      --launcher-card: rgba(255, 255, 255, 0.88);
+      --launcher-card-strong: rgba(255, 255, 255, 0.96);
+      --launcher-blue: var(--skhps-primary, #1f4b73);
+      --launcher-blue-soft: rgba(31, 75, 115, 0.10);
+      --launcher-blue-softer: rgba(31, 75, 115, 0.055);
+      --launcher-green: #1f7a5b;
+      --launcher-green-soft: rgba(31, 122, 91, 0.12);
+      --launcher-purple: #4f3d94;
+      --launcher-purple-soft: rgba(80, 62, 148, 0.10);
+      --launcher-amber: #9a6418;
+      --launcher-amber-soft: rgba(154, 100, 24, 0.13);
+      --launcher-danger: #9b2e2e;
+      --launcher-radius-xl: 32px;
+      --launcher-radius-lg: 28px;
+      --launcher-radius-md: 20px;
+      --launcher-radius-sm: 14px;
+    }
+
+    .skhps-backend-project-launcher-shell {
+      display: grid;
+      gap: 18px;
+    }
+
+    .skhps-backend-project-launcher-hero .skhps-hero-card {
+      padding-bottom: 26px;
+    }
+
+    .skhps-backend-project-launcher-runtime-panel,
+    .skhps-backend-project-launcher-registry-panel,
+    .skhps-backend-project-launcher-detail-card {
+      border: 1px solid var(--launcher-line);
+      border-radius: var(--launcher-radius-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.82));
+      box-shadow: 0 18px 48px rgba(39, 55, 84, 0.10);
+      overflow: hidden;
+    }
+
+    .skhps-backend-project-launcher-runtime-panel {
+      padding: 16px 18px;
+    }
+
+    .skhps-backend-project-launcher-runtime-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .skhps-backend-project-launcher-runtime-title {
+      margin: 0;
+      color: var(--launcher-ink);
+      font-size: 0.98rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .skhps-backend-project-launcher-runtime-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .skhps-backend-project-launcher-runtime-item {
+      min-width: 0;
+      border: 1px solid rgba(31, 75, 115, 0.10);
+      border-radius: 18px;
+      background: rgba(247, 250, 253, 0.78);
+      padding: 10px 12px;
+    }
+
+    .skhps-backend-project-launcher-runtime-label,
+    .skhps-backend-project-launcher-detail-label,
+    .skhps-backend-project-launcher-field-label,
+    .skhps-backend-project-launcher-zone-label,
+    .skhps-backend-project-launcher-board-label {
+      display: block;
+      color: var(--launcher-muted);
+      font-size: 0.72rem;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .skhps-backend-project-launcher-runtime-label {
+      margin-bottom: 4px;
+      white-space: nowrap;
+    }
+
+    .skhps-backend-project-launcher-runtime-value {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--launcher-ink);
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .skhps-backend-project-launcher-registry-panel {
+      padding: 0;
+    }
+
+    .skhps-backend-project-launcher-registry-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 22px 24px 14px;
+      border-bottom: 1px solid var(--launcher-line);
+    }
+
+    .skhps-backend-project-launcher-registry-title-block {
+      min-width: 0;
+    }
+
+    .skhps-backend-project-launcher-registry-status {
+      margin: 8px 0 0;
+      color: var(--launcher-muted);
+      font-size: 0.94rem;
+      line-height: 1.5;
+    }
+
+    .skhps-backend-project-launcher-sync-status {
+      align-self: flex-start;
+      min-width: 160px;
+      max-width: 320px;
+      border: 1px solid rgba(31, 75, 115, 0.12);
+      border-radius: 999px;
+      background: rgba(247, 250, 253, 0.76);
+      color: var(--launcher-muted);
+      font-size: 0.86rem;
+      font-weight: 800;
+      line-height: 1.3;
+      padding: 10px 14px;
+      text-align: center;
+    }
+
+    .skhps-backend-project-launcher-sync-status.is-saving {
+      color: var(--launcher-blue);
+      background: var(--launcher-blue-soft);
+    }
+
+    .skhps-backend-project-launcher-sync-status.is-ok {
+      color: var(--launcher-green);
+      background: var(--launcher-green-soft);
+    }
+
+    .skhps-backend-project-launcher-sync-status.is-error {
+      color: var(--launcher-danger);
+      background: rgba(155, 46, 46, 0.10);
+    }
+
+    .skhps-backend-project-launcher-board-wrap {
+      padding: 18px 24px 24px;
+    }
+
+    .skhps-backend-project-launcher-board {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .skhps-backend-project-launcher-column-head {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 1px solid rgba(31, 75, 115, 0.12);
+      border-radius: 20px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.90), rgba(247, 250, 253, 0.78));
+      color: var(--launcher-ink);
+      font-size: 1rem;
+      font-weight: 950;
+      letter-spacing: 0.06em;
+    }
+
+    .skhps-backend-project-launcher-zone {
+      min-height: 132px;
+      border: 1px solid rgba(31, 75, 115, 0.11);
+      border-radius: 24px;
+      background: rgba(247, 250, 253, 0.55);
+      padding: 12px;
+      transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        transform 160ms ease;
+    }
+
+    .skhps-backend-project-launcher-zone[data-enabled="true"] {
+      background:
+        linear-gradient(180deg, rgba(31, 122, 91, 0.055), rgba(247, 250, 253, 0.58));
+    }
+
+    .skhps-backend-project-launcher-zone[data-enabled="false"] {
+      background:
+        linear-gradient(180deg, rgba(154, 100, 24, 0.055), rgba(247, 250, 253, 0.58));
+    }
+
+    .skhps-backend-project-launcher-zone.is-drag-over {
+      border-color: rgba(31, 75, 115, 0.38);
+      background: rgba(31, 75, 115, 0.075);
+      box-shadow: inset 0 0 0 2px rgba(31, 75, 115, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .skhps-backend-project-launcher-zone-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .skhps-backend-project-launcher-zone-label {
+      color: var(--launcher-muted);
+    }
+
+    .skhps-backend-project-launcher-zone-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      min-height: 26px;
+      border-radius: 999px;
+      background: rgba(31, 75, 115, 0.08);
+      color: var(--launcher-blue);
+      font-size: 0.78rem;
+      font-weight: 950;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+
+    .skhps-backend-project-launcher-card-stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .skhps-backend-project-launcher-project-card {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      min-width: 0;
+      min-height: 48px;
+      border: 1px solid rgba(31, 75, 115, 0.12);
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.86));
+      box-shadow: 0 12px 24px rgba(39, 55, 84, 0.075);
+      color: var(--launcher-ink);
+      cursor: grab;
+      font: inherit;
+      padding: 11px 12px;
+      text-align: left;
+      transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        transform 160ms ease,
+        background 160ms ease;
+      user-select: none;
+    }
+
+    .skhps-backend-project-launcher-project-card:hover,
+    .skhps-backend-project-launcher-project-card:focus-visible {
+      border-color: rgba(31, 75, 115, 0.28);
+      box-shadow: 0 16px 32px rgba(39, 55, 84, 0.12);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    .skhps-backend-project-launcher-project-card.is-selected {
+      border-color: rgba(31, 75, 115, 0.46);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(237, 244, 251, 0.90));
+      box-shadow:
+        0 18px 34px rgba(39, 55, 84, 0.14),
+        inset 4px 0 0 var(--launcher-blue);
+    }
+
+    .skhps-backend-project-launcher-project-card.is-dragging {
+      cursor: grabbing;
+      opacity: 0.58;
+      transform: scale(0.985);
+    }
+
+    .skhps-backend-project-launcher-project-name {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      color: var(--launcher-ink);
+      font-size: 0.98rem;
+      font-weight: 950;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .skhps-backend-project-launcher-project-order {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      min-height: 28px;
+      border-radius: 999px;
+      background: var(--launcher-blue-soft);
+      color: var(--launcher-blue);
+      font-size: 0.76rem;
+      font-weight: 950;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+
+    .skhps-backend-project-launcher-zone-empty {
+      margin: 4px 0 0;
+      border: 1px dashed rgba(96, 112, 134, 0.28);
+      border-radius: 16px;
+      color: var(--launcher-faint);
+      font-size: 0.86rem;
+      font-weight: 750;
+      line-height: 1.6;
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .skhps-backend-project-launcher-empty,
+    .skhps-backend-project-launcher-error {
+      margin: 0;
+      padding: 22px 24px;
+      color: var(--launcher-muted);
+      line-height: 1.7;
+    }
+
+    .skhps-backend-project-launcher-error {
+      color: var(--launcher-danger);
+    }
+
+    .skhps-backend-project-launcher-detail-card {
+      margin-top: 18px;
+      padding: 22px 24px;
+    }
+
+    .skhps-backend-project-launcher-detail-card.is-empty {
+      color: var(--launcher-muted);
+      font-size: 0.98rem;
+      font-weight: 750;
+      line-height: 1.7;
+    }
+
+    .skhps-backend-project-launcher-detail-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .skhps-backend-project-launcher-detail-title {
+      margin: 0;
+      color: var(--launcher-ink);
+      font-size: 1.28rem;
+      font-weight: 950;
+      line-height: 1.3;
+    }
+
+    .skhps-backend-project-launcher-detail-subtitle {
+      margin: 5px 0 0;
+      color: var(--launcher-muted);
+      font-size: 0.9rem;
+      font-weight: 750;
+      line-height: 1.5;
+      word-break: break-all;
+    }
+
+    .skhps-backend-project-launcher-detail-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .skhps-backend-project-launcher-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 30px;
+      border: 1px solid rgba(31, 75, 115, 0.12);
+      border-radius: 999px;
+      background: rgba(31, 75, 115, 0.08);
+      color: var(--launcher-blue);
+      font-size: 0.78rem;
+      font-weight: 950;
+      line-height: 1;
+      padding: 7px 10px;
+      white-space: nowrap;
+    }
+
+    .skhps-backend-project-launcher-badge.is-enabled {
+      border-color: rgba(31, 122, 91, 0.18);
+      background: var(--launcher-green-soft);
+      color: var(--launcher-green);
+    }
+
+    .skhps-backend-project-launcher-badge.is-disabled {
+      border-color: rgba(154, 100, 24, 0.18);
+      background: var(--launcher-amber-soft);
+      color: var(--launcher-amber);
+    }
+
+    .skhps-backend-project-launcher-badge.is-front {
+      border-color: rgba(31, 75, 115, 0.18);
+      background: var(--launcher-blue-soft);
+      color: var(--launcher-blue);
+    }
+
+    .skhps-backend-project-launcher-badge.is-backend {
+      border-color: rgba(80, 62, 148, 0.18);
+      background: var(--launcher-purple-soft);
+      color: var(--launcher-purple);
+    }
+
+    .skhps-backend-project-launcher-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0 18px;
+    }
+
+    .skhps-backend-project-launcher-detail-item,
+    .skhps-backend-project-launcher-sort-editor {
+      min-width: 0;
+      border: 1px solid rgba(31, 75, 115, 0.10);
+      border-radius: 18px;
+      background: rgba(247, 250, 253, 0.72);
+      padding: 10px 12px;
+    }
+
+    .skhps-backend-project-launcher-detail-item.is-wide {
+      grid-column: span 2;
+    }
+
+    .skhps-backend-project-launcher-detail-label {
+      margin-bottom: 5px;
+    }
+
+    .skhps-backend-project-launcher-detail-value {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--launcher-ink);
+      font-size: 0.92rem;
+      font-weight: 850;
+      line-height: 1.42;
+    }
+
+    .skhps-backend-project-launcher-link {
+      color: var(--launcher-blue);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .skhps-backend-project-launcher-link:hover,
+    .skhps-backend-project-launcher-link:focus-visible {
+      text-decoration: underline;
+    }
+
+    .skhps-backend-project-launcher-sort-editor {
+      display: grid;
+      gap: 8px;
+    }
+
+    .skhps-backend-project-launcher-sort-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .skhps-backend-project-launcher-sort-input {
+      width: 120px;
+      min-height: 42px;
+      border: 1px solid rgba(31, 75, 115, 0.16);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.90);
+      color: var(--launcher-ink);
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 900;
+      outline: none;
+      padding: 8px 14px;
+    }
+
+    .skhps-backend-project-launcher-sort-input:focus {
+      border-color: rgba(31, 75, 115, 0.44);
+      box-shadow: 0 0 0 4px rgba(31, 75, 115, 0.10);
+    }
+
+    .skhps-backend-project-launcher-sort-hint {
+      color: var(--launcher-muted);
+      font-size: 0.86rem;
+      font-weight: 750;
+      line-height: 1.5;
+    }
+
+    .skhps-backend-project-launcher-move-hint {
+      margin: 12px 0 0;
+      border: 1px solid rgba(31, 75, 115, 0.10);
+      border-radius: 18px;
+      background: rgba(31, 75, 115, 0.045);
+      color: var(--launcher-muted);
+      font-size: 0.9rem;
+      font-weight: 750;
+      line-height: 1.65;
+      padding: 12px 14px;
+    }
+
+    @media (max-width: 960px) {
+      .skhps-backend-project-launcher-runtime-grid,
+      .skhps-backend-project-launcher-detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .skhps-backend-project-launcher-registry-head,
+      .skhps-backend-project-launcher-detail-head {
+        flex-direction: column;
+      }
+
+      .skhps-backend-project-launcher-sync-status {
+        max-width: none;
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .skhps-backend-project-launcher-board {
+        grid-template-columns: 1fr;
+      }
+
+      .skhps-backend-project-launcher-column-head {
+        display: none;
+      }
+
+      .skhps-backend-project-launcher-zone::before {
+        content: attr(data-zone-title);
+        display: block;
+        margin: 0 0 10px;
+        color: var(--launcher-ink);
+        font-size: 0.95rem;
+        font-weight: 950;
+        letter-spacing: 0.04em;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .skhps-backend-project-launcher-runtime-grid,
+      .skhps-backend-project-launcher-detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .skhps-backend-project-launcher-detail-item.is-wide {
+        grid-column: auto;
+      }
+
+      .skhps-backend-project-launcher-runtime-panel,
+      .skhps-backend-project-launcher-detail-card {
+        border-radius: 22px;
+        padding: 16px;
+      }
+
+      .skhps-backend-project-launcher-registry-head {
+        padding: 18px 16px 12px;
+      }
+
+      .skhps-backend-project-launcher-board-wrap {
+        padding: 16px;
+      }
+
+      .skhps-backend-project-launcher-sort-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .skhps-backend-project-launcher-sort-input {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body class="skhps-body">
+  <header id="header" class="skhps-header" data-skhps-header></header>
+
+  <main class="skhps-page skhps-backend-project-launcher-page">
+    <div class="skhps-container skhps-backend-project-launcher-shell">
+      <section class="skhps-hero skhps-backend-project-launcher-hero" aria-labelledby="launcherTitle">
+        <div class="skhps-hero-card">
+          <p class="skhps-eyebrow">Backend Project Launcher</p>
+          <h1 id="launcherTitle" class="skhps-page-title">後台專案啟動器</h1>
+          <p class="skhps-page-subtitle">
+            拖曳外部專案卡片即可決定是否啟用、顯示在前台或後台，以及同一象限內的上下順序；排序由卡片位置自動編號，不由外部專案自我報到決定。
+          </p>
+        </div>
+      </section>
+
+      <section class="skhps-section skhps-backend-project-launcher-runtime-panel" aria-labelledby="launcherRuntimeTitle">
+        <div class="skhps-backend-project-launcher-runtime-head">
+          <div>
+            <p class="skhps-eyebrow">Source</p>
+            <h2 id="launcherRuntimeTitle" class="skhps-backend-project-launcher-runtime-title">Runtime 來源</h2>
+          </div>
+        </div>
+
+        <div class="skhps-backend-project-launcher-runtime-grid" aria-label="runtime 診斷">
+          <div class="skhps-backend-project-launcher-runtime-item">
+            <span class="skhps-backend-project-launcher-runtime-label">Host Env</span>
+            <strong class="skhps-backend-project-launcher-runtime-value" data-launcher-host-env>判斷中</strong>
+          </div>
+
+          <div class="skhps-backend-project-launcher-runtime-item">
+            <span class="skhps-backend-project-launcher-runtime-label">Runtime Requested</span>
+            <strong class="skhps-backend-project-launcher-runtime-value" data-launcher-runtime-requested>判斷中</strong>
+          </div>
+
+          <div class="skhps-backend-project-launcher-runtime-item">
+            <span class="skhps-backend-project-launcher-runtime-label">Runtime Effective</span>
+            <strong class="skhps-backend-project-launcher-runtime-value" data-launcher-runtime-effective>判斷中</strong>
+          </div>
+
+          <div class="skhps-backend-project-launcher-runtime-item">
+            <span class="skhps-backend-project-launcher-runtime-label">Script Source</span>
+            <strong class="skhps-backend-project-launcher-runtime-value" data-launcher-script-source>未知</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="skhps-section skhps-backend-project-launcher-registry-panel" aria-labelledby="launcherListTitle">
+        <div class="skhps-backend-project-launcher-registry-head">
+          <div class="skhps-backend-project-launcher-registry-title-block">
+            <p class="skhps-eyebrow">Registry</p>
+            <h2 id="launcherListTitle" class="skhps-section-title">外部專案清單</h2>
+            <p class="skhps-backend-project-launcher-registry-status" data-backend-project-launcher-status>
+              外部專案 registry 載入中...
+            </p>
+          </div>
+
+          <div class="skhps-backend-project-launcher-sync-status" data-backend-project-launcher-sync-status>
+            尚未變更
+          </div>
+        </div>
+
+        <div data-backend-project-launcher-list></div>
+        <div data-backend-project-launcher-editor></div>
+      </section>
+    </div>
+  </main>
+
+  <footer data-skhps-footer class="skhps-footer">
+    Footer 載入中...
+  </footer>
+
+  <script src="assets/js/runtime.js?v=202606131555"></script>
+  <script src="assets/js/loading-gate.js?v=20260611"></script>
+  <script src="assets/js/config.js?v=202606131230"></script>
+  <script src="assets/js/route.js?v=202606131230"></script>
+  <script src="assets/js/backend-client.js?v=20260611"></script>
+  <script src="assets/js/css-sheet-runtime.js?v=20260611"></script>
+  <script src="assets/js/header.js?v=20260611"></script>
+  <script src="assets/js/page-map.js?v=202606131610"></script>
+  <script src="assets/js/footer.js?v=202606131555"></script>
+
+  <script>
+    /*
+      backend-project-launcher page-only JS.
+      開發期先放在本頁；穩定後建議拆到 assets/js/backend-project-launcher.js。
+    */
+    (function () {
+      "use strict";
+
+      var CACHE_PREFIX = "skhps.backendProjectLauncher.projects.";
+
+      var ZONES = [
+        { enabled: true, position: "前台", label: "啟用中", title: "啟用中 / 前台" },
+        { enabled: true, position: "後台", label: "啟用中", title: "啟用中 / 後台" },
+        { enabled: false, position: "前台", label: "未啟用", title: "未啟用 / 前台" },
+        { enabled: false, position: "後台", label: "未啟用", title: "未啟用 / 後台" }
+      ];
+
+      var state = {
+        env: "",
+        projects: [],
+        selectedKey: "",
+        draggedKey: ""
+      };
+
+      function $(selector, root) {
+        return (root || document).querySelector(selector);
+      }
+
+      function $all(selector, root) {
+        return Array.prototype.slice.call((root || document).querySelectorAll(selector));
+      }
+
+      function setText(selector, value) {
+        var el = $(selector);
+        if (el) el.textContent = value;
+      }
+
+      function escapeHtml(value) {
+        return String(value == null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function escapeAttr(value) {
+        return escapeHtml(value);
+      }
+
+      function toText(value, fallback) {
+        var text = String(value == null ? "" : value).trim();
+        return text || fallback || "";
+      }
+
+      function parseEnabled(value) {
+        if (value === true || value === 1) return true;
+        if (value === false || value === 0) return false;
+
+        var text = String(value == null ? "" : value).trim().toLowerCase();
+        return ["true", "1", "yes", "y", "啟用", "是", "on"].indexOf(text) >= 0;
+      }
+
+      function normalizePosition(value) {
+        return String(value || "").trim() === "後台" ? "後台" : "前台";
+      }
+
+      function normalizeEnvForDisplay(value) {
+        var text = String(value || "").trim().toLowerCase();
+        if (text === "local-dev" || text === "local") return "LOCAL";
+        if (text === "dev") return "DEV";
+        if (text === "prod") return "PROD";
+        return String(value || "未知").toUpperCase();
+      }
+
+      function inferHostEnv() {
+        var host = location.hostname;
+        if (host === "127.0.0.1" || host === "localhost") return "local-dev";
+        if (host.indexOf("dev-") === 0 || host.indexOf("dev-skhps") >= 0) return "dev";
+        return "prod";
+      }
+
+      function inferRequestedRuntime() {
+        var params = new URLSearchParams(location.search);
+        return params.get("skhpsRuntime") || "auto";
+      }
+
+      function getConfigEnv(config) {
+        try {
+          if (window.SKHPSConfig && typeof window.SKHPSConfig.getEnv === "function") {
+            return window.SKHPSConfig.getEnv(config || window.SKHPS_CONFIG);
+          }
+        } catch (error) {}
+
+        return inferHostEnv();
+      }
+
+      function getProjectKey(project) {
+        return [project.appId, project.env].join("::");
+      }
+
+      function findProject(key) {
+        return state.projects.find(function (item) {
+          return getProjectKey(item) === key;
+        });
+      }
+
+      function cloneProject(project) {
+        return Object.assign({}, project);
+      }
+
+      function projectSortValue(project) {
+        var value = Number(project && project.sort);
+        return Number.isFinite(value) ? value : 999999;
+      }
+
+      function sortProjects(projects) {
+        return projects.slice().sort(function (a, b) {
+          var sortA = projectSortValue(a);
+          var sortB = projectSortValue(b);
+          if (sortA !== sortB) return sortA - sortB;
+          return String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant");
+        });
+      }
+
+      function normalizeProject(raw) {
+        raw = raw || {};
+        var enabledValue = raw.enabled;
+        if (enabledValue === undefined) enabledValue = raw["啟用"];
+
+        return {
+          appId: toText(raw.appId || raw.projectId || raw.id || raw["專案ID"]),
+          env: toText(raw.env || raw.environment || raw["環境"]),
+          title: toText(raw.title || raw.name || raw.projectName || raw["專案名稱"], "未命名專案"),
+          href: toText(raw.href || raw.url || raw.entryUrl || raw["入口網址"]),
+          displayPosition: normalizePosition(raw.displayPosition || raw.position || raw["顯示位置"]),
+          displayGroup: toText(raw.displayGroup || raw.group || raw["顯示群組"]),
+          sort: String(projectSortValue({ sort: raw.sort || raw.order || raw["排序"] }) === 999999 ? 999 : projectSortValue({ sort: raw.sort || raw.order || raw["排序"] })),
+          enabled: parseEnabled(enabledValue),
+          version: toText(raw.version || raw["版本"]),
+          lastSeenAt: toText(raw.lastSeenAt || raw.lastReportAt || raw["最後報到時間"]),
+          reportCount: toText(raw.reportCount || raw.reportTimes || raw["報到次數"])
+        };
+      }
+
+      function extractProjects(response) {
+        var list = [];
+
+        if (Array.isArray(response)) {
+          list = response;
+        } else if (response && Array.isArray(response.projects)) {
+          list = response.projects;
+        } else if (response && response.data && Array.isArray(response.data.projects)) {
+          list = response.data.projects;
+        } else if (response && Array.isArray(response.data)) {
+          list = response.data;
+        } else if (response && response.result && Array.isArray(response.result.projects)) {
+          list = response.result.projects;
+        }
+
+        return sortProjects(list.map(normalizeProject).filter(function (project) {
+          return project.appId || project.title || project.href;
+        }));
+      }
+
+      function cacheKey() {
+        return CACHE_PREFIX + (state.env || "unknown");
+      }
+
+      function saveCache() {
+        try {
+          localStorage.setItem(cacheKey(), JSON.stringify({
+            env: state.env,
+            updatedAt: new Date().toISOString(),
+            projects: state.projects
+          }));
+        } catch (error) {}
+      }
+
+      function setSyncStatus(message, type) {
+        var el = $("[data-backend-project-launcher-sync-status]");
+        if (!el) return;
+
+        el.textContent = message;
+        el.classList.remove("is-saving", "is-ok", "is-error");
+        if (type) el.classList.add("is-" + type);
+      }
+
+      function renderStatus() {
+        var status = $("[data-backend-project-launcher-status]");
+        if (!status) return;
+
+        status.textContent =
+          "已載入 " +
+          state.projects.length +
+          " 個目前環境外部專案（" +
+          state.env +
+          "）。拖曳卡片即可變更啟用狀態、顯示位置與順序。";
+      }
+
+      function zoneId(enabled, position) {
+        return String(Boolean(enabled)) + "::" + normalizePosition(position);
+      }
+
+      function zoneProjects(enabled, position) {
+        return sortProjects(state.projects.filter(function (project) {
+          return Boolean(project.enabled) === Boolean(enabled) && normalizePosition(project.displayPosition) === normalizePosition(position);
+        }));
+      }
+
+      function cardHtml(project) {
+        var key = getProjectKey(project);
+        var selectedClass = key === state.selectedKey ? " is-selected" : "";
+
+        return [
+          '<button type="button" draggable="true" class="skhps-backend-project-launcher-project-card' + selectedClass + '" data-project-key="' + escapeAttr(key) + '" title="' + escapeAttr(project.title) + '">',
+            '<span class="skhps-backend-project-launcher-project-name">' + escapeHtml(project.title) + '</span>',
+          '</button>'
+        ].join("");
+      }
+
+      function zoneHtml(options) {
+        var projects = zoneProjects(options.enabled, options.position);
+        var rows = projects.map(cardHtml).join("");
+        var empty = '<p class="skhps-backend-project-launcher-zone-empty">拖曳專案到這裡</p>';
+
+        return [
+          '<section class="skhps-backend-project-launcher-zone" data-drop-zone data-enabled="' + String(options.enabled) + '" data-position="' + escapeAttr(options.position) + '" data-zone-title="' + escapeAttr(options.title) + '">',
+            '<div class="skhps-backend-project-launcher-zone-head">',
+              '<span class="skhps-backend-project-launcher-zone-label">' + escapeHtml(options.label) + '</span>',
+              '<span class="skhps-backend-project-launcher-zone-count">' + projects.length + '</span>',
+            '</div>',
+            '<div class="skhps-backend-project-launcher-card-stack" data-card-stack>',
+              rows || empty,
+            '</div>',
+          '</section>'
+        ].join("");
+      }
+
+      function renderBoard() {
+        var list = $("[data-backend-project-launcher-list]");
+        if (!list) return;
+
+        if (!state.projects.length) {
+          list.innerHTML = '<p class="skhps-backend-project-launcher-empty">目前環境沒有外部專案。請先確認 Sheet 的「環境」欄位與目前 runtime 是否一致。</p>';
+          return;
+        }
+
+        list.innerHTML = [
+          '<div class="skhps-backend-project-launcher-board-wrap">',
+            '<div class="skhps-backend-project-launcher-board" aria-label="外部專案四象限拖曳管理">',
+              '<div class="skhps-backend-project-launcher-column-head">前台</div>',
+              '<div class="skhps-backend-project-launcher-column-head">後台</div>',
+              zoneHtml(ZONES[0]),
+              zoneHtml(ZONES[1]),
+              zoneHtml(ZONES[2]),
+              zoneHtml(ZONES[3]),
+            '</div>',
+          '</div>'
+        ].join("");
+
+        bindBoard(list);
+      }
+
+      function badgeHtml(text, className) {
+        return '<span class="skhps-backend-project-launcher-badge ' + className + '">' + escapeHtml(text) + '</span>';
+      }
+
+      function detailItem(label, htmlValue, wide) {
+        return [
+          '<div class="skhps-backend-project-launcher-detail-item' + (wide ? " is-wide" : "") + '">',
+            '<span class="skhps-backend-project-launcher-detail-label">' + escapeHtml(label) + '</span>',
+            '<span class="skhps-backend-project-launcher-detail-value">' + htmlValue + '</span>',
+          '</div>'
+        ].join("");
+      }
+
+      function renderEditor() {
+        var editor = $("[data-backend-project-launcher-editor]");
+        if (!editor) return;
+
+        var project = findProject(state.selectedKey);
+
+        if (!project) {
+          editor.innerHTML = [
+            '<article class="skhps-backend-project-launcher-detail-card is-empty">',
+              '點選任一專案卡片即可查看詳情。拖曳卡片到四個象限，可立即更新啟用狀態、前台/後台位置與順序。',
+            '</article>'
+          ].join("");
+          return;
+        }
+
+        var position = normalizePosition(project.displayPosition);
+        var statusBadge = project.enabled
+          ? badgeHtml("啟用中", "is-enabled")
+          : badgeHtml("未啟用", "is-disabled");
+        var positionBadge = position === "後台"
+          ? badgeHtml("後台", "is-backend")
+          : badgeHtml("前台", "is-front");
+        var hrefHtml = project.href
+          ? '<a class="skhps-backend-project-launcher-link" href="' + escapeAttr(project.href) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(project.href) + '</a>'
+          : "—";
+
+        editor.innerHTML = [
+          '<article class="skhps-backend-project-launcher-detail-card">',
+            '<div class="skhps-backend-project-launcher-detail-head">',
+              '<div>',
+                '<h3 class="skhps-backend-project-launcher-detail-title">' + escapeHtml(project.title) + '</h3>',
+                '<p class="skhps-backend-project-launcher-detail-subtitle">' + escapeHtml(project.appId) + '</p>',
+              '</div>',
+              '<div class="skhps-backend-project-launcher-detail-actions">',
+                statusBadge,
+                positionBadge,
+              '</div>',
+            '</div>',
+
+            '<div class="skhps-backend-project-launcher-detail-grid">',
+              detailItem("專案ID", escapeHtml(project.appId)),
+              detailItem("版本", escapeHtml(project.version || "—")),
+              detailItem("最後報到時間", escapeHtml(project.lastSeenAt || "—"), true),
+              detailItem("報到次數", escapeHtml(project.reportCount || "—")),
+              detailItem("入口網址", hrefHtml, true),
+            '</div>',
+
+            '<p class="skhps-backend-project-launcher-move-hint">',
+              '移動位置：直接拖曳上方卡片到「啟用中 / 未啟用」與「前台 / 後台」象限；同一象限內上下拖曳會自動更新排序。',
+            '</p>',
+          '</article>'
+        ].join("");
+      }
+
+      function renderAll() {
+        renderStatus();
+        renderBoard();
+        renderEditor();
+      }
+
+      function selectProject(key) {
+        // 同一張卡片再點一次就收折詳情。
+        state.selectedKey = state.selectedKey === key ? "" : key;
+        renderAll();
+      }
+
+      function getDropBeforeKey(event, zone) {
+        var cards = $all("[data-project-key]:not(.is-dragging)", zone);
+        var closestKey = "";
+        var closestOffset = Number.NEGATIVE_INFINITY;
+
+        cards.forEach(function (card) {
+          var box = card.getBoundingClientRect();
+          var offset = event.clientY - box.top - box.height / 2;
+
+          if (offset < 0 && offset > closestOffset) {
+            closestOffset = offset;
+            closestKey = card.getAttribute("data-project-key") || "";
+          }
+        });
+
+        return closestKey;
+      }
+
+      function bindBoard(root) {
+        $all("[data-project-key]", root).forEach(function (card) {
+          card.addEventListener("click", function () {
+            selectProject(card.getAttribute("data-project-key"));
+          });
+
+          card.addEventListener("dragstart", function (event) {
+            state.draggedKey = card.getAttribute("data-project-key");
+            card.classList.add("is-dragging");
+            try {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", state.draggedKey);
+            } catch (error) {}
+          });
+
+          card.addEventListener("dragend", function () {
+            state.draggedKey = "";
+            card.classList.remove("is-dragging");
+            $all("[data-drop-zone]").forEach(function (zone) {
+              zone.classList.remove("is-drag-over");
+            });
+          });
+        });
+
+        $all("[data-drop-zone]", root).forEach(function (zone) {
+          zone.addEventListener("dragover", function (event) {
+            event.preventDefault();
+            zone.classList.add("is-drag-over");
+            try {
+              event.dataTransfer.dropEffect = "move";
+            } catch (error) {}
+          });
+
+          zone.addEventListener("dragleave", function () {
+            zone.classList.remove("is-drag-over");
+          });
+
+          zone.addEventListener("drop", function (event) {
+            event.preventDefault();
+            zone.classList.remove("is-drag-over");
+
+            var key = state.draggedKey;
+            try {
+              key = event.dataTransfer.getData("text/plain") || key;
+            } catch (error) {}
+
+            var enabled = zone.getAttribute("data-enabled") === "true";
+            var position = normalizePosition(zone.getAttribute("data-position"));
+            var beforeKey = getDropBeforeKey(event, zone);
+            moveProject(key, enabled, position, beforeKey);
+          });
+        });
+      }
+
+      function buildZoneListsWithoutDragged(draggedKey) {
+        var zoneLists = {};
+
+        ZONES.forEach(function (zone) {
+          zoneLists[zoneId(zone.enabled, zone.position)] = [];
+        });
+
+        state.projects.forEach(function (project) {
+          var key = getProjectKey(project);
+          if (key === draggedKey) return;
+
+          var id = zoneId(project.enabled, project.displayPosition);
+          if (!zoneLists[id]) zoneLists[id] = [];
+          zoneLists[id].push(project);
+        });
+
+        Object.keys(zoneLists).forEach(function (id) {
+          zoneLists[id] = sortProjects(zoneLists[id]);
+        });
+
+        return zoneLists;
+      }
+
+      function flattenZoneLists(zoneLists) {
+        var next = [];
+        ZONES.forEach(function (zone) {
+          var id = zoneId(zone.enabled, zone.position);
+          next = next.concat(zoneLists[id] || []);
+        });
+        return next;
+      }
+
+      function applyAutoSort(zoneLists) {
+        /*
+          排序由卡片在四象限看板上的位置自動決定。
+          不是每個象限各自從 10 開始，而是依整個看板視覺順序給唯一排序值：
+          啟用前台 → 啟用後台 → 未啟用前台 → 未啟用後台。
+          這樣寫回 Sheet 後，「排序」欄位才能完整保存目前卡片位置。
+        */
+        var orderIndex = 0;
+
+        ZONES.forEach(function (zone) {
+          var id = zoneId(zone.enabled, zone.position);
+          var list = zoneLists[id] || [];
+
+          list.forEach(function (project) {
+            orderIndex += 1;
+            project.sort = String(orderIndex * 10);
+          });
+        });
+      }
+
+      function hasProjectChanged(previous, current) {
+        if (!previous || !current) return true;
+        return (
+          Boolean(previous.enabled) !== Boolean(current.enabled) ||
+          normalizePosition(previous.displayPosition) !== normalizePosition(current.displayPosition) ||
+          String(previous.sort || "") !== String(current.sort || "")
+        );
+      }
+
+      function moveProject(key, enabled, displayPosition, beforeKey) {
+        if (!key) return;
+
+        var project = findProject(key);
+        if (!project) return;
+
+        displayPosition = normalizePosition(displayPosition);
+
+        var previousProjects = state.projects.map(cloneProject);
+        var previousMap = {};
+        previousProjects.forEach(function (item) {
+          previousMap[getProjectKey(item)] = item;
+        });
+
+        var zoneLists = buildZoneListsWithoutDragged(key);
+        var targetId = zoneId(enabled, displayPosition);
+        var targetList = zoneLists[targetId] || [];
+
+        project.enabled = enabled;
+        project.displayPosition = displayPosition;
+
+        var beforeIndex = beforeKey ? targetList.findIndex(function (item) {
+          return getProjectKey(item) === beforeKey;
+        }) : -1;
+
+        if (beforeIndex >= 0) {
+          targetList.splice(beforeIndex, 0, project);
+        } else {
+          targetList.push(project);
+        }
+
+        zoneLists[targetId] = targetList;
+        applyAutoSort(zoneLists);
+
+        state.projects = flattenZoneLists(zoneLists);
+        state.selectedKey = key;
+        saveCache();
+        renderAll();
+
+        var changedProjects = state.projects.filter(function (item) {
+          return hasProjectChanged(previousMap[getProjectKey(item)], item);
+        });
+
+        if (!changedProjects.length) {
+          setSyncStatus("未變更", "ok");
+          return;
+        }
+
+        setSyncStatus("更新位置與排序中...", "saving");
+
+        saveProjectList(changedProjects, previousProjects).then(function () {
+          setSyncStatus("位置與排序已更新", "ok");
+          saveCache();
+        }).catch(function (error) {
+          state.projects = previousProjects;
+          state.selectedKey = key;
+          saveCache();
+          renderAll();
+          setSyncStatus("更新失敗：" + (error && error.message ? error.message : String(error)), "error");
+        });
+      }
+
+      function saveProjectList(projects, previousProjects) {
+        if (!window.SKHPSBackend || typeof window.SKHPSBackend.updateExternalProjectActivation !== "function") {
+          state.projects = previousProjects;
+          return Promise.reject(new Error("找不到 SKHPSBackend.updateExternalProjectActivation"));
+        }
+
+        var saves = projects.map(function (project) {
+          var sortValue = Number(project.sort);
+
+          return window.SKHPSBackend.updateExternalProjectActivation({
+            appId: project.appId,
+            env: project.env,
+            enabled: project.enabled,
+            displayPosition: normalizePosition(project.displayPosition),
+            sort: Number.isFinite(sortValue) ? sortValue : project.sort,
+            order: Number.isFinite(sortValue) ? sortValue : project.sort,
+            displayOrder: Number.isFinite(sortValue) ? sortValue : project.sort,
+            "排序": Number.isFinite(sortValue) ? sortValue : project.sort
+          }).then(function (response) {
+            if (response && response.ok === false) {
+              throw new Error(response.error || "更新失敗");
+            }
+            return response;
+          });
+        });
+
+        return Promise.all(saves);
+      }
+
+      function updateRuntimePanel(config) {
+        var hostEnv = inferHostEnv();
+        var requested = inferRequestedRuntime();
+        var effective = getConfigEnv(config);
+
+        state.env = effective || hostEnv;
+
+        setText("[data-launcher-host-env]", normalizeEnvForDisplay(hostEnv));
+        setText("[data-launcher-runtime-requested]", requested);
+        setText("[data-launcher-runtime-effective]", normalizeEnvForDisplay(effective));
+        setText("[data-launcher-script-source]", "未知");
+      }
+
+      function loadConfig() {
+        if (window.SKHPSConfig && typeof window.SKHPSConfig.loadConfig === "function") {
+          return window.SKHPSConfig.loadConfig();
+        }
+        if (window.SKHPSBackend && typeof window.SKHPSBackend.loadConfig === "function") {
+          return window.SKHPSBackend.loadConfig();
+        }
+        if (window.SKHPS_CONFIG) {
+          return Promise.resolve(window.SKHPS_CONFIG);
+        }
+        return Promise.resolve(null);
+      }
+
+      function loadProjects() {
+        var list = $("[data-backend-project-launcher-list]");
+        var status = $("[data-backend-project-launcher-status]");
+        if (status) status.textContent = "外部專案 registry 載入中...";
+        if (list) list.innerHTML = '<p class="skhps-backend-project-launcher-empty">讀取中...</p>';
+
+        if (!window.SKHPSBackend || typeof window.SKHPSBackend.listExternalProjects !== "function") {
+          throw new Error("找不到 SKHPSBackend.listExternalProjects");
+        }
+
+        return window.SKHPSBackend.listExternalProjects({
+          env: state.env
+        }).then(function (response) {
+          if (response && response.ok === false) {
+            throw new Error(response.error || "listExternalProjects failed");
+          }
+
+          state.projects = extractProjects(response);
+
+          if (!state.selectedKey || !findProject(state.selectedKey)) {
+            state.selectedKey = state.projects[0] ? getProjectKey(state.projects[0]) : "";
+          }
+
+          saveCache();
+          renderAll();
+        });
+      }
+
+      function markReady() {
+        try {
+          if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
+            window.SKHPSLoading.done("backend-project-launcher");
+          }
+        } catch (error) {}
+      }
+
+      function showError(error) {
+        var status = $("[data-backend-project-launcher-status]");
+        var list = $("[data-backend-project-launcher-list]");
+        var message = error && error.message ? error.message : String(error);
+
+        if (status) status.textContent = "外部專案 registry 載入失敗。";
+        if (list) {
+          list.innerHTML = '<p class="skhps-backend-project-launcher-error">' + escapeHtml(message) + '</p>';
+        }
+      }
+
+      function boot() {
+        loadConfig().then(function (config) {
+          updateRuntimePanel(config);
+          return loadProjects();
+        }).catch(function (error) {
+          showError(error);
+        }).finally(function () {
+          markReady();
+        });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+      } else {
+        boot();
+      }
+    })();
+  </script>
+</body>
+</html>

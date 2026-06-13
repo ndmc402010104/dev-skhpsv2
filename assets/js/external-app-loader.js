@@ -1,6 +1,7 @@
 /*
-File: skhpsv2/assets/js/external-app-loader.js
-Purpose: include loader for SKHPS external child apps.
+檔案位置：skhpsv2/assets/js/external-app-loader.js
+時間戳：2026-06-13 00:00 UTC+8
+用途：include loader for SKHPS external child apps；外部專案只接入 skhpsv2 水庫，並以 registry 名片報到。
 
 設計：
 - 這支檔案是外部 App 接入 skhpsv2 共用 runtime 的 include loader。
@@ -146,6 +147,7 @@ Purpose: include loader for SKHPS external child apps.
       title: appEnv.title || "",
       href: appEnv.href || window.location.href,
       group: appEnv.group || "",
+      displayPosition: appEnv.displayPosition || appEnv["顯示位置"] || "",
       order: appEnv.order || 9999,
       coreScripts: appEnv.coreScripts || CORE_SCRIPTS.slice(),
       afterScripts: appEnv.afterScripts || []
@@ -317,6 +319,13 @@ Purpose: include loader for SKHPS external child apps.
       ""
     ).trim();
 
+    var displayPosition = String(
+      config["顯示位置"] ||
+      config.displayPosition ||
+      options.displayPosition ||
+      ""
+    ).trim();
+
     var order = Number(
       config.order ||
       options.order ||
@@ -334,6 +343,8 @@ Purpose: include loader for SKHPS external child apps.
       title: title,
       href: href,
       group: group,
+      displayPosition: displayPosition,
+      "顯示位置": displayPosition,
       order: order,
       version: version,
       env: options.env || "",

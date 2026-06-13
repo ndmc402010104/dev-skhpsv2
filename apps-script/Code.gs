@@ -1,7 +1,7 @@
 /**
  * 檔案位置：skhpsv2/apps-script/Code.gs
- * 時間戳記：2026-06-11 UTC+8
- * 用途：skhpsv2 Apps Script API 入口與 action router；統一 JSON / JSONP 回傳，任何例外都包成 JSONP，避免前端只看到 JSONP failed。
+ * 時間戳記：2026-06-13 00:00 UTC+8
+ * 用途：skhpsv2 Apps Script API 入口與 action router；統一 JSON / JSONP 回傳，任何例外都包成 JSONP，並提供外部專案 Sheet registry 通用讀寫 action。
  */
 
 function doGet(e) {
@@ -61,7 +61,10 @@ function routeAction_(action, params) {
     'saveCssSheetRows',
     'registerExternalApp',
     'listExternalApps',
-    'setExternalAppActive'
+    'setExternalAppActive',
+    'updateExternalAppSettings',
+    'listExternalProjects',
+    'updateExternalProjectActivation'
   ];
 
   if (allowedActions.indexOf(action) === -1) {
@@ -196,6 +199,18 @@ function routeAction_(action, params) {
     return listResult;
   }
 
+  if (action === 'listExternalProjects') {
+    var projectListPayload = parsePayload_(params);
+    var projectListResult = listExternalProjects(projectListPayload);
+
+    projectListResult.action = action;
+    projectListResult.app = 'skhpsv2';
+    projectListResult.env = getServerEnv_();
+    projectListResult.serverTime = getServerTime_();
+
+    return projectListResult;
+  }
+
   if (action === 'setExternalAppActive') {
     var activePayload = parsePayload_(params);
     var activeResult = setExternalAppActive(activePayload);
@@ -206,6 +221,30 @@ function routeAction_(action, params) {
     activeResult.serverTime = getServerTime_();
 
     return activeResult;
+  }
+
+  if (action === 'updateExternalAppSettings') {
+    var settingsPayload = parsePayload_(params);
+    var settingsResult = updateExternalAppSettings(settingsPayload);
+
+    settingsResult.action = action;
+    settingsResult.app = 'skhpsv2';
+    settingsResult.env = getServerEnv_();
+    settingsResult.serverTime = getServerTime_();
+
+    return settingsResult;
+  }
+
+  if (action === 'updateExternalProjectActivation') {
+    var activationPayload = parsePayload_(params);
+    var activationResult = updateExternalProjectActivation(activationPayload);
+
+    activationResult.action = action;
+    activationResult.app = 'skhpsv2';
+    activationResult.env = getServerEnv_();
+    activationResult.serverTime = getServerTime_();
+
+    return activationResult;
   }
 
   return {

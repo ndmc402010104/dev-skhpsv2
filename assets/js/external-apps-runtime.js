@@ -1,6 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/external-apps-runtime.js
-用途：首頁讀取 Sheet「外部專案」，顯示目前 runtime 啟用中的外部專案。
+時間戳：2026-06-13 00:00 UTC+8
+用途：首頁讀取 Sheet「外部專案」，只顯示目前 runtime、啟用=true、且「顯示位置」為前台的外部專案。
 
 Loading Gate：
 - 任務名稱：external-apps-runtime
@@ -76,33 +77,34 @@ Loading Gate：
     }
   }
 
+  function normalizeRegistryEnv(value) {
+    value = String(value || "").trim();
+    if (value === "LOCAL") return "local-dev";
+    if (value === "DEV") return "dev";
+    if (value === "PROD") return "prod";
+    return value;
+  }
+
   function getRuntime() {
+    if (window.SKHPSRuntime && typeof window.SKHPSRuntime.getState === "function") {
+      var state = window.SKHPSRuntime.getState();
+      if (state && state.runtime && state.runtime.effective) {
+        return normalizeRegistryEnv(state.runtime.effective);
+      }
+    }
+
     var fromHtml = document.documentElement.getAttribute("data-skhps-runtime");
-    if (fromHtml) return fromHtml;
+    if (fromHtml) return normalizeRegistryEnv(fromHtml);
 
     if (window.SKHPSConfig && typeof window.SKHPSConfig.getEnv === "function") {
-      return window.SKHPSConfig.getEnv(window.SKHPS_CONFIG);
+      return normalizeRegistryEnv(window.SKHPSConfig.getEnv(window.SKHPS_CONFIG));
     }
 
     if (window.SKHPS_CONFIG && window.SKHPS_CONFIG.env) {
-      return window.SKHPS_CONFIG.env;
+      return normalizeRegistryEnv(window.SKHPS_CONFIG.env);
     }
 
-    var host = String(window.location.hostname || "").toLowerCase();
-
-    if (host === "127.0.0.1" || host === "localhost" || host === "") {
-      return "local-dev";
-    }
-
-    if (
-      host.indexOf("dev-") === 0 ||
-      host.indexOf("dev.") === 0 ||
-      host.indexOf("dev-skhps") >= 0
-    ) {
-      return "dev";
-    }
-
-    return "prod";
+    return "";
   }
 
   function setStatus(text) {
@@ -138,6 +140,31 @@ Loading Gate：
     if (Array.isArray(response.apps)) return response.apps;
     if (response.data && Array.isArray(response.data.apps)) return response.data.apps;
     return [];
+  }
+
+  function isActive(app) {
+    if (!app) return false;
+    if (app.active === true || app.enabled === true) return true;
+
+    var value = String(app.active || app.enabled || app["啟用"] || "").trim().toLowerCase();
+    return value === "true" || value === "是" || value === "1" || value === "yes";
+  }
+
+  function normalizeDisplayLocation(app) {
+    var value = app && (
+      app["顯示位置"] ||
+      app.displayPosition ||
+      ""
+    );
+    var text = String(value || "").trim().toLowerCase();
+
+    if (text === "front" || text === "frontend" || value === "前台") return "front";
+    if (text === "back" || text === "backend" || text === "admin" || value === "後台") return "backend";
+    return "";
+  }
+
+  function isFrontendApp(app) {
+    return isActive(app) && normalizeDisplayLocation(app) === "front";
   }
 
   function renderApps(apps, runtime) {
@@ -214,13 +241,13 @@ Loading Gate：
       env: runtime
     });
 
-    callBackend("listExternalApps", {
+    callBackend("listExternalProjects", {
       activeOnly: true,
       env: runtime
     })
       .then(function (response) {
         console.info("[SKHPSExternalAppsRuntime] listExternalApps response:", response);
-        var apps = normalizeApps(response);
+        var apps = normalizeApps(response).filter(isFrontendApp);
         renderApps(apps, runtime);
         setRuntimeExternalApps({
           loaded: true,

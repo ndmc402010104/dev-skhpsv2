@@ -110,6 +110,7 @@
     if (protocol === "file:" || host === "127.0.0.1" || host === "localhost" || host === "") return "LOCAL";
     if (host === "skhps.jonaminz.com" || host === "quick-login.skhps.jonaminz.com") return "PROD";
     if (host === "dev-skhps.jonaminz.com" || host === "dev-quick-login.skhps.jonaminz.com") return "DEV";
+    if (window.SKHPS_APP_ENV || window.SKHPS_APP_CONFIG) return "EXTERNAL";
     return "UNKNOWN";
   }
 
@@ -128,10 +129,16 @@
     var host = state.host || {};
     var runtimeState = state.runtime || {};
     var hostEnv = host.env || hostEnvFromLocation();
-    var effective = runtimeState.effective || "";
+    var effective = runtimeState.effective ||
+      (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.env ? String(window.SKHPS_APP_ENV.env).toUpperCase() : "") ||
+      String(document.documentElement.getAttribute("data-skhps-runtime") || "").toUpperCase();
 
     if (hostEnv === "LOCAL" && effective && effective !== "LOCAL" && effective !== "UNKNOWN") {
       return "LOCAL→" + effective;
+    }
+
+    if ((hostEnv === "UNKNOWN" || hostEnv === "EXTERNAL") && effective) {
+      return "EXTERNAL→" + effective;
     }
 
     return hostEnv || "UNKNOWN";
@@ -186,12 +193,19 @@
   function toggleHref(state) {
     var label = hostEnvLabel(state);
     var targetEnv = label.indexOf("PROD") >= 0 ? "dev" : "prod";
+    var href = "";
 
     if (label.indexOf("LOCAL") >= 0) {
       targetEnv = "dev";
     }
 
-    return appHrefForEnv(targetEnv) || siteBaseForEnv(targetEnv);
+    href = appHrefForEnv(targetEnv) || siteBaseForEnv(targetEnv);
+
+    if (href && window.SKHPSConfig && typeof window.SKHPSConfig.withRuntime === "function") {
+      return window.SKHPSConfig.withRuntime(href, window.SKHPS_CONFIG || {}, targetEnv);
+    }
+
+    return href;
   }
 
   function loadVersionJsIfNeeded() {

@@ -81,6 +81,23 @@
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(version);
   }
 
+  function withRuntimeParam(url, env) {
+    if (!url || !env) {
+      return url || "";
+    }
+
+    try {
+      var output = new URL(url, window.location.href);
+      output.searchParams.set("skhpsRuntime", env);
+      return output.toString();
+    } catch (error) {
+      return String(url) +
+        (String(url).indexOf("?") >= 0 ? "&" : "?") +
+        "skhpsRuntime=" +
+        encodeURIComponent(env);
+    }
+  }
+
   function getRuntimeParam() {
     try {
       var params = new URLSearchParams(window.location.search || "");
@@ -256,6 +273,8 @@
     if (!config.href) {
       config.href = window.location.href;
     }
+
+    config.href = withRuntimeParam(config.href, env);
 
     if (!config.group) {
       config.group = "";

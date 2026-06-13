@@ -18,6 +18,8 @@
 
 html.skhps-css-loading {
   min-height: 100%;
+  overflow: hidden;
+  scrollbar-width: none;
   background:
     radial-gradient(circle at 24% 18%, rgba(81, 109, 135, .18), transparent 34%),
     radial-gradient(circle at 78% 24%, rgba(167, 141, 114, .13), transparent 30%),
@@ -37,6 +39,41 @@ html.skhps-css-loading {
     100% 100%,
     0 0;
   animation: skhps-loading-bg 9s ease-in-out infinite;
+}
+
+html.skhps-loading,
+html.skhps-shell-loading,
+html.skhps-main-loading,
+body.skhps-css-loading,
+body.skhps-loading,
+body.skhps-shell-loading,
+body.skhps-main-loading {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+html.skhps-css-loading body,
+html.skhps-loading body,
+html.skhps-shell-loading body,
+html.skhps-main-loading body {
+  overflow: hidden;
+}
+
+html.skhps-css-loading::-webkit-scrollbar,
+html.skhps-loading::-webkit-scrollbar,
+html.skhps-shell-loading::-webkit-scrollbar,
+html.skhps-main-loading::-webkit-scrollbar,
+body.skhps-css-loading::-webkit-scrollbar,
+body.skhps-loading::-webkit-scrollbar,
+body.skhps-shell-loading::-webkit-scrollbar,
+body.skhps-main-loading::-webkit-scrollbar,
+html.skhps-css-loading body::-webkit-scrollbar,
+html.skhps-loading body::-webkit-scrollbar,
+html.skhps-shell-loading body::-webkit-scrollbar,
+html.skhps-main-loading body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 html.skhps-shell-loading [data-skhps-header],

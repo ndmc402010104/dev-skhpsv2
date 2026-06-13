@@ -83,12 +83,19 @@
   function getHref(pageId, fallbackHref) {
     var config = getConfig();
     var page = getPageById(pageId);
+    var href = "";
 
     if (page && page.href) {
-      return getEnvValue(page.href, config) || fallbackHref || "#";
+      href = getEnvValue(page.href, config) || fallbackHref || "#";
+    } else {
+      href = fallbackHref || "#";
     }
 
-    return fallbackHref || "#";
+    if (href !== "#" && window.SKHPSConfig && typeof window.SKHPSConfig.withRuntime === "function") {
+      return window.SKHPSConfig.withRuntime(href, config);
+    }
+
+    return href;
   }
 
   function applyPageLinks(root) {

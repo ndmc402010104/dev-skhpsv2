@@ -118,9 +118,14 @@ Loading Gate：
 
   function createAppButton(app) {
     var a = document.createElement("a");
+    var href = app.href || "#";
+
+    if (href !== "#" && window.SKHPSConfig && typeof window.SKHPSConfig.withRuntime === "function") {
+      href = window.SKHPSConfig.withRuntime(href, window.SKHPS_CONFIG || {}, app.env || getRuntime());
+    }
 
     a.className = "skhps-btn skhps-btn-secondary skhps-btn-lg";
-    a.href = app.href || "#";
+    a.href = href;
     a.textContent = app.title || app.appId || "未命名外部專案";
     a.setAttribute("data-skhps-external-app-id", app.appId || "");
     a.setAttribute("data-skhps-external-app-env", app.env || "");

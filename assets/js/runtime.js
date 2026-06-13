@@ -106,7 +106,16 @@
       return "DEV";
     }
 
+    if (window.SKHPS_APP_ENV || window.SKHPS_APP_CONFIG) {
+      return "EXTERNAL";
+    }
+
     return "UNKNOWN";
+  }
+
+  function isAuthoritativeHostEnv(hostEnv) {
+    hostEnv = normalizeRuntime(hostEnv);
+    return hostEnv === "LOCAL" || hostEnv === "DEV" || hostEnv === "PROD";
   }
 
   function normalizeRuntime(value) {
@@ -145,7 +154,7 @@
       };
     }
 
-    if (hostEnv && hostEnv !== "UNKNOWN") {
+    if (isAuthoritativeHostEnv(hostEnv)) {
       return {
         effective: hostEnv,
         overrideReason: "",
@@ -156,7 +165,7 @@
     return {
       effective: fallback,
       overrideReason: "",
-      fallbackReason: "Host Env UNKNOWN; fallback to " + fallback
+      fallbackReason: "Host Env " + (hostEnv || "UNKNOWN") + "; fallback to " + fallback
     };
   }
 
@@ -201,6 +210,7 @@
       requiredTasks: [],
       completedTasks: [],
       failedTasks: [],
+      taskStates: {},
       releaseReason: ""
     },
     data: {
@@ -353,22 +363,25 @@
     var patch = Object.assign({}, data);
     if (patch.requested) patch.requested = normalizeRuntime(patch.requested) || patch.requested;
 
+    var currentHostEnv = state.host && state.host.env === "UNKNOWN" && (window.SKHPS_APP_ENV || window.SKHPS_APP_CONFIG)
+      ? "EXTERNAL"
+      : state.host && state.host.env;
     var requested = normalizeRuntime(patch.requested || state.runtime.requested);
     var proposedEffective = normalizeRuntime(patch.effective);
     var defaultRuntime = normalizeRuntime(patch.defaultRuntime || patch.fallback || "");
     var decision;
 
     if (requested) {
-      decision = runtimeDecision(state.host && state.host.env, requested, defaultRuntime);
+      decision = runtimeDecision(currentHostEnv, requested, defaultRuntime);
     } else if (proposedEffective) {
       decision = {
         effective: proposedEffective,
         overrideReason: patch.overrideReason || "",
         fallbackReason: patch.fallbackReason ||
-          (state.host && state.host.env === "UNKNOWN" ? "Host Env UNKNOWN; fallback to " + proposedEffective : state.runtime.fallbackReason || "")
+          (!isAuthoritativeHostEnv(currentHostEnv) ? "Host Env " + (currentHostEnv || "UNKNOWN") + "; using runtime " + proposedEffective : state.runtime.fallbackReason || "")
       };
     } else {
-      decision = runtimeDecision(state.host && state.host.env, "", defaultRuntime);
+      decision = runtimeDecision(currentHostEnv, "", defaultRuntime);
     }
 
     patch.effective = decision.effective;
@@ -501,7 +514,23 @@
   }
 
   function setLoadingRequired(tasks) {
-    state.loadingGate.requiredTasks = uniqueList(tasks);
+    var required = uniqueList(tasks);
+    var now = nowIso();
+
+    state.loadingGate.requiredTasks = required;
+    state.loadingGate.taskStates = state.loadingGate.taskStates || {};
+    required.forEach(function (taskName) {
+      state.loadingGate.taskStates[taskName] = Object.assign({
+        task: taskName,
+        status: "waiting",
+        requiredAt: now,
+        completedAt: "",
+        durationMs: null,
+        error: ""
+      }, state.loadingGate.taskStates[taskName] || {}, {
+        task: taskName
+      });
+    });
     emitUpdated();
   }
 
@@ -513,6 +542,7 @@
   function taskDone(taskName) {
     taskName = String(taskName || "").trim();
     if (!taskName) return;
+    state.loadingGate.taskStates = state.loadingGate.taskStates || {};
 
     if (state.loadingGate.requiredTasks.indexOf(taskName) < 0) {
       state.loadingGate.requiredTasks.push(taskName);
@@ -526,12 +556,26 @@
       return item.task !== taskName;
     });
 
+    var now = nowIso();
+    var taskState = state.loadingGate.taskStates[taskName] || {
+      task: taskName,
+      requiredAt: now
+    };
+    var started = taskState.requiredAt ? Date.parse(taskState.requiredAt) : NaN;
+    state.loadingGate.taskStates[taskName] = Object.assign({}, taskState, {
+      status: "ok",
+      completedAt: now,
+      durationMs: isNaN(started) ? taskState.durationMs || null : Date.now() - started,
+      error: ""
+    });
+
     emitUpdated();
   }
 
   function taskFailed(taskName, error) {
     taskName = String(taskName || "").trim();
     if (!taskName) return;
+    state.loadingGate.taskStates = state.loadingGate.taskStates || {};
 
     if (state.loadingGate.requiredTasks.indexOf(taskName) < 0) {
       state.loadingGate.requiredTasks.push(taskName);
@@ -546,6 +590,19 @@
     });
     state.loadingGate.failedTasks.push({
       task: taskName,
+      error: normalizeError(error) || "failed"
+    });
+
+    var now = nowIso();
+    var taskState = state.loadingGate.taskStates[taskName] || {
+      task: taskName,
+      requiredAt: now
+    };
+    var started = taskState.requiredAt ? Date.parse(taskState.requiredAt) : NaN;
+    state.loadingGate.taskStates[taskName] = Object.assign({}, taskState, {
+      status: "fail",
+      completedAt: now,
+      durationMs: isNaN(started) ? taskState.durationMs || null : Date.now() - started,
       error: normalizeError(error) || "failed"
     });
 
@@ -659,6 +716,88 @@
     }
 
     return value;
+  }
+
+  function formatDuration(ms) {
+    if (ms === null || ms === undefined || ms === "") return "-";
+    ms = Number(ms);
+    if (isNaN(ms) || ms < 0) return "-";
+    if (ms < 1000) return Math.round(ms) + "ms";
+    return (ms / 1000).toFixed(ms < 10000 ? 1 : 0) + "s";
+  }
+
+  function elapsedSince(iso) {
+    var started = iso ? Date.parse(iso) : NaN;
+    if (isNaN(started)) return null;
+    return Date.now() - started;
+  }
+
+  function failedTaskMap() {
+    var map = {};
+    (state.loadingGate.failedTasks || []).forEach(function (item) {
+      if (item && item.task) {
+        map[item.task] = item.error || "failed";
+      }
+    });
+    return map;
+  }
+
+  function loadingGateTaskRows() {
+    var required = state.loadingGate.requiredTasks || [];
+    var completed = state.loadingGate.completedTasks || [];
+    var taskStates = state.loadingGate.taskStates || {};
+    var failures = failedTaskMap();
+
+    return required.map(function (taskName) {
+      var taskState = taskStates[taskName] || {};
+      var failed = failures[taskName];
+      var done = completed.indexOf(taskName) >= 0;
+      var status = failed ? "fail" : done ? "ok" : "waiting";
+      var duration = taskState.durationMs;
+
+      if ((duration === null || duration === undefined) && taskState.requiredAt) {
+        duration = elapsedSince(taskState.requiredAt);
+      }
+
+      return {
+        name: taskName,
+        status: status,
+        durationMs: duration,
+        detail: [
+          status === "waiting" ? "waiting" : status === "ok" ? "completed" : "failed",
+          formatDuration(duration),
+          failed || ""
+        ].filter(Boolean).join(" | "),
+        error: failed || ""
+      };
+    });
+  }
+
+  function waitingBackendReason() {
+    var calls = state.backend && state.backend.calls ? state.backend.calls : [];
+    var running = calls.filter(function (call) {
+      return String(call.status || "").toLowerCase() === "running";
+    });
+
+    if (running.length) {
+      return "waiting for " + running.map(function (call) {
+        return call.action || call.resourceName || "backend call";
+      }).join(", ");
+    }
+
+    if (!state.config || !state.config.loaded) {
+      return "waiting for config/api endpoint";
+    }
+
+    if (!window.SKHPSBackend || typeof window.SKHPSBackend.call !== "function") {
+      return "waiting for backend-client.js";
+    }
+
+    if (state.backend && state.backend.loaded && !calls.length) {
+      return "backend loaded; no calls yet";
+    }
+
+    return "waiting for first backend call";
   }
 
   function logSource(entry) {
@@ -886,17 +1025,30 @@
     }
 
     if (state.backend && state.backend.loaded) {
+      var calls = state.backend.calls || [];
+      var running = calls.filter(function (call) {
+        return String(call.status || "").toLowerCase() === "running";
+      });
+
+      if (running.length) {
+        return {
+          label: "running",
+          className: "skhps-runtime-waiting",
+          reason: waitingBackendReason()
+        };
+      }
+
       return {
         label: state.backend.healthy === true ? "healthy" : "loaded",
         className: "skhps-runtime-ok",
-        reason: state.backend.endpoint || "backend loaded"
+        reason: calls.length ? state.backend.endpoint || "backend loaded" : waitingBackendReason()
       };
     }
 
     return {
       label: "waiting",
       className: "skhps-runtime-waiting",
-      reason: "backend not loaded"
+      reason: waitingBackendReason()
     };
   }
 
@@ -1097,6 +1249,21 @@
       pageReady: html.getAttribute("data-skhps-page-ready") === "true",
       cssRuntimeReady: html.getAttribute("data-skhps-css-ready") === "true" || Boolean(state.cssRuntime.loaded)
     };
+  }
+
+  function hostEnvDisplay() {
+    var hostEnv = state.host && state.host.env ? state.host.env : "";
+    var effective = state.runtime && state.runtime.effective ? state.runtime.effective : "";
+
+    if ((hostEnv === "UNKNOWN" || hostEnv === "EXTERNAL") && effective) {
+      return "EXTERNAL→" + effective;
+    }
+
+    if (hostEnv === "LOCAL" && effective && effective !== "LOCAL" && effective !== "UNKNOWN") {
+      return "LOCAL→" + effective;
+    }
+
+    return hostEnv || "UNKNOWN";
   }
 
   function actionStatusFromLogs() {
@@ -1595,14 +1762,54 @@
 
     var env = addSection(panel, "Environment");
     addRow(env, "Host", state.host.hostname || "(file)");
-    addRow(env, "Host Env", state.host.env, statusClass(state.host.env));
+    addRow(env, "Host Env", hostEnvDisplay(), statusClass(state.runtime.effective || state.host.env));
     addRow(env, "Runtime Requested", state.runtime.requested);
     addRow(env, "Runtime Effective", state.runtime.effective, statusClass(state.runtime.effective));
     addRow(env, "Override Reason", state.runtime.overrideReason || "-");
     addRow(env, "Fallback Reason", state.runtime.fallbackReason || "-");
-    addRow(env, "Config URL", state.config.source || "not loaded", statusClass(String(state.config.loaded)));
-    addRow(env, "Backend URL", state.backend.endpoint || "not loaded", statusClass(state.backend.healthy === false ? "fail" : state.backend.loaded ? "ok" : "waiting"));
-    addRow(env, "CSS Runtime", state.cssRuntime.loaded ? state.cssRuntime.source : "not loaded", statusClass(String(state.cssRuntime.loaded)));
+
+    var gate = addSection(panel, "Gate / Loading Gate");
+    addRow(gate, "Status", gateSummary.reason || gateSummary.label, gateSummary.className);
+    addRow(gate, "Release", state.loadingGate.releaseReason || "not released", state.loadingGate.releaseReason ? "skhps-runtime-ok" : "skhps-runtime-waiting");
+    var gateList = document.createElement("div");
+    gateList.className = "skhps-runtime-checklist";
+    loadingGateTaskRows().forEach(function (task) {
+      addChecklistItem(gateList, {
+        path: task.name,
+        status: task.status,
+        detail: task.detail,
+        error: task.error
+      });
+    });
+    if (gateList.childNodes.length) {
+      gate.appendChild(gateList);
+    } else {
+      addRow(gate, "Tasks", "none declared", "skhps-runtime-waiting");
+    }
+
+    var configSection = addSection(panel, "Config");
+    addRow(configSection, "Status", configSummary.reason || configSummary.label, configSummary.className);
+    addRow(configSection, "Source", state.config.source || "not loaded", statusClass(String(state.config.loaded)));
+    addRow(configSection, "Duration", formatDuration(state.config.durationMs));
+
+    var backendSection = addSection(panel, "Backend");
+    addRow(backendSection, "Status", backendSummary.reason || backendSummary.label, backendSummary.className);
+    addRow(backendSection, "Endpoint", state.backend.endpoint || "not loaded", statusClass(state.backend.healthy === false ? "fail" : state.backend.loaded ? "ok" : "waiting"));
+    addRow(backendSection, "Runtime Env", state.backend.env || state.runtime.effective || "-");
+    addRow(backendSection, "Duration", formatDuration(state.backend.durationMs));
+    if (state.backend.calls && state.backend.calls.length) {
+      var callList = document.createElement("div");
+      callList.className = "skhps-runtime-call-list";
+      state.backend.calls.slice(-20).forEach(function (call) {
+        addBackendCall(callList, call);
+      });
+      backendSection.appendChild(callList);
+    }
+
+    var cssSection = addSection(panel, "CSS");
+    addRow(cssSection, "Status", cssSummary.reason || cssSummary.label, cssSummary.className);
+    addRow(cssSection, "Source", state.cssRuntime.loaded ? state.cssRuntime.source : "not loaded", statusClass(String(state.cssRuntime.loaded)));
+    addRow(cssSection, "Duration", formatDuration(state.cssRuntime.durationMs));
 
     var domState = getDomState();
     var dom = addSection(panel, "DOM State");
@@ -1615,13 +1822,6 @@
     addRow(dom, "footer", domState.footerExists ? (domState.footerVisible ? "exists / visible" : "exists / hidden") : "missing", statusClass(domState.footerExists && domState.footerVisible ? "ok" : "waiting"));
     addRow(dom, "loading gate release", domState.loadingReleased ? ("released: " + (domState.loadingReleaseReason || "ready")) : "not released", statusClass(String(domState.loadingReleased)));
     addRow(dom, "css-runtime", domState.cssRuntimeReady ? "done" : "pending", statusClass(domState.cssRuntimeReady ? "ok" : "waiting"));
-
-    var gate = addSection(panel, "Loading Gate");
-    addRow(gate, "Required", state.loadingGate.requiredTasks.join(", ") || "-");
-    addRow(gate, "Completed", state.loadingGate.completedTasks.join(", ") || "-");
-    addRow(gate, "Failed", state.loadingGate.failedTasks.map(function (item) {
-      return item.task + ": " + item.error;
-    }).join(" | ") || "-", state.loadingGate.failedTasks.length ? "skhps-runtime-fail" : "skhps-runtime-ok");
 
     var dataDetail = state.data && state.data.detail ? state.data.detail : {};
     var calendarDetail = dataDetail.calendar || {};
@@ -1675,16 +1875,6 @@
       var item = state.modules[name] || {};
       addRow(modules, name, (item.status || "waiting") + (item.error ? " - " + item.error : ""), statusClass(item.status));
     });
-
-    if (state.backend.calls && state.backend.calls.length) {
-      var backendCalls = addSection(panel, "Backend Calls");
-      var callList = document.createElement("div");
-      callList.className = "skhps-runtime-call-list";
-      state.backend.calls.slice(-20).forEach(function (call) {
-        addBackendCall(callList, call);
-      });
-      backendCalls.appendChild(callList);
-    }
 
     var externalApps = addSection(panel, "External Apps");
     addRow(externalApps, "listExternalApps", state.externalApps.loaded ? (state.externalApps.count + " app(s)") : state.externalApps.error ? state.externalApps.error : "not loaded", statusClass(state.externalApps.error ? "fail" : state.externalApps.loaded ? "ok" : "waiting"));

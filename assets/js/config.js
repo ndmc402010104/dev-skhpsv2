@@ -337,6 +337,26 @@
     return String(base).replace(/\/+$/, "") + "/" + rawPath.replace(/^\/+/, "");
   }
 
+  function withRuntimeParam(url, config, runtimeOverride) {
+    var env = String(runtimeOverride || "").trim() || getEnv(config);
+    var output;
+
+    if (!url || !env) {
+      return url || "";
+    }
+
+    try {
+      output = new URL(url, window.location.href);
+      output.searchParams.set("skhpsRuntime", env);
+      return output.toString();
+    } catch (error) {
+      return String(url) +
+        (String(url).indexOf("?") >= 0 ? "&" : "?") +
+        "skhpsRuntime=" +
+        encodeURIComponent(env);
+    }
+  }
+
   window.SKHPSConfig = window.SKHPSConfig || {};
   window.SKHPSConfig.loadConfig = loadConfig;
   window.SKHPSConfig.reloadConfig = function () {
@@ -349,5 +369,6 @@
   window.SKHPSConfig.getEnvValue = getEnvValue;
   window.SKHPSConfig.getSiteBaseUrl = getSiteBaseUrl;
   window.SKHPSConfig.joinUrl = joinConfigUrl;
+  window.SKHPSConfig.withRuntime = withRuntimeParam;
   rlog("OK", "moduleReady", "config.js");
 })();

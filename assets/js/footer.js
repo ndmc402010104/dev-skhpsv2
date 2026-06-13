@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/footer.js
 時間戳記：2026-06-13 UTC+8
-用途：Footer 三區 runtime 摘要與單一完整 runtime panel；只保留 closed/full；full 開啟時立刻展開 tail，滑到頁尾接點後從 docked 掛畫切回 flow 順接；短頁會補足 tail 前導距離，避免一開始沒有 scroll 時 flow 接點過早。
+用途：Footer 三區 runtime 摘要與單一完整 runtime panel；只保留 closed/full；full 開啟時立刻展開 tail。短頁會補足 tail 前導距離；長頁原頁底開啟時允許 signed tail spacer，把 flow runtime 上緣直接對齊「footer 上緣 - summary cards 高度」。
 */
 
 (function () {
@@ -19,6 +19,7 @@
   var measureRaf = 0;
   var runtimeTailStart = 0;
   var runtimeOpenScrollY = 0;
+  var runtimeOpenedAtExistingBottom = false;
 
   function rlog(status, action, detail) {
     try {
@@ -523,7 +524,8 @@
     }
     if (state === "closed") {
       runtimeOpenScrollY = 0;
-      setRuntimeCssNumber("--skhps-runtime-tail-spacer", 0);
+      runtimeOpenedAtExistingBottom = false;
+      setRuntimeCssSignedNumber("--skhps-runtime-tail-spacer", 0);
     }
 
     runtimeState = state;
@@ -551,6 +553,12 @@
 
   function setRuntimeCssNumber(name, value) {
     value = Math.max(0, Math.ceil(Number(value) || 0));
+    document.documentElement.style.setProperty(name, value + "px");
+    return value;
+  }
+
+  function setRuntimeCssSignedNumber(name, value) {
+    value = Math.ceil(Number(value) || 0);
     document.documentElement.style.setProperty(name, value + "px");
     return value;
   }
@@ -620,14 +628,22 @@
     }
 
     /*
-     * 短頁修正：如果原本頁面高度不足、runtime-tail 的自然起點太高，
-     * full 開啟時會一開始就切到奇怪的 flow 位置。
-     * 這裡只在 full 狀態補一段 tail 前導距離，讓 flow 接點至少對齊
-     * 「docked 掛畫時 summary cards 的上緣」。長頁 naturalTailStart 已經更低，spacer 會是 0。
+     * flow 接點定位：runtime panel 的上緣不應該對齊 footer 上緣。
+     * 正確位置是「footer 上緣 - summary cards 高度」，也就是整張 runtime
+     * 放進 flow 時，summary cards 的下緣剛好貼在 footer 上緣。
+     *
+     * 短頁：naturalTailStart 太高，使用正 spacer 補一段跑道。
+     * 長頁原本已在頁底開啟：naturalTailStart 常常太低，必須允許負 spacer
+     * 把 runtime-tail 往上拉到目前 viewport 的接點；這才是「畫到二樓」，不是
+     * 「電梯在二樓、畫在一樓」。
+     * 其他長頁位置：不能用負 spacer 把尾巴硬拉到目前視窗，避免提前出現 runtime。
      */
     if (runtimeState === "full" && fullHeight > 0) {
       dockedSummaryTop = Math.max(0, viewportHeight - (footerDockBottom || footerHeight || 48) - summaryHeight);
-      tailSpacer = Math.max(0, Math.ceil((runtimeOpenScrollY || 0) + dockedSummaryTop - naturalTailStart));
+      tailSpacer = Math.ceil((runtimeOpenScrollY || 0) + dockedSummaryTop - naturalTailStart);
+      if (!runtimeOpenedAtExistingBottom) {
+        tailSpacer = Math.max(0, tailSpacer);
+      }
     } else {
       tailSpacer = 0;
     }
@@ -641,7 +657,7 @@
     setRuntimeCssNumber("--skhps-runtime-full-height", fullHeight);
     setRuntimeCssNumber("--skhps-runtime-visible-height", fullHeight);
     setRuntimeCssNumber("--skhps-runtime-tail-height", tailHeight);
-    setRuntimeCssNumber("--skhps-runtime-tail-spacer", tailSpacer);
+    setRuntimeCssSignedNumber("--skhps-runtime-tail-spacer", tailSpacer);
 
     document.documentElement.setAttribute("data-skhps-runtime-tail-start", String(runtimeTailStart));
     document.documentElement.setAttribute("data-skhps-runtime-tail-spacer", String(tailSpacer));
@@ -714,6 +730,8 @@
   }
 
   function toggleRuntimePanel(event) {
+    var openedFromExistingBottom = false;
+
     if (event && typeof event.preventDefault === "function") {
       event.preventDefault();
     }
@@ -737,10 +755,35 @@
       return;
     }
 
+    /*
+     * 長頁已在原本頁底時按箭頭：
+     * tail 會立刻展開，所以 scrollHeight 會馬上變長。
+     * 但不要再用 scrollTo 把「電梯」拉到一樓；那會有明顯跳動。
+     * 正確做法是「把畫拉到電梯所在樓層」：
+     * 1. 先用 docked 掛畫顯示 summary cards。
+     * 2. measureRuntimePanel() 會用 runtimeOpenScrollY 計算 tail spacer，讓 flow 裡的 runtime top 對齊目前視窗。
+     * 3. 若原本就是長頁頁尾，下一個 frame 直接切成 flow，但不改 scrollY。
+     * 這樣視覺上卡片仍在原位，scrollbar 也是真的變長，runtime 已經接到頁尾 flow。
+     * 短頁雖然也可能 nearPageBottom，但沒有原本 scroll runway，不套用這個立即 flow 規則。
+     */
+    openedFromExistingBottom = pageHasScrollableRunway() && nearPageBottom();
+    runtimeOpenedAtExistingBottom = Boolean(openedFromExistingBottom);
+
     setRuntimeState("full", {
       docked: true,
       restoreToggleFocus: true
     });
+
+    if (openedFromExistingBottom) {
+      window.requestAnimationFrame(function () {
+        measureRuntimePanel();
+        setRuntimeState("full", {
+          docked: false,
+          skipRender: true
+        });
+        measureRuntimePanel();
+      });
+    }
   }
 
   function render(options) {
@@ -848,6 +891,13 @@
 
     return (window.innerHeight || 0) + (window.scrollY || window.pageYOffset || doc.scrollTop || 0) >=
       doc.scrollHeight - 2;
+  }
+
+  function pageHasScrollableRunway() {
+    var doc = document.documentElement;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+
+    return doc.scrollHeight > viewportHeight + 2;
   }
 
   function cssPixelValue(name) {

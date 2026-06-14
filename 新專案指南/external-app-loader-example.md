@@ -93,7 +93,7 @@ your-app/
 
       var resolvedRuntime = currentRuntime();
 
-      window.SKHPS_ENTRY_VERSION = "20260612";
+      window.SKHPS_ENTRY_VERSION = "202606141725";
       window.SKHPS_ENTRY_BASE_URL = runtimeBaseUrl(resolvedRuntime);
       window.SKHPS_APP_CARD_URL = "app-card.json";
 
@@ -102,7 +102,7 @@ your-app/
       document.write(
         '<link rel="stylesheet" href="' +
         window.SKHPS_ENTRY_BASE_URL +
-        'assets/css/skhps-loading.css?v=' +
+        'uni-CSS.CSS?v=' +
         encodeURIComponent(window.SKHPS_ENTRY_VERSION) +
         '">'
       );

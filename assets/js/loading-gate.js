@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/loading-gate.js
-時間戳記：2026-06-10 UTC+8
+時間戳記：2026-06-14 13:25 UTC+8
 用途：全站 loading passive AND gate。
 設計：
 - gate 不硬寫任務來源。
@@ -16,8 +16,6 @@
   var LOADING_CLASSES = ["skhps-css-loading", "skhps-loading"];
   var SHELL_LOADING_CLASS = "skhps-shell-loading";
   var MAIN_LOADING_CLASS = "skhps-main-loading";
-  var CSS_RUNTIME_CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v1";
-  var CSS_RUNTIME_SESSION_READY_KEY = "skhpsv2.cssSheetRuntimeSessionReady.v1";
   var DEFAULT_TIMEOUT_MS = 12000;
 
   var state = {
@@ -79,19 +77,7 @@
   } catch (error) {}
 
   function hasUsableCssRuntimeCache() {
-    try {
-      if (sessionStorage.getItem(CSS_RUNTIME_SESSION_READY_KEY) !== "1") {
-        return false;
-      }
-
-      var raw = localStorage.getItem(CSS_RUNTIME_CACHE_KEY);
-      if (!raw) return false;
-
-      var cache = JSON.parse(raw);
-      return Boolean(cache && cache.cssText);
-    } catch (error) {
-      return false;
-    }
+    return false;
   }
 
   function setInitialLayerState() {

@@ -1,29 +1,16 @@
 /*
 檔案位置：skhpsv2/assets/js/loading-cache-probe.js
-用途：loading CSS 前的極早期 CSS runtime cache probe。
+時間戳記：2026-06-14 13:25 UTC+8
+用途：loading CSS 前的極早期探針；CSS runtime 改為 uni-CSS.CSS 優先後，本檔不再用 localStorage cache 提前解除 shell loading。
 */
 
 (function () {
   "use strict";
 
-  var CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v1";
-  var SESSION_READY_KEY = "skhpsv2.cssSheetRuntimeSessionReady.v1";
   var html = document.documentElement;
 
   function hasUsableCache() {
-    try {
-      if (sessionStorage.getItem(SESSION_READY_KEY) !== "1") {
-        return false;
-      }
-
-      var raw = localStorage.getItem(CACHE_KEY);
-      if (!raw) return false;
-
-      var cache = JSON.parse(raw);
-      return Boolean(cache && cache.cssText);
-    } catch (error) {
-      return false;
-    }
+    return false;
   }
 
   if (hasUsableCache()) {

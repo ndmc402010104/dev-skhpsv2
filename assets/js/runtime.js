@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/runtime.js
-時間戳記：2026-06-13 UTC+8
+時間戳記：2026-06-14 16:45 UTC+8
 用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、模組狀態與最近 logs。
 */
 
@@ -1064,10 +1064,18 @@
 
   function summarizeCssRuntime() {
     if (state.cssRuntime && state.cssRuntime.loaded) {
+      var sourceLabel = cssSourceDisplay(state.cssRuntime.source);
+      var reason = [
+        sourceLabel || "css runtime loaded",
+        state.cssRuntime.refreshStatus ? "refresh=" + state.cssRuntime.refreshStatus : "",
+        state.cssRuntime.appliedRefresh ? "applied refresh" : "",
+        state.cssRuntime.hash ? "hash=" + state.cssRuntime.hash : ""
+      ].filter(Boolean).join(" | ");
+
       return {
-        label: state.cssRuntime.source || "loaded",
-        className: "skhps-runtime-ok",
-        reason: state.cssRuntime.source || "css runtime loaded"
+        label: sourceLabel || "loaded",
+        className: state.cssRuntime.refreshStatus === "failed" ? "skhps-runtime-warn" : "skhps-runtime-ok",
+        reason: reason
       };
     }
 
@@ -1274,6 +1282,19 @@
     }
 
     return hostEnv || "UNKNOWN";
+  }
+
+  function cssSourceDisplay(source) {
+    var map = {
+      "css-file": "uni-CSS.CSS",
+      "localStorage-cache": "localStorage",
+      "sheet-refresh": "Sheet",
+      "csv": "Sheet",
+      "backend": "Backend",
+      "default-fallback": "Default CSS"
+    };
+
+    return map[source] || source || "";
   }
 
   function envLabel(value) {
@@ -1857,8 +1878,27 @@
 
     var cssSection = addSection(panel, "CSS");
     addRow(cssSection, "Status", cssSummary.reason || cssSummary.label, cssSummary.className);
-    addRow(cssSection, "Source", state.cssRuntime.loaded ? state.cssRuntime.source : "not loaded", statusClass(String(state.cssRuntime.loaded)));
-    addRow(cssSection, "Duration", formatDuration(state.cssRuntime.durationMs));
+    addRow(cssSection, "Source", state.cssRuntime.loaded ? cssSourceDisplay(state.cssRuntime.source) : "not loaded", statusClass(String(state.cssRuntime.loaded)));
+    addRow(cssSection, "Source Key", state.cssRuntime.source || "-");
+    addRow(cssSection, "CSS File URL", state.cssRuntime.cssFileUrl || "-");
+    addRow(cssSection, "CSS File Fetch", [
+      state.cssRuntime.cssFileFetchStatus || "",
+      state.cssRuntime.cssFileFetchOk === true ? "OK" : state.cssRuntime.cssFileFetchOk === false ? "FAILED" : ""
+    ].filter(Boolean).join(" / ") || "-", statusClass(state.cssRuntime.cssFileFetchOk === false ? "fail" : state.cssRuntime.cssFileFetchOk === true ? "ok" : ""));
+    addRow(cssSection, "CSS File Error", state.cssRuntime.cssFileFetchError || "-");
+    addRow(cssSection, "Updated At", state.cssRuntime.updatedAt || state.cssRuntime.generatedAt || "-");
+    addRow(cssSection, "Version", state.cssRuntime.version || "-");
+    addRow(cssSection, "Hash", state.cssRuntime.hash || "-");
+    addRow(cssSection, "Sheet Refresh", state.cssRuntime.refreshStatus || "-", statusClass(state.cssRuntime.refreshStatus === "failed" ? "fail" : state.cssRuntime.refreshStatus === "success" ? "ok" : ""));
+    addRow(cssSection, "Last Refresh", state.cssRuntime.lastRefreshAt || "-");
+    addRow(cssSection, "Applied New CSS", state.cssRuntime.appliedRefresh === undefined ? "-" : String(state.cssRuntime.appliedRefresh), statusClass(String(state.cssRuntime.appliedRefresh)));
+    addRow(cssSection, "Refresh Error", state.cssRuntime.refreshError || "-");
+    addRow(cssSection, "Rows", [
+      state.cssRuntime.rowsCount !== undefined ? state.cssRuntime.rowsCount + " raw" : "",
+      state.cssRuntime.latestRowsCount !== undefined ? state.cssRuntime.latestRowsCount + " latest" : ""
+    ].filter(Boolean).join(" / ") || "-");
+    addRow(cssSection, "Initial Load", formatDuration(state.cssRuntime.initialDurationMs || state.cssRuntime.durationMs));
+    addRow(cssSection, "Refresh Duration", state.cssRuntime.refreshDurationMs === "" || state.cssRuntime.refreshDurationMs === undefined ? "-" : formatDuration(state.cssRuntime.refreshDurationMs));
 
     var domState = getDomState();
     var dom = addSection(panel, "DOM State");

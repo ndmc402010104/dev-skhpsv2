@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/css-setting-sheet-save.js
-時間戳記：2026-06-11 UTC+8
-用途：CSS Setting 共用 Sheet save；固定寫回 CSS總表（cssMain / gid 0）。後端採 upsert，同一組 component + className + property 不再無限 append。
+時間戳記：2026-06-14 13:25 UTC+8
+用途：CSS Setting 共用 Sheet save；固定寫回 CSS總表（cssMain / gid 0）。後端採 upsert，同一組 component + className + property 不再無限 append；儲存後清除 runtime localStorage cache，uni-CSS.CSS 需由 helper script 更新。
 */
 
 (function () {
@@ -35,6 +35,7 @@
 
     try {
       localStorage.removeItem("skhpsv2.cssSheetRuntimeCache.v1");
+      localStorage.removeItem("skhpsv2.cssSheetRuntimeCache.v2");
     } catch (error) {
       console.warn("CSS runtime local cache clear failed:", error);
     }

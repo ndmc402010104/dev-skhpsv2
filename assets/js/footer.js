@@ -63,7 +63,7 @@
     var style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = [
-      ".skhps-footer{max-width:100%;overflow-x:hidden;z-index:2147483000}",
+      ".skhps-footer{max-width:100%;overflow-x:hidden;isolation:isolate!important;z-index:2147483000!important}",
       ".skhps-footer-left,.skhps-footer-center,.skhps-footer-right{min-width:0}",
       ".skhps-footer-left{overflow:hidden}",
       ".skhps-footer-page{overflow:hidden;text-overflow:ellipsis}",
@@ -852,11 +852,14 @@
     if (runtimeState === "full") {
       var wasDocked = runtimeDocked;
 
+      var currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      var shouldScrollToTop = !wasDocked && currentY > runtimeOpenScrollY;
+
       setRuntimeState("closed", {
         restoreToggleFocus: true
       });
 
-      if (!wasDocked) {
+      if (shouldScrollToTop) {
         window.requestAnimationFrame(function () {
           window.scrollTo({
             top: 0,

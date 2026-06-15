@@ -4,7 +4,7 @@
   major: 2,
   minor: 2,
   patch: 17,
-  $12026-06-16 01:05:39 UTC+08",
-  $12026-06-16 01:05:39 UTC+08",
+  buildTime: "202606141654",
+  updatedAt: "2026-06-14T16:54:00+08:00",
   source: "version.js"
 };

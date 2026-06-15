@@ -100,11 +100,18 @@
 
   function applyPageLinks(root) {
     var scope = root || document;
-    var links = scope.querySelectorAll("[data-skhps-page-id]");
+
+    /*
+      重要：
+      data-skhps-page-id 也會出現在 <html> 上，用來標記目前頁面。
+      route.js 只應該處理真正要補 href 的連結，不可以處理 html/body/section。
+    */
+    var links = scope.querySelectorAll("a[data-skhps-page-id], area[data-skhps-page-id]");
 
     links.forEach(function (link) {
       var pageId = link.getAttribute("data-skhps-page-id");
-      var href = getHref(pageId);
+      var fallbackHref = link.getAttribute("href") || "";
+      var href = getHref(pageId, fallbackHref);
 
       if (!href || href === "#") {
         link.setAttribute("href", "#");

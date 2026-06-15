@@ -1496,24 +1496,12 @@
   }
 
   function startBackgroundRefresh() {
-    ensureCssFetch()
-      .then(function (api) {
-        if (api && typeof api.refresh === "function") {
-          return api.refresh({
-            reason: "runtime-background"
-          });
-        }
-        return refreshFromSheet({
-          reason: "runtime-background"
-        });
-      })
-      .catch(function (error) {
-        refreshFromSheet({
-          reason: "runtime-background-fallback"
-        }).catch(function () {
-          console.warn("CSS-fetch background refresh failed:", error);
-        });
-      });
+    refreshFromSheet({
+      reason: "runtime-background",
+      apply: false
+    }).catch(function (error) {
+      console.warn("CSS Sheet background refresh failed:", error);
+    });
   }
 
   function initialLoad() {
@@ -1525,27 +1513,25 @@
       })
       .catch(function () {});
 
-    loadCssFileCache()
-      .then(function (model) {
-        applyCssModel(model, {
-          source: "css-file"
-        });
-        setStatus("CSS：已套用 uni-CSS.CSS（hash " + model.hash + "）", true);
-        startBackgroundRefresh();
-      })
-      .catch(function (cssFileError) {
-        if (applyCacheIfAvailable()) {
-          setStatus("CSS：uni-CSS.CSS 讀取失敗，暫用 localStorage cache：" + (cssFileError.message || String(cssFileError)), false);
-          startBackgroundRefresh();
-          return;
-        }
+    /*
+      新順序：
+      1. 先吃 localStorage cache
+      2. cache 命中就立刻放行
+      3. 背景刷新 Sheet
+      4. cache 沒命中才讀 Sheet
+      5. Sheet 失敗才 default fallback
+    */
+    if (applyCacheIfAvailable()) {
+      setStatus("CSS：已套用 localStorage cache，背景刷新 Sheet。", true);
+      startBackgroundRefresh();
+      return;
+    }
 
-        load({
-          silent: false
-        }).catch(function (sheetError) {
-          applyDefaultFallback(sheetError || cssFileError);
-        });
-      });
+    load({
+      silent: false
+    }).catch(function (sheetError) {
+      applyDefaultFallback(sheetError);
+    });
   }
 
   ready(function () {

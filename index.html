@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/index.html
-時間戳記：2026-06-14 13:25 UTC+8
-首頁調整：移除 QR 簽到卡片與頁面內 Runtime 診斷區；移除頁面後台大卡；本版暫時拆除頁面內寫死 header，保留 header 掛載點，下一步由 assets/js/header.js 掛載。
+時間戳記：2026-06-16 UTC+8
+首頁調整：改由 assets/js/skhps-entry.js 作為 skhpsv2 本體頁唯一入口；共通 JS 由 entry-core.js 依序載入。
 用途：整外資訊系統首頁。
 
 Loading Gate：
@@ -21,7 +21,7 @@ Loading Gate：
 -->
 <html
   lang="zh-Hant"
-  class="skhps-css-loading"
+  class="skhps-loading skhps-css-loading skhps-main-loading"
   data-skhps-page-id="index"
   data-skhps-page-map-current="首頁"
   data-loading-title="整外資訊系統首頁"
@@ -31,7 +31,7 @@ Loading Gate：
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <script src="assets/js/loading-cache-probe.js?v=20260611"></script>
-  <link rel="stylesheet" href="uni-CSS.CSS?v=202606141725">
+  <script src="assets/js/skhps-entry.js?v=2026061609"></script>
   <title>整外資訊系統首頁</title>
 </head>
 
@@ -106,173 +106,5 @@ Loading Gate：
   <footer data-skhps-footer class="skhps-footer">
     Footer 載入中...
   </footer>
-
-  <script src="assets/js/runtime.js?v=202606141725"></script>
-  <script src="assets/js/loading-gate.js?v=202606141325"></script>
-
-  <script>
-    (function () {
-      "use strict";
-
-      window.setTimeout(function () {
-        var html = document.documentElement;
-
-        if (
-          window.SKHPSLoading &&
-          typeof window.SKHPSLoading.getState === "function"
-        ) {
-          var state = window.SKHPSLoading.getState();
-
-          if (state && state.released) {
-            return;
-          }
-
-          var required = state && Array.isArray(state.required) ? state.required : [];
-          var done = state && Array.isArray(state.done) ? state.done : [];
-          var failed = state && Array.isArray(state.failed) ? state.failed : [];
-
-          required.forEach(function (task) {
-            if (done.indexOf(task) >= 0 || failed.indexOf(task) >= 0) {
-              return;
-            }
-
-            console.warn("[SKHPSIndex] fallback fail pending task:", task);
-
-            if (typeof window.SKHPSLoading.fail === "function") {
-              window.SKHPSLoading.fail(task, new Error("index fallback timeout"));
-            }
-          });
-
-          html.setAttribute("data-skhps-index-fallback-at", new Date().toISOString());
-          return;
-        }
-
-        console.warn("[SKHPSIndex] fallback release without SKHPSLoading");
-
-        html.classList.remove("skhps-css-loading");
-        html.classList.remove("skhps-loading");
-
-        if (document.body) {
-          document.body.classList.remove("skhps-css-loading");
-          document.body.classList.remove("skhps-loading");
-        }
-
-        html.setAttribute("data-skhps-loading-released", "true");
-        html.setAttribute("data-skhps-loading-release-reason", "index-fallback-no-gate");
-        html.setAttribute("data-skhps-index-fallback-at", new Date().toISOString());
-      }, 8000);
-    })();
-  </script>
-
-  <script>
-    (function () {
-      "use strict";
-
-      function $(selector) {
-        return document.querySelector(selector);
-      }
-
-      function getRuntime() {
-        var fromHtml = document.documentElement.getAttribute("data-skhps-runtime");
-        if (fromHtml) return fromHtml;
-
-        var host = String(window.location.hostname || "").toLowerCase();
-
-        if (host === "127.0.0.1" || host === "localhost" || host === "") {
-          return "local-dev";
-        }
-
-        if (
-          host.indexOf("dev-") === 0 ||
-          host.indexOf("dev.") === 0 ||
-          host.indexOf("dev-skhps") >= 0
-        ) {
-          return "dev";
-        }
-
-        return "prod";
-      }
-
-      function safeJson(value) {
-        try {
-          return JSON.stringify(value, null, 2);
-        } catch (error) {
-          return String(value);
-        }
-      }
-
-      function updateDiagnostics() {
-        var runtime = getRuntime();
-        var loadingState = null;
-
-        if (
-          window.SKHPSLoading &&
-          typeof window.SKHPSLoading.getState === "function"
-        ) {
-          loadingState = window.SKHPSLoading.getState();
-        }
-
-        var runtimeLabel = $("[data-skhps-runtime-label]");
-        var runtimeText = $("[data-skhps-runtime-text]");
-        var loadingSummary = $("[data-skhps-loading-summary]");
-        var loadingStateBox = $("[data-skhps-loading-state]");
-        var externalDebugBox = $("[data-skhps-external-apps-debug]");
-        var externalCount = $("[data-skhps-external-apps-count]");
-
-        if (runtimeLabel) runtimeLabel.textContent = runtime;
-        if (runtimeText) runtimeText.textContent = runtime;
-
-        if (loadingSummary) {
-          loadingSummary.textContent = loadingState && loadingState.releaseReason
-            ? loadingState.releaseReason
-            : "等待中";
-        }
-
-        if (loadingStateBox) {
-          loadingStateBox.textContent = loadingState
-            ? safeJson(loadingState)
-            : "SKHPSLoading 尚未建立";
-        }
-
-        if (externalDebugBox) {
-          externalDebugBox.textContent = safeJson({
-            ready: document.documentElement.getAttribute("data-skhps-external-apps-runtime-ready"),
-            error: document.documentElement.getAttribute("data-skhps-external-apps-runtime-error"),
-            runtime: runtime
-          });
-        }
-
-        if (externalCount) {
-          var buttons = document.querySelectorAll("[data-skhps-external-app-id]");
-          if (document.documentElement.getAttribute("data-skhps-external-apps-runtime-ready") === "true") {
-            externalCount.textContent = String(buttons.length);
-          } else {
-            externalCount.textContent = "載入中";
-          }
-        }
-      }
-
-      window.SKHPSIndexDiagnostics = {
-        update: updateDiagnostics
-      };
-
-      window.setInterval(updateDiagnostics, 1000);
-
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", updateDiagnostics);
-      } else {
-        updateDiagnostics();
-      }
-    })();
-  </script>
-
-  <script src="assets/js/config.js?v=202606131230"></script>
-  <script src="assets/js/route.js?v=202606131230"></script>
-  <script src="assets/js/backend-client.js?v=20260611"></script>
-  <script src="assets/js/css-sheet-runtime.js?v=202606141725"></script>
-  <script src="assets/js/header.js?v=20260611"></script>
-  <script src="assets/js/page-map.js?v=202606131610"></script>
-  <script src="assets/js/footer.js?v=202606142130"></script>
-  <script src="assets/js/external-apps-runtime.js?v=202606131230"></script>
 </body>
 </html>

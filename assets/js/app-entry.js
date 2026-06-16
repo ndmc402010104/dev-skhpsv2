@@ -1,4 +1,4 @@
-﻿/*
+/*
 檔案位置：skhpsv2/assets/js/app-entry.js
 時間戳記：2026-06-16 UTC+8
 用途：外部專案接入 skhpsv2 水庫的共用入口；只負責辨識外部專案身分，然後交給 entry-core.js。
@@ -6,7 +6,7 @@
 責任切分：
 - 本檔是 external-app adapter。
 - 不動態插入 loading style。
-- loading 階段樣式由唯一固定 CSS：assets/CSS/skhps-loading.css 管理。
+- loading 階段樣式由唯一固定 CSS：assets/css/skhps-loading.css 管理。
 - 共通 JS 載入順序、shell/main 分層、header/footer/main release 由 entry-core.js + loading-gate.js 管理。
 - 外部專案資訊由 app-card.json / version.js / window.SKHPS_APP_CONFIG 合併。
 - registerExternalApp 是背景報到，不擋畫面。

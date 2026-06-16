@@ -6,7 +6,7 @@
 責任切分：
 - 本檔是 skhpsv2 本體頁 adapter。
 - 不動態插入 loading style。
-- loading 階段樣式由唯一固定 CSS：assets/CSS/skhps-loading.css 管理。
+- loading 階段樣式由唯一固定 CSS：assets/css/skhps-loading.css 管理。
 - 共通 JS 載入順序、shell/main 分層、header/footer/main release 由 entry-core.js + loading-gate.js 管理。
 
 目前套用：

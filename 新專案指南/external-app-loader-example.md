@@ -44,7 +44,7 @@
 外部 App 的 HTML 只直接載兩個水庫資源：
 
 ```txt
-1. skhpsv2/assets/CSS/skhps-loading.css
+1. skhpsv2/assets/css/skhps-loading.css
 2. skhpsv2/assets/js/app-entry.js
 ```
 
@@ -193,7 +193,7 @@ your-app/
 水庫法則：
 - 本頁是外部 App，不是 skhpsv2 主體頁。
 - 本頁只直接載入：
-  1. skhpsv2/assets/CSS/skhps-loading.css
+  1. skhpsv2/assets/css/skhps-loading.css
   2. skhpsv2/assets/js/app-entry.js
 - 本頁不直接載入 runtime/config/backend/css/header/footer。
 - 正式 CSS 由 CSS Sheet runtime / cache 負責。
@@ -276,7 +276,7 @@ your-app/
       document.write(
         '<link rel="stylesheet" href="' +
         window.SKHPS_ENTRY_BASE_URL +
-        'assets/CSS/skhps-loading.css?v=' +
+        'assets/css/skhps-loading.css?v=' +
         encodeURIComponent(window.SKHPS_ENTRY_VERSION) +
         '">'
       );
@@ -544,7 +544,7 @@ localStorage cache
 唯一獨立 CSS：
 
 ```txt
-skhpsv2/assets/CSS/skhps-loading.css
+skhpsv2/assets/css/skhps-loading.css
 ```
 
 外部 App 不應：

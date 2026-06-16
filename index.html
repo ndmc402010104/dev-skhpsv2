@@ -6,7 +6,7 @@
 
 本版調整：
 - 首頁改為 skhpsv2 本體頁，由 assets/js/skhps-entry.js 作為唯一入口。
-- loading 階段只載唯一固定 loading CSS：assets/CSS/skhps-loading.css。
+- loading 階段只載唯一固定 loading CSS：assets/css/skhps-loading.css。
 - 移除 loading-cache-probe.js。
 - 共通 JS 由 entry-core.js 依序載入。
 - Header/Footer 先由 shell gate 顯示；main 等 page gate 完成後顯示。
@@ -25,7 +25,7 @@ Loading Gate：
 - 首頁不放 inline CSS。
 - 首頁不直接載入共通 runtime scripts。
 - 首頁只提供語意結構與 class，正式樣式由 CSS Sheet / css-sheet-runtime.js / cache 管理。
-- loading 階段樣式只由 assets/CSS/skhps-loading.css 管理。
+- loading 階段樣式只由 assets/css/skhps-loading.css 管理。
 -->
 <html
   lang="zh-Hant"
@@ -41,7 +41,7 @@ Loading Gate：
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <link rel="stylesheet" href="assets/CSS/skhps-loading.css?v=2026061610">
+  <link rel="stylesheet" href="assets/css/skhps-loading.css?v=2026061610">
   <script src="assets/js/skhps-entry.js?v=2026061610"></script>
   <title>整外資訊系統首頁</title>
 </head>

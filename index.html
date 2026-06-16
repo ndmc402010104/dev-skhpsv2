@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/index.html
-時間戳記：2026-06-16 UTC+8
+時間戳記：2026-06-16 13:20 UTC+8
 用途：整外資訊系統首頁。
 
 本版調整：
-- 首頁改為 skhpsv2 本體頁，由 assets/js/skhps-entry.js 作為唯一入口。
+- 保留 skhpsv2 本體首頁入口架構，由 assets/js/skhps-entry.js 作為唯一入口。
 - loading 階段只載唯一固定 loading CSS：assets/css/skhps-loading.css。
-- 移除 loading-cache-probe.js。
-- 共通 JS 由 entry-core.js 依序載入。
-- Header/Footer 先由 shell gate 顯示；main 等 page gate 完成後顯示。
+- 首頁主視覺回到 Theme40 大標題 + 大入口卡片版本。
+- 移除首頁主畫面的 external apps status 文字，不顯示「已載入 N 個外部專案（env）」。
+- 中間入口面板保留 Theme40 卡片式入口容器，外部專案仍由 external-apps-runtime 動態渲染。
 
 Loading Gate：
 - 首頁使用 AND gate。
@@ -76,67 +76,40 @@ Loading Gate：
   <header id="header" class="skhps-header" data-skhps-header></header>
 
   <main class="skhps-page skhps-index-page" data-skhps-main>
-    <div class="skhps-container skhps-index-shell">
-      <section class="skhps-hero skhps-index-hero" aria-labelledby="indexTitle">
-        <div class="skhps-hero-card skhps-index-hero-card">
-          <div class="skhps-index-hero-content">
-            <p class="skhps-eyebrow">Shin Kong Wu Ho-Su Memorial Hospital</p>
-            <h1 id="indexTitle" class="skhps-page-title skhps-index-title">
-              整外資訊系統首頁
-            </h1>
-            <p class="skhps-page-subtitle skhps-index-subtitle">
-              這裡是整形外科共用入口。系統入口會依目前環境與啟用狀態自動顯示。
-            </p>
-          </div>
+    <nav class="skhps-page-map" aria-label="breadcrumb">
+      <span class="skhps-page-map-current">首頁</span>
+    </nav>
 
-          <div class="skhps-meta-grid skhps-index-meta-grid" aria-label="首頁狀態">
-            <div class="skhps-meta-item skhps-index-meta-item">
-              <span class="skhps-meta-label">目前環境</span>
-              <strong class="skhps-meta-value" data-skhps-runtime-text>判斷中</strong>
-            </div>
+    <section class="skhps-hero skhps-index-hero" aria-labelledby="indexTitle">
+      <p class="skhps-eyebrow">常用功能集中入口</p>
 
-            <div class="skhps-meta-item skhps-index-meta-item">
-              <span class="skhps-meta-label">外部專案</span>
-              <strong class="skhps-meta-value" data-skhps-external-apps-count>載入中</strong>
-            </div>
+      <h1 id="indexTitle" class="skhps-page-title skhps-index-title">
+        把簽到、院內系統快速登入與敷料領用放在同一個工作台。
+      </h1>
 
-            <div class="skhps-meta-item skhps-index-meta-item">
-              <span class="skhps-meta-label">Loading Gate</span>
-              <strong class="skhps-meta-value" data-skhps-loading-summary>等待中</strong>
-            </div>
-          </div>
-        </div>
-      </section>
+      <p class="skhps-page-subtitle skhps-index-subtitle">
+        選擇下方功能即可進入對應頁面。首頁保留清楚的入口面板，方便值班與行政流程快速切換。
+      </p>
 
-      <section class="skhps-section skhps-index-section skhps-system-entry-section" aria-labelledby="externalAppsTitle">
-        <div class="skhps-section-head skhps-index-section-head">
+      <article class="skhps-entry-panel skhps-system-entry-card" aria-labelledby="externalAppsTitle">
+        <div class="skhps-entry-panel-head skhps-section-head skhps-index-section-head">
           <div>
-            <p class="skhps-eyebrow">System Entrances</p>
-            <h2 id="externalAppsTitle" class="skhps-section-title">系統入口</h2>
-          </div>
-          <p class="skhps-page-subtitle skhps-section-description">
-            已啟用的功能與外部系統會以卡片顯示在這裡。
-          </p>
-        </div>
-
-        <div class="skhps-system-entry-grid">
-          <article class="skhps-hero-card skhps-system-entry-card">
-            <p
-              class="skhps-page-subtitle skhps-system-entry-status"
-              data-skhps-external-apps-status
-            >
-              系統入口載入中...
+            <h2 id="externalAppsTitle" class="skhps-section-title skhps-entry-panel-title">
+              請選擇要使用的功能
+            </h2>
+            <p class="skhps-section-description skhps-entry-panel-description">
+              依照目前作業情境進入對應表單或工具。
             </p>
-
-            <nav
-              class="skhps-action-grid skhps-external-apps-grid"
-              aria-label="系統入口"
-              data-skhps-external-apps
-            ></nav>
-          </article>
+          </div>
         </div>
-      </section>
-    </div>
+
+        <nav
+          class="skhps-entry-list skhps-external-apps-grid"
+          aria-label="系統入口"
+          data-skhps-external-apps
+        ></nav>
+      </article>
+    </section>
   </main>
 
   <footer id="footer" data-skhps-footer class="skhps-footer">

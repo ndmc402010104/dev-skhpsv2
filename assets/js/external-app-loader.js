@@ -126,23 +126,105 @@
     };
   }
 
-  function requireManifest() {
-    var manifest = window.SKHPS_APP_MANIFEST || (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.manifest) || null;
+  function getCurrentPageId() {
+    var html = document.documentElement;
+    var body = document.body;
 
-    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return String(
+      html.getAttribute("data-skhps-page-id") ||
+      html.getAttribute("data-page-id") ||
+      body && body.getAttribute("data-skhps-page-id") ||
+      body && body.getAttribute("data-page-id") ||
+      ""
+    ).trim();
+  }
+
+  function mergeObject(base, override) {
+    return Object.assign({}, base || {}, override || {});
+  }
+
+  function resolveEffectiveManifest(rawManifest) {
+    var manifest = rawManifest || {};
+    var pageId = getCurrentPageId();
+    var pages = manifest.pages && typeof manifest.pages === "object" && !Array.isArray(manifest.pages)
+      ? manifest.pages
+      : {};
+    var page = pageId && pages[pageId] && typeof pages[pageId] === "object" && !Array.isArray(pages[pageId])
+      ? pages[pageId]
+      : null;
+    var effective;
+
+    if (!page) {
+      window.SKHPS_APP_ROOT_MANIFEST = manifest;
+      window.SKHPS_APP_EFFECTIVE_MANIFEST = manifest;
+      return manifest;
+    }
+
+    effective = Object.assign({}, manifest, page, {
+      appId: manifest.appId,
+      rootAppId: manifest.appId,
+      pageId: page.pageId || pageId,
+      title: page.title || manifest.title || "",
+      description: page.description || manifest.description || "",
+      group: page.group || manifest.group || "",
+      href: page.href || manifest.href || "",
+      version: manifest.version || {},
+      entry: page.entry || manifest.entry || {},
+      features: mergeObject(manifest.features, page.features),
+      backend: mergeObject(manifest.backend, page.backend),
+      pages: manifest.pages
+    });
+
+    if (page.registerExternalApp !== undefined) {
+      effective.registerExternalApp = page.registerExternalApp;
+    } else {
+      effective.registerExternalApp = manifest.registerExternalApp;
+    }
+
+    if (page.configUrl === undefined && manifest.configUrl !== undefined) {
+      effective.configUrl = manifest.configUrl;
+    }
+
+    if (page.signPageUrl === undefined && manifest.signPageUrl !== undefined) {
+      effective.signPageUrl = manifest.signPageUrl;
+    }
+
+    window.SKHPS_APP_ROOT_MANIFEST = manifest;
+    window.SKHPS_APP_EFFECTIVE_MANIFEST = effective;
+
+    mark("external-app-loader:page-manifest", {
+      file: "external-app-loader.js",
+      functionName: "resolveEffectiveManifest",
+      appId: manifest.appId || "",
+      pageId: pageId,
+      title: effective.title || "",
+      afterScripts: effective.entry && effective.entry.afterScripts || [],
+      loadingTasks: effective.entry && effective.entry.loadingTasks || []
+    });
+
+    return effective;
+  }
+
+  function requireManifest() {
+    var rawManifest = window.SKHPS_APP_MANIFEST || (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.manifest) || null;
+    var manifest;
+
+    if (!rawManifest || typeof rawManifest !== "object" || Array.isArray(rawManifest)) {
       throw new Error("SKHPS_APP_MANIFEST missing; external apps must use app.json");
     }
 
+    manifest = resolveEffectiveManifest(rawManifest);
+
     if (!manifest.entry || typeof manifest.entry !== "object" || Array.isArray(manifest.entry)) {
-      throw new Error("SKHPS_APP_MANIFEST.entry missing");
+      throw new Error("SKHPS_APP_MANIFEST.entry missing for current page");
     }
 
     if (!Array.isArray(manifest.entry.afterScripts)) {
-      throw new Error("SKHPS_APP_MANIFEST.entry.afterScripts must be an array");
+      throw new Error("SKHPS_APP_MANIFEST.entry.afterScripts must be an array for current page");
     }
 
     if (!Array.isArray(manifest.entry.loadingTasks)) {
-      throw new Error("SKHPS_APP_MANIFEST.entry.loadingTasks must be an array");
+      throw new Error("SKHPS_APP_MANIFEST.entry.loadingTasks must be an array for current page");
     }
 
     return manifest;
@@ -151,7 +233,9 @@
   function getAppEnv() {
     var appEnv = window.SKHPS_APP_ENV || {};
     var manifest = requireManifest();
+    var rootManifest = window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || manifest;
     var version = appEnv.version || currentScriptVersion() || Date.now();
+    var pageId = manifest.pageId || getCurrentPageId();
 
     mark("external-app-loader:init", {
       file: "external-app-loader.js",
@@ -164,20 +248,24 @@
     }
 
     var options = {
-      appId: appEnv.appId || manifest.appId || window.SKHPS_APP_ID || "unknown",
+      appId: appEnv.appId || rootManifest.appId || manifest.appId || window.SKHPS_APP_ID || "unknown",
+      rootAppId: rootManifest.appId || manifest.rootAppId || manifest.appId || "",
+      pageId: pageId,
       env: appEnv.env || "prod",
       requestedRuntime: appEnv.requestedRuntime || "",
       sharedBaseUrl: normalizeBaseUrl(appEnv.sharedBaseUrl),
       version: version,
-      title: manifest.title || appEnv.title || "",
-      href: manifest.href || appEnv.href || window.location.href,
-      group: manifest.group || appEnv.group || "",
+      title: manifest.title || rootManifest.title || appEnv.title || "",
+      href: manifest.href || rootManifest.href || appEnv.href || window.location.href,
+      group: manifest.group || rootManifest.group || appEnv.group || "",
       displayPosition: "",
       order: 9999,
       coreScripts: CORE_SCRIPTS.slice(),
       afterScripts: manifest.entry.afterScripts.slice(),
       loadingTasks: manifest.entry.loadingTasks.slice(),
-      manifest: manifest
+      manifest: manifest,
+      effectiveManifest: manifest,
+      rootManifest: rootManifest
     };
 
     mark("external-app-loader:env", Object.assign({
@@ -317,11 +405,15 @@
   }
 
   function normalizeRegisterPayload(options) {
-    var manifest = options.manifest || window.SKHPS_APP_MANIFEST || {};
-    var appId = String(manifest.appId || options.appId || window.SKHPS_APP_ID || "").trim();
-    var title = String(manifest.title || manifest.name || options.title || document.title || appId || "").trim();
-    var href = String(manifest.href || options.href || window.location.href || "").trim();
-    var group = String(manifest.group || options.group || "").trim();
+    var effectiveManifest = options.manifest || window.SKHPS_APP_EFFECTIVE_MANIFEST || window.SKHPS_APP_MANIFEST || {};
+    var rootManifest = options.rootManifest || window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || effectiveManifest || {};
+    var appId = String(rootManifest.appId || effectiveManifest.rootAppId || effectiveManifest.appId || options.appId || window.SKHPS_APP_ID || "").trim();
+    var title = String(rootManifest.title || rootManifest.name || appId || "").trim();
+    var href = String(rootManifest.href || options.href || window.location.href || "").trim();
+    var group = String(rootManifest.group || options.group || "").trim();
+    var pageId = String(effectiveManifest.pageId || options.pageId || getCurrentPageId() || "").trim();
+    var pageTitle = String(effectiveManifest.title || options.title || document.title || "").trim();
+    var pageHref = String(effectiveManifest.href || window.location.href || "").trim();
     var version = String(options.version || "").trim();
 
     return {
@@ -335,6 +427,10 @@
       version: version,
       env: options.env || "",
       requestedRuntime: options.requestedRuntime || "",
+      rootAppId: appId,
+      pageId: pageId,
+      pageTitle: pageTitle,
+      pageHref: pageHref,
       origin: window.location.origin || "",
       pageUrl: window.location.href || "",
       userAgent: navigator.userAgent || ""
@@ -342,13 +438,14 @@
   }
 
   function registerExternalAppIfNeeded(options) {
-    var manifest = options.manifest || window.SKHPS_APP_MANIFEST || {};
+    var manifest = options.manifest || window.SKHPS_APP_EFFECTIVE_MANIFEST || window.SKHPS_APP_MANIFEST || {};
+    var rootManifest = options.rootManifest || window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || manifest || {};
 
     if (!manifest || typeof manifest !== "object") {
       return;
     }
 
-    if (manifest.registerExternalApp === false) {
+    if (rootManifest.registerExternalApp === false || manifest.registerExternalApp === false) {
       return;
     }
 
@@ -436,7 +533,8 @@
   window.SKHPSExternalAppLoader = {
     getAppEnv: getAppEnv,
     load: load,
-    registerExternalAppIfNeeded: registerExternalAppIfNeeded
+    registerExternalAppIfNeeded: registerExternalAppIfNeeded,
+    resolveEffectiveManifest: resolveEffectiveManifest
   };
 
   load().then(function () {

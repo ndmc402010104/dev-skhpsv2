@@ -173,6 +173,84 @@
     return LOADING_TASK_ALIASES[normalized] || normalized;
   }
 
+  function getCurrentPageId() {
+    var html = document.documentElement;
+    var body = document.body;
+
+    return String(
+      html.getAttribute("data-skhps-page-id") ||
+      html.getAttribute("data-page-id") ||
+      body && body.getAttribute("data-skhps-page-id") ||
+      body && body.getAttribute("data-page-id") ||
+      ""
+    ).trim();
+  }
+
+  function mergeObject(base, override) {
+    return Object.assign({}, base || {}, override || {});
+  }
+
+  function resolveEffectiveManifest(rawManifest) {
+    var manifest = rawManifest || {};
+    var pageId = getCurrentPageId();
+    var pages = manifest.pages && typeof manifest.pages === "object" && !Array.isArray(manifest.pages)
+      ? manifest.pages
+      : {};
+    var page = pageId && pages[pageId] && typeof pages[pageId] === "object" && !Array.isArray(pages[pageId])
+      ? pages[pageId]
+      : null;
+    var effective;
+
+    if (!page) {
+      window.SKHPS_APP_ROOT_MANIFEST = manifest;
+      window.SKHPS_APP_EFFECTIVE_MANIFEST = manifest;
+      return manifest;
+    }
+
+    effective = Object.assign({}, manifest, page, {
+      appId: manifest.appId,
+      rootAppId: manifest.appId,
+      pageId: page.pageId || pageId,
+      title: page.title || manifest.title || "",
+      description: page.description || manifest.description || "",
+      group: page.group || manifest.group || "",
+      href: page.href || manifest.href || "",
+      version: manifest.version || {},
+      entry: page.entry || manifest.entry || {},
+      features: mergeObject(manifest.features, page.features),
+      backend: mergeObject(manifest.backend, page.backend),
+      pages: manifest.pages,
+      __skhpsMatchedPage: true
+    });
+
+    if (page.registerExternalApp !== undefined) {
+      effective.registerExternalApp = page.registerExternalApp;
+    } else {
+      effective.registerExternalApp = manifest.registerExternalApp;
+    }
+
+    if (page.configUrl === undefined && manifest.configUrl !== undefined) {
+      effective.configUrl = manifest.configUrl;
+    }
+
+    if (page.signPageUrl === undefined && manifest.signPageUrl !== undefined) {
+      effective.signPageUrl = manifest.signPageUrl;
+    }
+
+    window.SKHPS_APP_ROOT_MANIFEST = manifest;
+    window.SKHPS_APP_EFFECTIVE_MANIFEST = effective;
+
+    earlyRuntimeLog("OK", "resolveEffectiveManifest", {
+      appId: manifest.appId || "",
+      pageId: pageId,
+      title: effective.title || "",
+      afterScripts: effective.entry && effective.entry.afterScripts || [],
+      loadingTasks: effective.entry && effective.entry.loadingTasks || []
+    });
+
+    return effective;
+  }
+
   function normalizeLoadingTaskAttribute(attributeName) {
     var html = document.documentElement;
     var raw = html.getAttribute(attributeName) || "";
@@ -350,6 +428,34 @@
 
   function normalizeOptions(rawOptions) {
     var options = rawOptions || {};
+    var rawManifest = options.manifest || window.SKHPS_APP_MANIFEST || window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.manifest || null;
+    var effectiveManifest;
+
+    if (rawManifest && typeof rawManifest === "object" && !Array.isArray(rawManifest)) {
+      effectiveManifest = resolveEffectiveManifest(rawManifest);
+      options.rootManifest = window.SKHPS_APP_ROOT_MANIFEST || rawManifest;
+      options.manifest = effectiveManifest;
+      options.effectiveManifest = effectiveManifest;
+      options.rootAppId = options.rootAppId || options.rootManifest.appId || effectiveManifest.rootAppId || effectiveManifest.appId || "";
+      options.appId = options.appId || options.rootAppId || effectiveManifest.appId || "";
+      options.pageId = options.pageId || effectiveManifest.pageId || getCurrentPageId() || "";
+      options.title = options.title || effectiveManifest.title || options.rootManifest.title || "";
+      options.href = options.href || effectiveManifest.href || options.rootManifest.href || "";
+      options.group = options.group || effectiveManifest.group || options.rootManifest.group || "";
+
+      if (
+        effectiveManifest.entry &&
+        Array.isArray(effectiveManifest.entry.afterScripts) &&
+        (effectiveManifest.__skhpsMatchedPage || (!options.specificScripts && !options.afterScripts))
+      ) {
+        options.specificScripts = effectiveManifest.entry.afterScripts.slice();
+        options.afterScripts = effectiveManifest.entry.afterScripts.slice();
+      }
+
+      if (effectiveManifest.entry && Array.isArray(effectiveManifest.entry.loadingTasks)) {
+        options.loadingTasks = effectiveManifest.entry.loadingTasks.slice();
+      }
+    }
 
     options.sharedBaseUrl = normalizeBaseUrl(options.sharedBaseUrl || inferSharedBaseUrl());
     options.coreVersion = String(options.coreVersion || currentScriptVersion() || "").trim();
@@ -531,6 +637,7 @@
     onDomReady: onDomReady,
     requireShellTask: requireShellTask,
     doneShellTask: doneShellTask,
-    normalizeLoadingTaskNames: normalizeLoadingTaskNames
+    normalizeLoadingTaskNames: normalizeLoadingTaskNames,
+    resolveEffectiveManifest: resolveEffectiveManifest
   };
 })();

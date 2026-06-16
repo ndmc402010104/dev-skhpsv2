@@ -11,19 +11,20 @@
 - skhps-loading.css：唯一 loading CSS，負責 loading 階段視覺與隱藏規則。
 
 流程：
-1. 載 runtime.js
-2. 載 loading-gate.js
-3. require("skhps-shell")
-4. 載 config.js
-5. 載 route.js
-6. 載 backend-client.js
-7. 載 css-sheet-runtime.js
-8. DOM ready
-9. 載 header.js
-10. 載 page-map.js
-11. 載 footer.js
-12. done("skhps-shell")
-13. 載 page/app-specific JS
+1. 正規化 loading task 名稱，例如 external-apps-runtime → external-apps-layout
+2. 載 runtime.js
+3. 載 loading-gate.js
+4. require("skhps-shell")
+5. 載 config.js
+6. 載 route.js
+7. 載 backend-client.js
+8. 載 css-sheet-runtime.js
+9. DOM ready
+10. 載 header.js
+11. 載 page-map.js
+12. 載 footer.js
+13. done("skhps-shell")
+14. 載 page/app-specific JS
 */
 
 (function () {
@@ -46,6 +47,10 @@
     "assets/js/page-map.js",
     "assets/js/footer.js"
   ];
+
+  var LOADING_TASK_ALIASES = {
+    "external-apps-runtime": "external-apps-layout"
+  };
 
   function earlyRuntimeLog(status, action, detail, durationMs) {
     try {
@@ -160,6 +165,68 @@
       path: String(entry.path || entry.src || entry.url || "").trim(),
       optional: Boolean(entry.optional)
     };
+  }
+
+  function normalizeTaskToken(token) {
+    var normalized = String(token || "").trim();
+
+    return LOADING_TASK_ALIASES[normalized] || normalized;
+  }
+
+  function normalizeLoadingTaskAttribute(attributeName) {
+    var html = document.documentElement;
+    var raw = html.getAttribute(attributeName) || "";
+
+    if (!raw) {
+      return raw;
+    }
+
+    var changed = false;
+    var seen = {};
+    var tasks = raw.split(/[\s,]+/).map(function (token) {
+      var original = String(token || "").trim();
+      var normalized = normalizeTaskToken(original);
+
+      if (original && original !== normalized) {
+        changed = true;
+      }
+
+      return normalized;
+    }).filter(function (token) {
+      if (!token || seen[token]) {
+        return false;
+      }
+
+      seen[token] = true;
+      return true;
+    });
+
+    if (!tasks.length) {
+      return raw;
+    }
+
+    var next = tasks.join(",");
+
+    if (changed || raw !== next) {
+      html.setAttribute(attributeName, next);
+      html.setAttribute("data-skhps-loading-tasks-normalized", "true");
+      earlyRuntimeLog("OK", "normalizeLoadingTaskNames", {
+        attribute: attributeName,
+        from: raw,
+        to: next
+      });
+    }
+
+    return next;
+  }
+
+  function normalizeLoadingTaskNames() {
+    normalizeLoadingTaskAttribute("data-loading-tasks");
+    normalizeLoadingTaskAttribute("data-skhps-loading-tasks");
+
+    return document.documentElement.getAttribute("data-loading-tasks") ||
+      document.documentElement.getAttribute("data-skhps-loading-tasks") ||
+      "";
   }
 
   function onDomReady() {
@@ -387,6 +454,7 @@
     var specificScripts = resolveSpecificScripts(options);
 
     ensureLoadingClasses();
+    normalizeLoadingTaskNames();
 
     window.SKHPS_ENTRY_CORE_OPTIONS = options;
 
@@ -462,6 +530,7 @@
     loadSequential: loadSequential,
     onDomReady: onDomReady,
     requireShellTask: requireShellTask,
-    doneShellTask: doneShellTask
+    doneShellTask: doneShellTask,
+    normalizeLoadingTaskNames: normalizeLoadingTaskNames
   };
 })();

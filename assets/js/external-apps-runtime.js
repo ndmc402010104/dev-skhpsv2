@@ -4,20 +4,24 @@
 用途：首頁讀取 Sheet「外部專案」，只顯示目前 runtime、啟用=true、且「顯示位置」為前台的外部專案。
 
 Loading Gate：
-- 任務名稱：external-apps-runtime
+- 任務名稱：external-apps-layout
+- 語意：首頁外部專案區塊的 layout 已穩定，可以解除全頁 loading。
 - 成功讀取 listExternalProjects 並 render 完成：done
 - 讀取失敗但錯誤訊息已 render：fail
+- 舊 loading task 名稱 external-apps-runtime 不再由本檔回報；若 HTML 尚未更新，由 entry-core.js 統一正規化成 external-apps-layout。
 
 規則：
 - 功能資料 / backend 資料不使用 localStorage cache。
 - 首頁系統入口是可操作功能，必須等 backend 回來並完成 render 後才放行。
 - CSS 可以 cache；功能資料不要 cache。
+- 放行前只處理會影響首屏 layout 的 listExternalProjects / filter / sort / render。
+- 放行後若未來要補 health、version、diagnostics、footer 狀態，只能更新既有區塊文字或 badge，不得新增/刪除卡片或改變高度。
 */
 
 (function () {
   "use strict";
 
-  var TASK_NAME = "external-apps-runtime";
+  var TASK_NAME = "external-apps-layout";
   var CONTAINER_SELECTOR = "[data-skhps-external-apps]";
   var STATUS_SELECTOR = "[data-skhps-external-apps-status]";
   var COUNT_SELECTOR = "[data-skhps-external-apps-count]";
@@ -50,7 +54,7 @@ Loading Gate：
     } catch (error) {}
   }
 
-  rlog("RUN", "moduleStart", "external-apps-runtime.js");
+  rlog("RUN", "moduleStart", TASK_NAME);
 
   function $(selector) {
     return document.querySelector(selector);
@@ -63,10 +67,10 @@ Loading Gate：
 
     readyMarked = true;
 
-    document.documentElement.setAttribute("data-skhps-external-apps-runtime-ready", "true");
-    document.documentElement.setAttribute("data-skhps-external-apps-runtime-ready-reason", "backend");
+    document.documentElement.setAttribute("data-skhps-external-apps-layout-ready", "true");
+    document.documentElement.setAttribute("data-skhps-external-apps-layout-ready-reason", "backend-rendered");
 
-    rlog("OK", "moduleReady", "external-apps-runtime.js", Date.now() - loadStartedAt);
+    rlog("OK", "layoutReady", TASK_NAME, Date.now() - loadStartedAt);
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
       window.SKHPSLoading.done(TASK_NAME);
@@ -82,15 +86,17 @@ Loading Gate：
 
     var message = error && error.message ? error.message : String(error || "unknown");
 
-    document.documentElement.setAttribute("data-skhps-external-apps-runtime-ready", "false");
-    document.documentElement.setAttribute("data-skhps-external-apps-runtime-error", message);
+    document.documentElement.setAttribute("data-skhps-external-apps-layout-ready", "false");
+    document.documentElement.setAttribute("data-skhps-external-apps-layout-error", message);
 
-    rlog("FAIL", "moduleReady", {
+    rlog("FAIL", "layoutReady", {
+      task: TASK_NAME,
       error: message
     }, Date.now() - loadStartedAt);
 
     setRuntimeExternalApps({
       loaded: false,
+      task: TASK_NAME,
       source: "backend",
       error: message,
       durationMs: Date.now() - loadStartedAt
@@ -348,6 +354,7 @@ Loading Gate：
 
         setRuntimeExternalApps({
           loaded: true,
+          task: TASK_NAME,
           source: "backend",
           count: apps.length,
           env: runtime,
@@ -369,11 +376,15 @@ Loading Gate：
       });
   }
 
-  window.SKHPSExternalAppsRuntime = {
+  var api = {
     init: init,
     getRuntime: getRuntime,
-    listExternalApps: listExternalApps
+    listExternalApps: listExternalApps,
+    taskName: TASK_NAME
   };
+
+  window.SKHPSExternalAppsLayout = api;
+  window.SKHPSExternalAppsRuntime = api;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });

@@ -1,19 +1,24 @@
 /*
 檔案位置：skhpsv2/assets/js/loading-gate.js
-時間戳記：2026-06-14 13:25 UTC+8
-用途：全站 loading passive AND gate。
+時間戳記：2026-06-16 UTC+8
+用途：全站 loading passive AND gate；支援 CSS ready / shell ready / page ready 三段式 release。
+
 設計：
 - gate 不硬寫任務來源。
 - 任務可由 HTML 的 data-skhps-loading-tasks 預先宣告，也可由各模組用 SKHPSLoading.require/done/fail 被動傳入。
-- 傳進來只有 css-runtime，就只等 css-runtime。
-- 傳進來多個 task，就所有 task 都 done/fail-rendered 後才顯示。
+- css-runtime 完成後，只移除 skhps-css-loading。
+- css-runtime + skhps-shell 完成後，才顯示 header/footer。
+- 所有 required tasks 完成後，才顯示 main。
+- fail 視為「任務已結束但狀態 WARN」，避免正式環境永久卡住。
+- timeout fallback 仍保留，避免白畫面。
 */
 
 (function () {
   "use strict";
 
   var html = document.documentElement;
-  var LOADING_CLASSES = ["skhps-css-loading", "skhps-loading"];
+  var CSS_LOADING_CLASS = "skhps-css-loading";
+  var GLOBAL_LOADING_CLASS = "skhps-loading";
   var SHELL_LOADING_CLASS = "skhps-shell-loading";
   var MAIN_LOADING_CLASS = "skhps-main-loading";
   var DEFAULT_TIMEOUT_MS = 12000;
@@ -23,6 +28,7 @@
     done: {},
     failed: {},
     released: false,
+    cssReady: false,
     shellReady: false,
     pageReady: false,
     openedAt: Date.now(),
@@ -40,9 +46,16 @@
 
   function log() {
     if (!window.SKHPS_DEBUG_LOADING) return;
+
     var args = Array.prototype.slice.call(arguments);
     args.unshift("[SKHPSLoading]");
     console.log.apply(console, args);
+  }
+
+  function warn() {
+    var args = Array.prototype.slice.call(arguments);
+    args.unshift("[SKHPSLoading]");
+    console.warn.apply(console, args);
   }
 
   function runtime() {
@@ -64,112 +77,21 @@
     } catch (error) {}
   }
 
-  rlog("RUN", "moduleStart", "loading-gate.js");
-  rlog("RUN", "loadingGateStart", {
-    loadingClasses: LOADING_CLASSES.concat([SHELL_LOADING_CLASS, MAIN_LOADING_CLASS]),
-    timeoutMs: DEFAULT_TIMEOUT_MS
-  });
-
-  try {
-    if (window.history && "scrollRestoration" in window.history) {
-      window.history.scrollRestoration = "manual";
-    }
-  } catch (error) {}
-
-  function hasUsableCssRuntimeCache() {
-    return false;
-  }
-
-  function setInitialLayerState() {
-    var hasDeclaredTasks =
-      html.hasAttribute("data-skhps-loading-tasks") ||
-      html.hasAttribute("data-loading-tasks");
-    var shouldUseLayeredGate =
-      hasLoadingClass() ||
-      hasDeclaredTasks ||
-      html.classList.contains(SHELL_LOADING_CLASS) ||
-      html.classList.contains(MAIN_LOADING_CLASS);
-
-    if (!shouldUseLayeredGate) {
-      return;
-    }
-
-    if (html.getAttribute("data-skhps-shell-ready") !== "true" && hasUsableCssRuntimeCache()) {
-      state.shellReady = true;
-      html.classList.remove(SHELL_LOADING_CLASS);
-      html.setAttribute("data-skhps-shell-ready", "true");
-      html.setAttribute("data-skhps-shell-ready-reason", "css-runtime-cache");
-      setRuntimeGatePatch({
-        shellReady: true,
-        shellReadyReason: "css-runtime-cache"
-      });
-      rlog("INFO", "shellCacheReady", "css-runtime-cache");
-    } else if (html.getAttribute("data-skhps-shell-ready") !== "true") {
-      html.classList.add(SHELL_LOADING_CLASS);
-      html.setAttribute("data-skhps-shell-ready", "false");
-    }
-
-    if (html.getAttribute("data-skhps-page-ready") !== "true") {
-      html.classList.add(MAIN_LOADING_CLASS);
-      html.setAttribute("data-skhps-page-ready", "false");
-    }
-  }
-
-  function setRuntimeRequired() {
-    if (runtime() && typeof runtime().setLoadingRequired === "function") {
-      runtime().setLoadingRequired(requiredTasks());
-    }
-
-    if (runtime() && typeof runtime().setLoadingGate === "function") {
-      runtime().setLoadingGate({
-        releaseReason: state.releaseReason || ""
-      });
-    }
-  }
-
-  function runtimeTaskDone(task) {
-    if (runtime() && typeof runtime().taskDone === "function") {
-      runtime().taskDone(task);
-    }
-  }
-
-  function runtimeTaskFailed(task, error) {
-    if (runtime() && typeof runtime().taskFailed === "function") {
-      runtime().taskFailed(task, error);
-    }
-  }
-
-  function setRuntimeGatePatch(data) {
-    if (runtime() && typeof runtime().setLoadingGate === "function") {
-      runtime().setLoadingGate(data || {});
-    }
-  }
-
   function traceFunction(functionName, status, data) {
-    if (runtime() && typeof runtime().log === "function") {
-      runtime().log({
-        level: status === "error" ? "error" : "debug",
-        module: "loading-gate.js",
-        message: "function-" + status,
-        data: Object.assign({
-          file: "loading-gate.js",
-          functionName: functionName,
-          status: status
-        }, data || {})
-      });
-    }
-  }
-
-  function warn() {
-    var args = Array.prototype.slice.call(arguments);
-    args.unshift("[SKHPSLoading]");
-    console.warn.apply(console, args);
-  }
-
-  function setTaskAttr(task, status) {
-    task = normalizeTask(task);
-    if (!task) return;
-    html.setAttribute("data-skhps-task-" + task, status);
+    try {
+      if (runtime() && typeof runtime().log === "function") {
+        runtime().log({
+          level: status === "error" ? "error" : "debug",
+          module: "loading-gate.js",
+          message: "function-" + status,
+          data: Object.assign({
+            file: "loading-gate.js",
+            functionName: functionName,
+            status: status
+          }, data || {})
+        });
+      }
+    } catch (error) {}
   }
 
   function parseTaskList(value) {
@@ -183,79 +105,224 @@
       .filter(Boolean);
   }
 
-  function hasLoadingClass() {
-    return LOADING_CLASSES.some(function (className) {
-      return html.classList.contains(className) ||
-        (document.body && document.body.classList.contains(className));
-    });
-  }
-
   function requiredTasks() {
     return keys(state.required);
   }
 
-  function isReady() {
-    var tasks = requiredTasks();
+  function failedTasks() {
+    return keys(state.failed);
+  }
 
-    if (!tasks.length) {
-      return false;
-    }
+  function doneTasks() {
+    return keys(state.done);
+  }
 
-    return tasks.every(function (task) {
-      return state.done[task] === true;
-    });
+  function isTaskRequired(task) {
+    task = normalizeTask(task);
+    return Boolean(task && state.required[task]);
+  }
+
+  function isTaskDone(task) {
+    task = normalizeTask(task);
+    return Boolean(task && state.done[task] === true);
+  }
+
+  function isTaskFailed(task) {
+    task = normalizeTask(task);
+    return Boolean(task && Object.prototype.hasOwnProperty.call(state.failed, task));
+  }
+
+  function isTaskComplete(task) {
+    return isTaskDone(task) || isTaskFailed(task);
+  }
+
+  function hasAnyFailure() {
+    return failedTasks().length > 0;
+  }
+
+  function hasLoadingClass() {
+    return html.classList.contains(CSS_LOADING_CLASS) ||
+      html.classList.contains(GLOBAL_LOADING_CLASS) ||
+      html.classList.contains(SHELL_LOADING_CLASS) ||
+      html.classList.contains(MAIN_LOADING_CLASS) ||
+      (document.body && (
+        document.body.classList.contains(CSS_LOADING_CLASS) ||
+        document.body.classList.contains(GLOBAL_LOADING_CLASS) ||
+        document.body.classList.contains(SHELL_LOADING_CLASS) ||
+        document.body.classList.contains(MAIN_LOADING_CLASS)
+      ));
+  }
+
+  function setTaskAttr(task, status) {
+    task = normalizeTask(task);
+    if (!task) return;
+
+    html.setAttribute("data-skhps-task-" + task, status);
+  }
+
+  function setRuntimeRequired() {
+    try {
+      if (runtime() && typeof runtime().setLoadingRequired === "function") {
+        runtime().setLoadingRequired(requiredTasks());
+      }
+
+      if (runtime() && typeof runtime().setLoadingGate === "function") {
+        runtime().setLoadingGate({
+          required: requiredTasks(),
+          done: doneTasks(),
+          failed: failedTasks(),
+          cssReady: state.cssReady,
+          shellReady: state.shellReady,
+          pageReady: state.pageReady,
+          released: state.released,
+          releaseReason: state.releaseReason || ""
+        });
+      }
+    } catch (error) {}
+  }
+
+  function runtimeTaskDone(task) {
+    try {
+      if (runtime() && typeof runtime().taskDone === "function") {
+        runtime().taskDone(task);
+      }
+    } catch (error) {}
+  }
+
+  function runtimeTaskFailed(task, error) {
+    try {
+      if (runtime() && typeof runtime().taskFailed === "function") {
+        runtime().taskFailed(task, error);
+      }
+    } catch (runtimeError) {}
+  }
+
+  function setRuntimeGatePatch(data) {
+    try {
+      if (runtime() && typeof runtime().setLoadingGate === "function") {
+        runtime().setLoadingGate(data || {});
+      }
+    } catch (error) {}
+  }
+
+  function getFailureReason(error) {
+    if (!error) return "failed";
+    if (error === true) return "failed";
+    if (error && error.message) return error.message;
+    return String(error);
   }
 
   function getState() {
     return {
       required: requiredTasks(),
-      done: keys(state.done),
-      failed: keys(state.failed).map(function (task) {
+      done: doneTasks(),
+      failed: failedTasks().map(function (task) {
         return {
           task: task,
           error: state.failed[task]
         };
       }),
       released: state.released,
+      cssReady: state.cssReady,
       shellReady: state.shellReady,
       pageReady: state.pageReady,
       releaseReason: state.releaseReason,
-      openedAt: state.openedAt
+      openedAt: state.openedAt,
+      durationMs: Date.now() - state.openedAt
     };
   }
 
+  function markCssReady(reason, status) {
+    if (state.cssReady) {
+      return;
+    }
+
+    state.cssReady = true;
+
+    html.classList.remove(CSS_LOADING_CLASS);
+
+    if (document.body) {
+      document.body.classList.remove(CSS_LOADING_CLASS);
+    }
+
+    if (isTaskDone("css-runtime")) {
+      html.setAttribute("data-skhps-css-ready", "true");
+      html.setAttribute("data-skhps-css-ready-reason", reason || "css-runtime");
+    } else if (isTaskFailed("css-runtime")) {
+      html.setAttribute("data-skhps-css-ready", "false");
+      html.setAttribute("data-skhps-css-ready-reason", reason || "css-runtime-failed");
+    } else {
+      html.setAttribute("data-skhps-css-ready", "true");
+      html.setAttribute("data-skhps-css-ready-reason", reason || "css-ready");
+    }
+
+    setRuntimeGatePatch({
+      cssReady: true,
+      cssReadyReason: reason || "css-runtime"
+    });
+
+    rlog(status || "OK", "releaseCssLoading", reason || "css-runtime", Date.now() - state.openedAt);
+  }
+
   function markShellReady(reason, status) {
-    if (state.shellReady) return;
+    if (state.shellReady) {
+      return;
+    }
 
     state.shellReady = true;
+
     html.classList.remove(SHELL_LOADING_CLASS);
+
     if (document.body) {
       document.body.classList.remove(SHELL_LOADING_CLASS);
     }
+
     html.setAttribute("data-skhps-shell-ready", "true");
-    html.setAttribute("data-skhps-shell-ready-reason", reason || "css-runtime");
+    html.setAttribute("data-skhps-shell-ready-reason", reason || "shell-ready");
+
     setRuntimeGatePatch({
       shellReady: true,
-      shellReadyReason: reason || "css-runtime"
+      shellReadyReason: reason || "shell-ready"
     });
-    rlog(status || "OK", "releaseShell", reason || "css-runtime");
+
+    rlog(status || "OK", "releaseShell", reason || "shell-ready", Date.now() - state.openedAt);
+
+    try {
+      document.dispatchEvent(new CustomEvent("skhps-loading-shell-ready", {
+        detail: getState()
+      }));
+    } catch (error) {}
   }
 
   function markPageReady(reason, status) {
-    if (state.pageReady) return;
+    if (state.pageReady) {
+      return;
+    }
 
     state.pageReady = true;
+
     html.classList.remove(MAIN_LOADING_CLASS);
+
     if (document.body) {
       document.body.classList.remove(MAIN_LOADING_CLASS);
     }
+
     html.setAttribute("data-skhps-page-ready", "true");
     html.setAttribute("data-skhps-page-ready-reason", reason || "all-ready");
+
     setRuntimeGatePatch({
       pageReady: true,
       pageReadyReason: reason || "all-ready"
     });
-    rlog(status || "OK", "releaseMain", reason || "all-ready");
+
+    rlog(status || "OK", "releaseMain", reason || "all-ready", Date.now() - state.openedAt);
+
+    try {
+      document.dispatchEvent(new CustomEvent("skhps-loading-page-ready", {
+        detail: getState()
+      }));
+    } catch (error) {}
+
     scrollPageToTopAfterReady();
   }
 
@@ -279,9 +346,114 @@
     });
   }
 
-  function release(reason) {
-    if (state.released) return;
+  function cssTaskIsCompleteIfRequired() {
+    if (!isTaskRequired("css-runtime")) {
+      return true;
+    }
+
+    return isTaskComplete("css-runtime");
+  }
+
+  function shellTaskIsCompleteIfRequired() {
+    if (!isTaskRequired("skhps-shell")) {
+      return true;
+    }
+
+    return isTaskComplete("skhps-shell");
+  }
+
+  function allRequiredTasksComplete() {
+    var tasks = requiredTasks();
+
+    if (!tasks.length) {
+      return false;
+    }
+
+    return tasks.every(function (task) {
+      return isTaskComplete(task);
+    });
+  }
+
+  function checkCssReady() {
+    if (state.cssReady) {
+      return;
+    }
+
+    if (!isTaskRequired("css-runtime")) {
+      return;
+    }
+
+    if (!isTaskComplete("css-runtime")) {
+      return;
+    }
+
+    if (isTaskFailed("css-runtime")) {
+      markCssReady("css-runtime-failed", "WARN");
+      return;
+    }
+
+    markCssReady("css-runtime", "OK");
+  }
+
+  function checkShellReady() {
+    if (state.shellReady) {
+      return;
+    }
+
+    if (!cssTaskIsCompleteIfRequired()) {
+      return;
+    }
+
+    if (!shellTaskIsCompleteIfRequired()) {
+      return;
+    }
+
+    /*
+      新架構中只要有 skhps-shell-loading，就會自動 require skhps-shell。
+      所以 shell 不會只因 css-runtime 完成就過早顯示。
+    */
+    if (isTaskFailed("css-runtime") || isTaskFailed("skhps-shell")) {
+      markShellReady("shell-ready-with-warning", "WARN");
+      return;
+    }
+
+    markShellReady("shell-ready", "OK");
+  }
+
+  function checkPageReady() {
+    if (state.pageReady) {
+      return;
+    }
+
+    if (!allRequiredTasksComplete()) {
+      return;
+    }
+
+    if (hasAnyFailure()) {
+      release("ready-with-failed-tasks", "WARN");
+      return;
+    }
+
+    release("all-ready", "OK");
+  }
+
+  function check() {
+    traceFunction("check", "start", getState());
+
+    checkCssReady();
+    checkShellReady();
+    checkPageReady();
+
+    traceFunction("check", "done", getState());
+  }
+
+  function release(reason, status) {
+    if (state.released) {
+      return;
+    }
+
     var durationMs = Date.now() - state.openedAt;
+
     traceFunction("release", "start", {
       reason: reason || "ready"
     });
@@ -294,234 +466,199 @@
       state.timer = null;
     }
 
-    markShellReady(state.releaseReason, state.releaseReason === "timeout-fallback" ? "WARN" : "OK");
-    markPageReady(state.releaseReason, state.releaseReason === "timeout-fallback" ? "WARN" : "OK");
+    if (!state.cssReady) {
+      markCssReady(state.releaseReason, status || "OK");
+    }
 
-    LOADING_CLASSES.forEach(function (className) {
-      html.classList.remove(className);
-      if (document.body) {
-        document.body.classList.remove(className);
-      }
-    });
+    if (!state.shellReady) {
+      markShellReady(state.releaseReason, status || "OK");
+    }
+
+    if (!state.pageReady) {
+      markPageReady(state.releaseReason, status || "OK");
+    }
+
+    html.classList.remove(GLOBAL_LOADING_CLASS);
+    html.classList.remove(CSS_LOADING_CLASS);
+    html.classList.remove(SHELL_LOADING_CLASS);
+    html.classList.remove(MAIN_LOADING_CLASS);
+
+    if (document.body) {
+      document.body.classList.remove(GLOBAL_LOADING_CLASS);
+      document.body.classList.remove(CSS_LOADING_CLASS);
+      document.body.classList.remove(SHELL_LOADING_CLASS);
+      document.body.classList.remove(MAIN_LOADING_CLASS);
+    }
 
     html.setAttribute("data-skhps-loading-released", "true");
     html.setAttribute("data-skhps-loading-release-reason", state.releaseReason);
 
-    if (runtime() && typeof runtime().done === "function") {
-      runtime().done("loadingGate", {
-        releaseReason: state.releaseReason
-      });
-    }
+    try {
+      if (runtime() && typeof runtime().done === "function") {
+        runtime().done("loadingGate", {
+          releaseReason: state.releaseReason
+        });
+      }
 
-    if (runtime() && typeof runtime().setLoadingGate === "function") {
-      runtime().setLoadingGate({
-        releaseReason: state.releaseReason
-      });
-    }
+      if (runtime() && typeof runtime().setLoadingGate === "function") {
+        runtime().setLoadingGate({
+          required: requiredTasks(),
+          done: doneTasks(),
+          failed: failedTasks(),
+          released: true,
+          releaseReason: state.releaseReason,
+          durationMs: durationMs,
+          cssReady: state.cssReady,
+          shellReady: state.shellReady,
+          pageReady: state.pageReady
+        });
+      }
+    } catch (error) {}
 
     log("released", getState());
-    rlog("OK", "releasePage", state.releaseReason, durationMs);
+    rlog(status || "OK", "releasePage", state.releaseReason, durationMs);
+
+    try {
+      document.dispatchEvent(new CustomEvent("skhps-loading-released", {
+        detail: getState()
+      }));
+    } catch (error) {}
+
     traceFunction("release", "done", {
       reason: state.releaseReason
     });
   }
 
-  function isSpareElement(el) {
-    if (!el || !el.matches) return false;
-    return el.matches(
-      "header, footer, #skhps-header, #skhps-footer, #header, #footer, .skhps-header, .skhps-footer, [data-skhps-loading-spare], #skhps-runtime-panel, script, style, link"
-    );
-  }
-
-  function markLoadingElements() {
-    if (!document.body) return;
-
-    Array.prototype.slice.call(document.body.children || []).forEach(function (el) {
-      if (isSpareElement(el)) {
-        el.classList.add("skhps-loading-spared");
-        el.classList.remove("skhps-loading-gated");
-      } else {
-        el.classList.add("skhps-loading-gated");
-        el.classList.remove("skhps-loading-spared");
-      }
-    });
-  }
-
-  function startSpareObserver() {
-    if (!document.body || window.__SKHPSLoadingSpareObserver) return;
-
-    window.__SKHPSLoadingSpareObserver = new MutationObserver(function () {
-      markLoadingElements();
-    });
-
-    window.__SKHPSLoadingSpareObserver.observe(document.body, {
-      childList: true
-    });
-  }
-
-  function initSpareLoadingElements() {
-    markLoadingElements();
-    startSpareObserver();
-  }
-
-  function check() {
-    if (state.released) return;
-
-    if (isReady()) {
-      release("all-ready");
-    }
-  }
-
-  function require(task) {
+  function requireTask(task) {
     task = normalizeTask(task);
-    if (!task) return;
-    traceFunction("require", "start", {
-      task: task
-    });
-    rlog("RUN", "require", task);
 
-    if (state.released) {
-      log("require ignored after release:", task);
+    if (!task) {
+      return;
+    }
+
+    if (state.released || state.pageReady) {
+      /*
+        all-ready 後不再重新鎖畫面。
+        避免後載模組晚 require 造成畫面 True -> False。
+      */
+      rlog("WARN", "requireAfterReleaseIgnored", task);
       return;
     }
 
     state.required[task] = true;
+    setTaskAttr(task, "required");
     setRuntimeRequired();
-
-    if (!state.done[task]) {
-      setTaskAttr(task, "pending");
-    }
-
+    rlog("RUN", "require", task);
     log("require", task, getState());
-    traceFunction("require", "done", {
-      task: task
-    });
-    check();
   }
 
   function requireMany(tasks) {
-    parseTaskList(tasks).forEach(require);
+    parseTaskList(tasks).forEach(requireTask);
+    check();
   }
 
   function done(task) {
     task = normalizeTask(task);
-    if (!task) return;
-    traceFunction("done", "start", {
-      task: task
-    });
 
-    /*
-      被動模式：
-      如果模組沒有先 require，done 也會自動把此 task 納入判斷。
-      所以只有 CSS 傳進來時，就只等 CSS。
-    */
-    if (!state.required[task]) {
-      require(task);
+    if (!task) {
+      return;
+    }
+
+    if (!isTaskRequired(task)) {
+      requireTask(task);
     }
 
     state.done[task] = true;
-    delete state.failed[task];
+
+    if (state.failed[task]) {
+      delete state.failed[task];
+    }
 
     setTaskAttr(task, "done");
     runtimeTaskDone(task);
-    rlog("OK", "taskDone", task);
-    if (task === "css-runtime") {
-      markShellReady("css-runtime", "OK");
-    }
+    setRuntimeRequired();
+
+    rlog("OK", "done", task);
     log("done", task, getState());
-    traceFunction("done", "done", {
-      task: task
-    });
+
     check();
   }
 
   function fail(task, error) {
     task = normalizeTask(task);
-    if (!task) return;
-    traceFunction("fail", "start", {
-      task: task
-    });
 
-    /*
-      fail 的意思是：
-      這個任務失敗，但錯誤畫面/降級狀態已經 render 完成。
-      所以它也算完成，不能讓整頁永遠 loading。
-    */
-    if (!state.required[task]) {
-      require(task);
+    if (!task) {
+      return;
     }
 
-    state.failed[task] = error && error.message ? error.message : String(error || true);
-    state.done[task] = true;
+    if (!isTaskRequired(task)) {
+      requireTask(task);
+    }
+
+    if (state.done[task]) {
+      /*
+        任務已成功時，後續 fail 不再把成功翻成失敗。
+        避免 true -> false。
+      */
+      rlog("WARN", "failIgnoredAlreadyDone", task);
+      check();
+      return;
+    }
+
+    state.failed[task] = getFailureReason(error);
 
     setTaskAttr(task, "failed");
     runtimeTaskFailed(task, error);
-    warn("task failed:", task, error);
-    if (task === "css-runtime") {
-      markShellReady("css-runtime-failed", "WARN");
-    }
-    rlog("WARN", "taskDone", {
+    setRuntimeRequired();
+
+    rlog("WARN", "fail", {
       task: task,
-      error: error && error.message ? error.message : String(error || true)
+      error: state.failed[task]
     });
-    traceFunction("fail", "error", {
-      task: task,
-      error: error && error.message ? error.message : String(error || true)
-    });
+
+    log("fail", task, error, getState());
+
     check();
   }
 
-  function reset(tasks) {
-    if (state.timer) {
-      window.clearTimeout(state.timer);
-      state.timer = null;
-    }
+  function markPendingTasksFailed(reason) {
+    requiredTasks().forEach(function (task) {
+      if (isTaskComplete(task)) {
+        return;
+      }
 
-    state.required = {};
-    state.done = {};
-    state.failed = {};
-    state.released = false;
-    state.shellReady = false;
-    state.pageReady = false;
-    state.releaseReason = "";
-    state.openedAt = Date.now();
-
-    html.removeAttribute("data-skhps-loading-released");
-    html.removeAttribute("data-skhps-loading-release-reason");
-    html.setAttribute("data-skhps-shell-ready", "false");
-    html.setAttribute("data-skhps-page-ready", "false");
-
-    LOADING_CLASSES.forEach(function (className) {
-      html.classList.add(className);
+      state.failed[task] = reason || "timeout-fallback";
+      setTaskAttr(task, "failed");
+      runtimeTaskFailed(task, reason || "timeout-fallback");
     });
 
-    if (hasUsableCssRuntimeCache()) {
-      state.shellReady = true;
-      html.classList.remove(SHELL_LOADING_CLASS);
-      html.setAttribute("data-skhps-shell-ready", "true");
-      html.setAttribute("data-skhps-shell-ready-reason", "css-runtime-cache");
-    } else {
-      html.classList.add(SHELL_LOADING_CLASS);
+    setRuntimeRequired();
+  }
+
+  function releaseTimeoutFallback() {
+    if (state.released) {
+      return;
     }
 
-    html.classList.add(MAIN_LOADING_CLASS);
+    warn("timeout fallback release", getState());
+    rlog("WARN", "timeoutRelease", getState(), Date.now() - state.openedAt);
 
-    requireMany(tasks || []);
-    setRuntimeRequired();
-    startTimeout();
+    markPendingTasksFailed("timeout-fallback");
+    release("timeout-fallback", "WARN");
+  }
+
+  function startTimeout() {
+    if (state.timer) {
+      return;
+    }
+
+    state.timer = window.setTimeout(releaseTimeoutFallback, DEFAULT_TIMEOUT_MS);
   }
 
   function receive(input) {
-    /*
-      統一接收入口，未來新程式可以只丟狀態進來，不需要知道 gate 內部。
-      支援：
-      - "css-runtime"                         => require
-      - ["css-runtime", "external-app-data"]  => requireMany
-      - { task: "css-runtime", status: "done" }
-      - { task: "x", status: "fail", error: err }
-      - { require: ["a", "b"], done: ["a"], fail: [{ task: "b", error: err }] }
-    */
-    if (!input) return;
+    if (!input) {
+      return;
+    }
 
     if (typeof input === "string" || Array.isArray(input)) {
       requireMany(input);
@@ -534,7 +671,8 @@
       } else if (input.status === "fail" || input.status === "failed") {
         fail(input.task, input.error);
       } else {
-        require(input.task);
+        requireTask(input.task);
+        check();
       }
       return;
     }
@@ -564,18 +702,121 @@
         fail(failures, true);
       }
     }
+
+    check();
   }
 
-  function startTimeout() {
-    if (state.timer) return;
+  function reset() {
+    state.required = {};
+    state.done = {};
+    state.failed = {};
+    state.released = false;
+    state.cssReady = false;
+    state.shellReady = false;
+    state.pageReady = false;
+    state.openedAt = Date.now();
+    state.releaseReason = "";
 
-    state.timer = window.setTimeout(function () {
-      if (state.released) return;
+    if (state.timer) {
+      window.clearTimeout(state.timer);
+      state.timer = null;
+    }
 
-      warn("timeout fallback release", getState());
-      rlog("WARN", "timeoutRelease", getState(), Date.now() - state.openedAt);
-      release("timeout-fallback");
-    }, DEFAULT_TIMEOUT_MS);
+    html.classList.add(GLOBAL_LOADING_CLASS);
+    html.classList.add(CSS_LOADING_CLASS);
+    html.classList.add(SHELL_LOADING_CLASS);
+    html.classList.add(MAIN_LOADING_CLASS);
+
+    html.setAttribute("data-skhps-css-ready", "false");
+    html.setAttribute("data-skhps-shell-ready", "false");
+    html.setAttribute("data-skhps-page-ready", "false");
+    html.removeAttribute("data-skhps-loading-released");
+    html.removeAttribute("data-skhps-loading-release-reason");
+
+    loadInitialTasksFromHtml();
+    startTimeout();
+  }
+
+  function isSpareElement(el) {
+    if (!el || !el.matches) {
+      return false;
+    }
+
+    return el.matches(
+      "header, footer, #skhps-header, #skhps-footer, #header, #footer, .skhps-header, .skhps-footer, [data-skhps-header], [data-skhps-footer], [data-skhps-loading-spare], #skhps-runtime-panel, script, style, link"
+    );
+  }
+
+  function markLoadingElements() {
+    if (!document.body) {
+      return;
+    }
+
+    Array.prototype.slice.call(document.body.children || []).forEach(function (el) {
+      if (isSpareElement(el)) {
+        el.classList.add("skhps-loading-spared");
+        el.classList.remove("skhps-loading-gated");
+      } else {
+        el.classList.add("skhps-loading-gated");
+        el.classList.remove("skhps-loading-spared");
+      }
+    });
+  }
+
+  function startSpareObserver() {
+    if (!document.body || window.__SKHPSLoadingSpareObserver) {
+      return;
+    }
+
+    window.__SKHPSLoadingSpareObserver = new MutationObserver(function () {
+      markLoadingElements();
+    });
+
+    window.__SKHPSLoadingSpareObserver.observe(document.body, {
+      childList: true,
+      subtree: false
+    });
+  }
+
+  function initSpareLoadingElements() {
+    markLoadingElements();
+    startSpareObserver();
+  }
+
+  function setInitialLayerState() {
+    var shouldUseLayeredGate =
+      hasLoadingClass() ||
+      html.hasAttribute("data-skhps-loading-tasks") ||
+      html.hasAttribute("data-loading-tasks") ||
+      html.classList.contains(SHELL_LOADING_CLASS) ||
+      html.classList.contains(MAIN_LOADING_CLASS);
+
+    if (!shouldUseLayeredGate) {
+      return;
+    }
+
+    if (html.getAttribute("data-skhps-css-ready") !== "true") {
+      html.setAttribute("data-skhps-css-ready", "false");
+    } else {
+      state.cssReady = true;
+      html.classList.remove(CSS_LOADING_CLASS);
+    }
+
+    if (html.getAttribute("data-skhps-shell-ready") !== "true") {
+      html.classList.add(SHELL_LOADING_CLASS);
+      html.setAttribute("data-skhps-shell-ready", "false");
+    } else {
+      state.shellReady = true;
+      html.classList.remove(SHELL_LOADING_CLASS);
+    }
+
+    if (html.getAttribute("data-skhps-page-ready") !== "true") {
+      html.classList.add(MAIN_LOADING_CLASS);
+      html.setAttribute("data-skhps-page-ready", "false");
+    } else {
+      state.pageReady = true;
+      html.classList.remove(MAIN_LOADING_CLASS);
+    }
   }
 
   function loadInitialTasksFromHtml() {
@@ -584,13 +825,58 @@
       html.getAttribute("data-loading-tasks") ||
       "";
 
-    rlog("INFO", "requiredTasks", rawTasks || "(none)");
+    rlog("INFO", "requiredTasksFromHtml", rawTasks || "(none)");
+
     requireMany(rawTasks);
+
+    /*
+      新架構：
+      HTML 不手寫 skhps-shell task，
+      但只要頁面一開始有 skhps-shell-loading，就代表 shell 必須完成才能顯示 header/footer。
+      entry-core.js 之後也會再 require("skhps-shell")，這裡先 require 是為了避免 css-runtime 太快完成時 shell 過早釋放。
+    */
+    if (html.classList.contains(SHELL_LOADING_CLASS)) {
+      requireTask("skhps-shell");
+    }
+
+    /*
+      有 skhps-css-loading 代表這頁需要 CSS runtime。
+      即使 HTML 忘了寫 css-runtime，也幫它補上，避免 loading 動畫無人釋放。
+    */
+    if (html.classList.contains(CSS_LOADING_CLASS)) {
+      requireTask("css-runtime");
+    }
+
     setRuntimeRequired();
+    check();
   }
 
+  function shouldStartTimeout() {
+    return hasLoadingClass() ||
+      html.hasAttribute("data-skhps-loading-tasks") ||
+      html.hasAttribute("data-loading-tasks") ||
+      requiredTasks().length > 0;
+  }
+
+  rlog("RUN", "moduleStart", "loading-gate.js");
+  rlog("RUN", "loadingGateStart", {
+    loadingClasses: [
+      CSS_LOADING_CLASS,
+      GLOBAL_LOADING_CLASS,
+      SHELL_LOADING_CLASS,
+      MAIN_LOADING_CLASS
+    ],
+    timeoutMs: DEFAULT_TIMEOUT_MS
+  });
+
+  try {
+    if (window.history && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+  } catch (error) {}
+
   window.SKHPSLoading = {
-    require: require,
+    require: requireTask,
     requireMany: requireMany,
     waitFor: requireMany,
     done: done,
@@ -611,20 +897,15 @@
   } else {
     document.addEventListener("DOMContentLoaded", initSpareLoadingElements);
   }
+
   loadInitialTasksFromHtml();
 
   /*
-    被動模式不再因為「HTML 沒宣告 task」就立刻 release。
-    它會等模組傳入 require/done/fail。
-    若真的沒有任何模組回報，timeout fallback 會避免正式環境永遠白畫面。
+    被動模式：
+    不因為「現在還沒有 done」就立刻 release。
+    由 css-sheet-runtime / entry-core / page-specific scripts 被動回報。
   */
-  if (
-    hasLoadingClass() ||
-    html.classList.contains(SHELL_LOADING_CLASS) ||
-    html.classList.contains(MAIN_LOADING_CLASS) ||
-    html.hasAttribute("data-skhps-loading-tasks") ||
-    html.hasAttribute("data-loading-tasks")
-  ) {
+  if (shouldStartTimeout()) {
     startTimeout();
   }
 

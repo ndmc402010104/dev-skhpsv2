@@ -1,7 +1,15 @@
 ﻿/*
 檔案位置：skhpsv2/assets/js/app-entry.js
 時間戳記：2026-06-16 UTC+8
-用途：外部專案接入 skhpsv2 水庫的共用入口。
+用途：外部專案接入 skhpsv2 水庫的共用入口；只負責辨識外部專案身分，然後交給 entry-core.js。
+
+責任切分：
+- 本檔是 external-app adapter。
+- 不動態插入 loading style。
+- loading 階段樣式由唯一固定 CSS：assets/CSS/skhps-loading.css 管理。
+- 共通 JS 載入順序、shell/main 分層、header/footer/main release 由 entry-core.js + loading-gate.js 管理。
+- 外部專案資訊由 app-card.json / version.js / window.SKHPS_APP_CONFIG 合併。
+- registerExternalApp 是背景報到，不擋畫面。
 */
 
 (function () {
@@ -10,70 +18,29 @@
   var currentScript = document.currentScript;
   var SOURCE = "app-entry.js";
 
-  function installEntryLoadingGuard() {
-    var html = document.documentElement;
-    var styleId = "skhps-entry-loading-guard";
-    var style;
-
-    html.classList.add("skhps-loading");
-    html.classList.add("skhps-css-loading");
-    html.classList.add("skhps-main-loading");
-    html.setAttribute("data-skhps-entry-guard", "true");
-
-    if (document.getElementById(styleId)) {
-      return;
-    }
-
-    style = document.createElement("style");
-    style.id = styleId;
-    style.setAttribute("data-skhps-entry-guard-style", "true");
-    style.textContent = [
-      "html.skhps-loading body > header,",
-      "html.skhps-loading body > main,",
-      "html.skhps-loading body > footer,",
-      "html.skhps-css-loading body > header,",
-      "html.skhps-css-loading body > main,",
-      "html.skhps-css-loading body > footer,",
-      "html.skhps-main-loading body > header,",
-      "html.skhps-main-loading body > main,",
-      "html.skhps-main-loading body > footer {",
-      "  opacity: 0 !important;",
-      "  visibility: hidden !important;",
-      "}",
-      "",
-      "html.skhps-loading,",
-      "html.skhps-css-loading,",
-      "html.skhps-main-loading {",
-      "  background: #eef3f8;",
-      "}",
-      "",
-      "html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading) body > header,",
-      "html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading) body > main,",
-      "html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading) body > footer {",
-      "  opacity: 1;",
-      "  visibility: visible;",
-      "}"
-    ].join("\n");
-
-    document.head.appendChild(style);
-  }
-
-  function onDomReady(fn) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", fn, { once: true });
-      return;
-    }
-
-    fn();
-  }
-
-  installEntryLoadingGuard();
-
   var ALLOWED_ENVS = {
     "local-dev": true,
     dev: true,
     prod: true
   };
+
+  function installMinimalLoadingClasses() {
+    var html = document.documentElement;
+
+    html.classList.add("skhps-loading");
+    html.classList.add("skhps-css-loading");
+    html.classList.add("skhps-shell-loading");
+    html.classList.add("skhps-main-loading");
+    html.setAttribute("data-skhps-entry-guard", "true");
+
+    if (html.getAttribute("data-skhps-shell-ready") !== "true") {
+      html.setAttribute("data-skhps-shell-ready", "false");
+    }
+
+    if (html.getAttribute("data-skhps-page-ready") !== "true") {
+      html.setAttribute("data-skhps-page-ready", "false");
+    }
+  }
 
   function earlyRuntimeLog(status, action, detail, durationMs) {
     try {
@@ -216,9 +183,10 @@
     }
 
     if (
-      host === "dev-skhps.jonaminz.com" ||
       host.indexOf("dev-") === 0 ||
-      host.indexOf("dev-skhps") >= 0
+      host.indexOf("dev.") === 0 ||
+      host.indexOf("dev-skhps") >= 0 ||
+      host === "dev-skhps.jonaminz.com"
     ) {
       return "dev";
     }
@@ -298,6 +266,29 @@
     });
   }
 
+  function releaseAllForEntryFailure(error) {
+    var html = document.documentElement;
+
+    html.classList.remove("skhps-css-loading");
+    html.classList.remove("skhps-loading");
+    html.classList.remove("skhps-shell-loading");
+    html.classList.remove("skhps-main-loading");
+
+    html.setAttribute("data-skhps-css-ready", "false");
+    html.setAttribute("data-skhps-shell-ready", "true");
+    html.setAttribute("data-skhps-shell-ready-reason", "app-entry-failed");
+    html.setAttribute("data-skhps-page-ready", "true");
+    html.setAttribute("data-skhps-page-ready-reason", "app-entry-failed");
+
+    try {
+      document.dispatchEvent(new CustomEvent("skhps-app-entry-failed", {
+        detail: {
+          error: error && error.message ? error.message : String(error || "")
+        }
+      }));
+    } catch (eventError) {}
+  }
+
   function markFailed(error) {
     console.error("[SKHPSAppEntry]", error);
     earlyRuntimeLog("FAIL", "appEntryFailed", error && error.message ? error.message : String(error));
@@ -307,12 +298,7 @@
       return;
     }
 
-    document.documentElement.classList.remove("skhps-css-loading");
-    document.documentElement.classList.remove("skhps-loading");
-    document.documentElement.classList.remove("skhps-shell-loading");
-    document.documentElement.classList.remove("skhps-main-loading");
-    document.documentElement.setAttribute("data-skhps-shell-ready", "true");
-    document.documentElement.setAttribute("data-skhps-page-ready", "true");
+    releaseAllForEntryFailure(error);
   }
 
   function mergeObjects(base, override) {
@@ -338,7 +324,7 @@
   }
 
   function getAppCardUrl() {
-    var url = window.SKHPS_APP_CARD_URL || "";
+    var url = window.SKHPS_APP_CARD_URL || window.SKHPS_APP_MANIFEST_URL || "";
 
     if (!url) {
       return "";
@@ -354,9 +340,12 @@
       return Promise.resolve({});
     }
 
+    earlyRuntimeLog("RUN", "loadAppCard", cardUrl);
+
     return fetchJson(cardUrl).then(function (card) {
       window.SKHPS_APP_CARD = card || {};
       window.SKHPS_APP_CARD_URL_RESOLVED = cardUrl;
+      earlyRuntimeLog("OK", "loadAppCard", cardUrl);
       return card || {};
     });
   }
@@ -380,6 +369,7 @@
       })
       .catch(function (error) {
         console.warn("[SKHPSAppEntry] version.js load failed:", error);
+        earlyRuntimeLog("WARN", "versionLoadFailed", error && error.message ? error.message : String(error));
         return null;
       });
   }
@@ -476,15 +466,19 @@
 
     if (!window.SKHPSBackend || typeof window.SKHPSBackend.call !== "function") {
       console.warn("[SKHPSAppEntry] registerExternalApp skipped: SKHPSBackend.call not available");
+      earlyRuntimeLog("WARN", "registerExternalAppSkipped", "SKHPSBackend.call not available");
       return;
     }
 
-    payload = normalizeRegisterPayload(options);
+    payload = normalizeRegisterPayload(options || {});
 
     if (!payload.appId || !payload.title || !payload.href) {
       console.warn("[SKHPSAppEntry] registerExternalApp skipped: missing appId/title/href", payload);
+      earlyRuntimeLog("WARN", "registerExternalAppSkipped", "missing appId/title/href");
       return;
     }
+
+    earlyRuntimeLog("RUN", "registerExternalApp", payload.appId);
 
     window.SKHPS_EXTERNAL_APP_REGISTER_PROMISE = window.SKHPSBackend
       .call("registerExternalApp", payload, {
@@ -492,11 +486,13 @@
       })
       .then(function (result) {
         window.SKHPS_EXTERNAL_APP_REGISTER_RESULT = result;
+        earlyRuntimeLog("OK", "registerExternalApp", payload.appId);
         return result;
       })
       .catch(function (error) {
         window.SKHPS_EXTERNAL_APP_REGISTER_ERROR = error;
         console.warn("[SKHPSAppEntry] registerExternalApp failed:", error);
+        earlyRuntimeLog("WARN", "registerExternalAppFailed", error && error.message ? error.message : String(error));
         return {
           ok: false,
           error: error && error.message ? error.message : String(error)
@@ -509,6 +505,8 @@
     var sharedBaseUrl = normalizeBaseUrl(window.SKHPS_ENTRY_BASE_URL || inferSharedBaseUrl());
     var appBaseUrl = inferAppBaseUrl();
     var coreVersion = String(window.SKHPS_ENTRY_VERSION || getEntryVersion() || "").trim();
+
+    installMinimalLoadingClasses();
 
     if (!sharedBaseUrl || sharedBaseUrl === "/") {
       throw new Error("shared base url missing");
@@ -574,6 +572,15 @@
 
         window.SKHPS_APP_ENTRY_LOADED = true;
 
+        earlyRuntimeLog("RUN", "init", {
+          appId: appId,
+          env: env,
+          sharedBaseUrl: sharedBaseUrl,
+          appBaseUrl: appBaseUrl,
+          appVersion: appVersion,
+          afterScripts: appConfig.afterScripts || []
+        });
+
         return loadEntryCore(sharedBaseUrl, coreVersion)
           .then(function () {
             return window.SKHPSEntryCore.load({
@@ -585,36 +592,35 @@
               coreVersion: coreVersion,
               specificBaseUrl: appBaseUrl,
               specificVersion: appVersion || coreVersion,
-              coreScripts: appConfig.coreScripts || null,
               specificScripts: appConfig.afterScripts || [],
-              failureTask: "app-entry",
-              beforeSpecific: registerExternalAppIfNeeded
+              coreScripts: appConfig.coreScripts || null,
+              failureTask: appId || "external-app"
             });
+          })
+          .then(function (options) {
+            /*
+              registerExternalApp 需要 backend-client.js 已經由 entry-core 載好。
+              這裡只啟動背景 promise，不等待、不擋畫面。
+            */
+            registerExternalAppIfNeeded(window.SKHPS_APP_ENV);
+
+            document.dispatchEvent(new CustomEvent("skhps-app-entry-ready", {
+              detail: options || window.SKHPS_APP_ENV
+            }));
+
+            return options;
           });
-      })
-      .then(function (options) {
-        window.SKHPS_BOOTSTRAP_LOADED = true;
-        window.SKHPS_EXTERNAL_APP_LOADER_LOADED = true;
-
-        try {
-          document.dispatchEvent(new CustomEvent("skhps-bootstrap-ready", { detail: options }));
-          document.dispatchEvent(new CustomEvent("skhps-external-app-loader-ready", { detail: options }));
-          document.dispatchEvent(new CustomEvent("skhps-app-entry-ready", { detail: options }));
-        } catch (error) {}
-
-        return options;
       });
   }
 
   window.SKHPSAppEntry = {
     init: init,
     getRuntimeParam: getRuntimeParam,
-    inferEnvFromPageLocation: inferEnvFromPageLocation
+    inferEnvFromPageLocation: inferEnvFromPageLocation,
+    loadAppCard: loadAppCard,
+    loadVersionForCard: loadVersionForCard
   };
 
-  earlyRuntimeLog("OK", "moduleReady", "app-entry.js");
-
-  onDomReady(function () {
-    init().catch(markFailed);
-  });
+  installMinimalLoadingClasses();
+  init().catch(markFailed);
 })();

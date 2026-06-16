@@ -1,294 +1,559 @@
 <!DOCTYPE html>
+
 <!--
 檔案位置：skhpsv2/新專案指南/外部網頁模板.html
-用途：建立新的 SKHPS 外部 App 時可複製的最小 HTML 模板。
+時間戳記：2026-06-16 UTC+8
+用途：SKHPS 外部 App 接入 skhpsv2 水庫的 HTML 說明文件。
 
-此檔不是 skhpsv2 主站頁面，也不是要直接在 skhpsv2 裡正式使用。
-此檔本身是 viewer 文件，不要整檔複製到外部專案。
-請依 body 內的 index.html head / body script / app-card / app.js 範本建立必要檔案。
-標準模式是：HTML 只設定 runtime 與 app-card.json 位置；App 資訊、afterScripts、href 交給 app-card.json，版本交給 version.js。
+注意：
+- 此檔是說明文件，不是正式外部 App。
+- 此檔不是 smoke test。
+- 真正 smoke test 專案之後另外建立。
+- 本檔只把可複製的 index.html / app-card.json / version.js / assets/js/app.js 範本用文字寫在頁面裡。
 -->
-<html
-  lang="zh-Hant"
-  class="skhps-css-loading"
-  data-loading-title="外部 App"
-  data-skhps-page-id="external-app-template"
-  data-skhps-page-map-current="外部 App 模板"
-  data-skhps-loading-tasks="css-runtime"
->
+
+<html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>外部 App</title>
-
-  <script src="assets/js/loading-cache-probe.js?v=20260612"></script>
-  <link rel="stylesheet" href="uni-CSS.CSS?v=202606141725">
+  <title>SKHPS 外部 App 接入模板</title>
 </head>
 
-<body class="skhps-body">
-  <header id="header" class="skhps-header" data-skhps-header></header>
+<body>
+  <main>
+    <h1>SKHPS 外部 App 接入模板</h1>
 
-  <main class="skhps-page">
-    <div class="skhps-container">
-      <section class="skhps-hero" aria-labelledby="appTitle">
-        <div class="skhps-hero-card">
-          <p class="skhps-eyebrow">External App</p>
-          <h1 id="appTitle" class="skhps-page-title">外部 App</h1>
-          <p class="skhps-page-subtitle">
-            這是一份外部 App 起手模板。請先複製到新專案，再建立 app-card.json、version.js 和 assets/js/app.js。
-          </p>
-        </div>
-      </section>
+```
+<p>
+  這份檔案是外部專案接入 skhpsv2 水庫的文字說明文件。
+  它不是正式外部 App，也不是 smoke test。
+  真正 smoke test 專案之後另外建立。
+</p>
 
-      <section class="skhps-section" aria-labelledby="newProjectChecklistTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">New Project Checklist</p>
-            <h2 id="newProjectChecklistTitle" class="skhps-section-title">開新外部專案還需要做的事</h2>
-          </div>
-        </div>
+<h2>核心規則</h2>
 
-        <div class="skhps-hero-card">
-          <ol>
-            <li>建立新的外部專案資料夾，例如 your-app。</li>
-            <li>依本頁 index.html head / body script 範本建立外部專案的 index.html，不要整檔複製此 viewer 文件。</li>
-            <li>在 HTML 裡只設定 runtime resolver、SKHPS_ENTRY_BASE_URL、SKHPS_ENTRY_VERSION、SKHPS_APP_CARD_URL。</li>
-            <li>在 app-card.json 裡設定 appId、title、group、order、href、afterScripts、registerExternalApp。</li>
-            <li>確認 data-skhps-loading-tasks 內的 app-ready 和 app.js 呼叫的 loading task 名稱一致。</li>
-            <li>建立 assets/js/app.js，內容可先使用下方最小範本。</li>
-            <li>建立 version.js，透過 window.SKHPS_VERSION 提供目前外部 App 版本。</li>
-            <li>外部 App 只直接載入 app-entry.js；不要直接載入 external-app-loader.js。</li>
-            <li>不要在外部 App 自己再載入 config.js、loading-gate.js、backend-client.js、css-sheet-runtime.js、header.js、footer.js。</li>
-            <li>如果需要後端功能，新增 Apps Script action，前端用 SKHPSBackend.call("actionName", payload)。</li>
-            <li>部署後確認 app-entry.js、external-app-loader.js、header、footer、CSS runtime、backend、afterScripts 都有載入成功。</li>
-            <li>CSS 如果還在吃 cache，可點 footer 的 CSS 狀態燈強迫重讀 Sheet。</li>
-          </ol>
-        </div>
-      </section>
+<pre>外部 App 只直接載入：
+```
 
-      <section class="skhps-section" aria-labelledby="fileStructureTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">Files</p>
-            <h2 id="fileStructureTitle" class="skhps-section-title">最小檔案結構</h2>
-          </div>
-        </div>
+1. skhpsv2/assets/CSS/skhps-loading.css
+2. skhpsv2/assets/js/app-entry.js
 
-        <div class="skhps-hero-card">
-          <pre class="skhps-code-block">your-app/
-  index.html
-  app-card.json
-  version.js
-  assets/
-    js/
-      app.js</pre>
-        </div>
-      </section>
+外部 App 不直接載入：
+runtime.js
+loading-gate.js
+config.js
+route.js
+backend-client.js
+css-sheet-runtime.js
+header.js
+page-map.js
+footer.js
+entry-core.js
 
-      <section class="skhps-section" aria-labelledby="headSnippetTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">index.html head</p>
-            <h2 id="headSnippetTitle" class="skhps-section-title">head 最小呼叫範本</h2>
-          </div>
-        </div>
+正式 CSS：
+CSS Sheet / css-sheet-runtime.js / cache
 
-        <div class="skhps-hero-card">
-          <pre class="skhps-code-block">&lt;script&gt;
+唯一 loading CSS：
+skhpsv2/assets/CSS/skhps-loading.css</pre>
+
+```
+<h2>Loading 狀態分工</h2>
+
+<pre>skhps-loading
+```
+
+loading 畫面總開關
+只有 page ready / all-ready 才移除
+
+skhps-css-loading
+CSS Sheet runtime 尚未完成
+CSS ready 後可以先移除
+但 loading 畫面不會因此關閉
+
+skhps-shell-loading
+header / footer shell 尚未完成
+shell ready 後可以先移除
+但只要 skhps-loading 還在，畫面仍不露出
+
+skhps-main-loading
+main / page content 尚未完成
+page ready 後移除</pre>
+
+```
+<h2>正確流程</h2>
+
+<pre>1. 進頁面
+```
+
+skhps-loading
+skhps-css-loading
+skhps-shell-loading
+skhps-main-loading
+
+2. CSS ready
+   移除 skhps-css-loading
+   loading 畫面繼續顯示
+
+3. Shell ready
+   移除 skhps-shell-loading
+   header/footer 已 ready
+   但仍被 skhps-loading 擋住
+
+4. Page ready / all-ready
+   移除 skhps-main-loading
+   移除 skhps-loading
+   loading 畫面關閉
+   header/footer/main 一起出現</pre>
+
+    <h2>最小檔案結構</h2>
+
+    <pre>your-app/
+
+index.html
+app-card.json
+version.js
+assets/
+js/
+app.js</pre>
+
+```
+<h2>index.html 範本</h2>
+
+<pre>&lt;!DOCTYPE html&gt;
+```
+
+<!--
+檔案位置：YOUR_EXTERNAL_APP/index.html
+用途：SKHPS 外部 App 最小入口模板。
+
+水庫法則：
+
+* 本頁是外部 App，不是 skhpsv2 主體頁。
+* 本頁只直接載入：
+
+  1. skhpsv2/assets/CSS/skhps-loading.css
+  2. skhpsv2/assets/js/app-entry.js
+* 本頁不直接載入 runtime/config/backend/css/header/footer。
+* 正式 CSS 由 CSS Sheet runtime / cache 負責。
+* loading 階段由唯一 skhps-loading.css 負責。
+  -->
+  <html
+  lang="zh-Hant"
+  class="skhps-loading skhps-css-loading skhps-shell-loading skhps-main-loading"
+  data-loading-title="YOUR_APP_TITLE"
+  data-skhps-entry-scope="external-app"
+  data-skhps-page-id="YOUR_APP_ID"
+  data-skhps-page-map-current="YOUR_APP_TITLE"
+  data-skhps-loading-tasks="css-runtime,app-ready"
+  data-skhps-shell-ready="false"
+  data-skhps-page-ready="false"
+  >
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>YOUR_APP_TITLE</title>
+
+  <script>
   (function () {
-    "use strict";
-
-    var host = String(location.hostname || "").toLowerCase();
-    var params = new URLSearchParams(location.search || "");
-    var runtime = String(params.get("skhpsRuntime") || "").trim();
-    var isLocal = host === "127.0.0.1" || host === "localhost" || host === "";
-    var allowedRuntime = { "local-dev": true, dev: true, prod: true };
-
-    function runtimeBaseUrl(value) {
-      if (value === "local-dev") return "http://127.0.0.1:5500/skhpsv2/";
-      if (value === "dev") return "https://dev-skhps.jonaminz.com/";
-      return "https://skhps.jonaminz.com/";
-    }
-
-    function currentRuntime() {
-      if (isLocal) return "local-dev";
-      if (allowedRuntime[runtime]) return runtime;
-      return "prod";
-    }
-
-    var resolvedRuntime = currentRuntime();
-
-    window.SKHPS_ENTRY_VERSION = "202606141725";
-    window.SKHPS_ENTRY_BASE_URL = runtimeBaseUrl(resolvedRuntime);
-    window.SKHPS_APP_CARD_URL = "app-card.json";
-
-    document.documentElement.setAttribute("data-skhps-runtime", resolvedRuntime);
-
-    document.write(
-      '&lt;link rel="stylesheet" href="' +
-      window.SKHPS_ENTRY_BASE_URL +
-      'uni-CSS.CSS?v=' +
-      encodeURIComponent(window.SKHPS_ENTRY_VERSION) +
-      '"&gt;'
-    );
-  })();
-&lt;/script&gt;</pre>
-        </div>
-      </section>
-
-      <section class="skhps-section" aria-labelledby="appJsTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">assets/js/app.js</p>
-            <h2 id="appJsTitle" class="skhps-section-title">最小 app.js 範本</h2>
-          </div>
-        </div>
-
-        <div class="skhps-hero-card">
-          <pre class="skhps-code-block">(function () {
   "use strict";
 
-  var APP_READY_TASK = "app-ready";
+  ```
+  var ENTRY_VERSION = "2026061611";
+  var APP_CARD_URL = "app-card.json";
 
-  function loadingDone(task) {
-    if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
-      window.SKHPSLoading.done(task);
-      return;
+  var host = String(location.hostname || "").toLowerCase();
+  var params = new URLSearchParams(location.search || "");
+  var runtime = String(params.get("skhpsRuntime") || params.get("runtime") || "").trim();
+
+  var allowedRuntime = {
+    "local-dev": true,
+    dev: true,
+    prod: true
+  };
+
+  function runtimeBaseUrl(value) {
+    if (value === "local-dev") {
+      return "http://127.0.0.1:5500/skhpsv2/";
     }
 
-    document.documentElement.classList.remove("skhps-css-loading");
-    document.documentElement.classList.remove("skhps-loading");
-  }
-
-  function loadingFail(task, error) {
-    if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
-      window.SKHPSLoading.fail(task, error);
-      return;
+    if (value === "dev") {
+      return "https://dev-skhps.jonaminz.com/";
     }
 
-    document.documentElement.classList.remove("skhps-css-loading");
-    document.documentElement.classList.remove("skhps-loading");
+    return "https://skhps.jonaminz.com/";
   }
 
-  function init() {
-    try {
-      /*
-        在這裡初始化你的外部 App。
-        如果需要後端資料，可以用：
-        SKHPSBackend.call("actionName", {});
-      */
-      loadingDone(APP_READY_TASK);
-    } catch (error) {
-      console.error(error);
-      loadingFail(APP_READY_TASK, error);
+  function currentRuntime() {
+    if (host === "127.0.0.1" || host === "localhost" || host === "") {
+      return "local-dev";
     }
+
+    if (allowedRuntime[runtime]) {
+      return runtime;
+    }
+
+    if (
+      host.indexOf("dev-") === 0 ||
+      host.indexOf("dev.") === 0 ||
+      host.indexOf("dev-skhps") &gt;= 0
+    ) {
+      return "dev";
+    }
+
+    return "prod";
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
-})();</pre>
-        </div>
-      </section>
+  var resolvedRuntime = currentRuntime();
 
-      <section class="skhps-section" aria-labelledby="versionJsTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">version.js</p>
-            <h2 id="versionJsTitle" class="skhps-section-title">最小 version.js 範本</h2>
-          </div>
-        </div>
+  window.SKHPS_ENTRY_VERSION = ENTRY_VERSION;
+  window.SKHPS_ENTRY_BASE_URL = runtimeBaseUrl(resolvedRuntime);
+  window.SKHPS_APP_CARD_URL = APP_CARD_URL;
 
-        <div class="skhps-hero-card">
-          <pre class="skhps-code-block">window.SKHPS_VERSION = {
-  appId: "your-app-id",
-  version: "v0.1.0-20260612",
-  major: 0,
-  minor: 1,
-  patch: 0,
-  buildTime: "20260612",
-  updatedAt: "2026-06-12T00:00:00+08:00",
-  source: "version.js"
-};</pre>
-        </div>
-      </section>
+  document.documentElement.setAttribute("data-skhps-runtime", resolvedRuntime);
+  document.documentElement.setAttribute("data-skhps-entry-scope", "external-app");
 
-      <section class="skhps-section" aria-labelledby="appCardTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">app-card.json</p>
-            <h2 id="appCardTitle" class="skhps-section-title">app-card.json 範本</h2>
-          </div>
-        </div>
+  document.write(
+    '&lt;link rel="stylesheet" href="' +
+    window.SKHPS_ENTRY_BASE_URL +
+    'assets/CSS/skhps-loading.css?v=' +
+    encodeURIComponent(window.SKHPS_ENTRY_VERSION) +
+    '"&gt;'
+  );
 
-        <div class="skhps-hero-card">
-          <p class="skhps-page-subtitle">
-            app-entry.js 會讀取 app-card.json，建立 SKHPS_APP_CONFIG / SKHPS_APP_ENV，再交給 external-app-loader.js 載入共用 runtime。
-          </p>
-          <pre class="skhps-code-block">{
-  "appId": "your-app-id",
-  "title": "外部 App",
-  "group": "未分類",
-  "order": 9999,
-  "registerExternalApp": true,
-  "versionUrl": "version.js",
-  "afterScripts": [
-    "assets/js/app.js"
-  ],
-  "href": {
-    "local-dev": "http://127.0.0.1:5500/your-app/",
-    "dev": "https://your-app.example.com/",
-    "prod": "https://your-app.example.com/"
-  }
-}</pre>
-        </div>
-      </section>
+  document.write(
+    '&lt;script src="' +
+    window.SKHPS_ENTRY_BASE_URL +
+    'assets/js/app-entry.js?v=' +
+    encodeURIComponent(window.SKHPS_ENTRY_VERSION) +
+    '"&gt;&lt;\/script&gt;'
+  );
+  ```
 
-      <section class="skhps-section" aria-labelledby="bodyScriptTitle">
-        <div class="skhps-section-head">
-          <div>
-            <p class="skhps-eyebrow">index.html body script</p>
-            <h2 id="bodyScriptTitle" class="skhps-section-title">body 最小載入 app-entry.js</h2>
-          </div>
-        </div>
-
-        <div class="skhps-hero-card">
-          <pre class="skhps-code-block">&lt;script&gt;
-  (function () {
-    "use strict";
-
-    var script = document.createElement("script");
-    script.src =
-      window.SKHPS_ENTRY_BASE_URL +
-      "assets/js/app-entry.js?v=" +
-      encodeURIComponent(window.SKHPS_ENTRY_VERSION);
-    script.async = false;
-    document.head.appendChild(script);
   })();
-&lt;/script&gt;</pre>
-        </div>
-      </section>
-    </div>
+  </script>
+  </head>
+
+<body class="skhps-body">
+<header id="header" class="skhps-header" data-skhps-header></header>
+
+<main class="skhps-page" data-skhps-main>
+<div class="skhps-container">
+<section class="skhps-hero" aria-labelledby="appTitle">
+<div class="skhps-hero-card">
+<p class="skhps-eyebrow">External App</p>
+<h1 id="appTitle" class="skhps-page-title">YOUR_APP_TITLE</h1>
+<p class="skhps-page-subtitle">
+這是 SKHPS 外部 App。共用框架、CSS runtime、header、footer、backend client 由 skhpsv2 水庫載入。
+</p>
+</div>
+</section>
+
+```
+  &lt;section class="skhps-section" aria-labelledby="appContentTitle"&gt;
+    &lt;div class="skhps-section-head"&gt;
+      &lt;div&gt;
+        &lt;p class="skhps-eyebrow"&gt;App Content&lt;/p&gt;
+        &lt;h2 id="appContentTitle" class="skhps-section-title"&gt;外部 App 內容&lt;/h2&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;div class="skhps-hero-card"&gt;
+      &lt;p class="skhps-page-subtitle" data-app-status&gt;
+        App 初始化中...
+      &lt;/p&gt;
+
+      &lt;div data-app-root&gt;
+        &lt;!-- assets/js/app.js 可以接管這裡 --&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+&lt;/div&gt;
+```
+
+</main>
+
+<footer id="footer" data-skhps-footer class="skhps-footer">
+Footer 載入中...
+</footer>
+</body>
+</html></pre>
+
+```
+<h2>app-card.json 範本</h2>
+
+<pre>{
+```
+
+"appId": "your-app-id",
+"title": "外部 App",
+"group": "未分類",
+"order": 9999,
+"registerExternalApp": true,
+"versionUrl": "version.js",
+"afterScripts": [
+"assets/js/app.js"
+],
+"href": {
+"local-dev": "http://127.0.0.1:5500/your-app/?skhpsRuntime=local-dev",
+"dev": "https://your-app.skhps.jonaminz.com/?skhpsRuntime=dev",
+"prod": "https://your-app.skhps.jonaminz.com/?skhpsRuntime=prod"
+}
+}</pre>
+
+```
+<h2>version.js 範本</h2>
+
+<pre>window.SKHPS_VERSION = {
+```
+
+appId: "your-app-id",
+version: "v0.1.0-20260616",
+major: 0,
+minor: 1,
+patch: 0,
+buildTime: "20260616",
+updatedAt: "2026-06-16T00:00:00+08:00",
+source: "version.js"
+};</pre>
+
+```
+<h2>assets/js/app.js 範本</h2>
+
+<pre>/*
+```
+
+檔案位置：YOUR_EXTERNAL_APP/assets/js/app.js
+用途：外部 App 自己的業務入口。
+*/
+
+(function () {
+"use strict";
+
+var READY_TASK = "app-ready";
+
+function loadingDone(task) {
+document.documentElement.setAttribute("data-skhps-" + task + "-ready", "true");
+
+```
+if (window.SKHPSLoading &amp;&amp; typeof window.SKHPSLoading.done === "function") {
+  window.SKHPSLoading.done(task);
+  return;
+}
+
+document.documentElement.classList.remove("skhps-loading");
+document.documentElement.classList.remove("skhps-css-loading");
+document.documentElement.classList.remove("skhps-shell-loading");
+document.documentElement.classList.remove("skhps-main-loading");
+document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+document.documentElement.setAttribute("data-skhps-page-ready", "true");
+```
+
+}
+
+function loadingFail(task, error) {
+document.documentElement.setAttribute("data-skhps-" + task + "-ready", "false");
+
+```
+if (window.SKHPSLoading &amp;&amp; typeof window.SKHPSLoading.fail === "function") {
+  window.SKHPSLoading.fail(task, error);
+  return;
+}
+
+document.documentElement.classList.remove("skhps-loading");
+document.documentElement.classList.remove("skhps-css-loading");
+document.documentElement.classList.remove("skhps-shell-loading");
+document.documentElement.classList.remove("skhps-main-loading");
+document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+document.documentElement.setAttribute("data-skhps-page-ready", "true");
+```
+
+}
+
+function setStatus(text) {
+var el = document.querySelector("[data-app-status]");
+if (el) {
+el.textContent = text;
+}
+}
+
+function init() {
+try {
+setStatus("App 已初始化。");
+
+```
+  /*
+    App 初始化放這裡。
+
+    如需後端：
+    SKHPSBackend.call("actionName", payload).then(...)
+
+    如需 AJAX module：
+    由本檔自行載入 assets/js/ajax/*.js。
+  */
+
+  loadingDone(READY_TASK);
+} catch (error) {
+  console.error(error);
+  setStatus("App 初始化失敗。");
+  loadingFail(READY_TASK, error);
+}
+```
+
+}
+
+if (document.readyState === "loading") {
+document.addEventListener("DOMContentLoaded", init, { once: true });
+} else {
+init();
+}
+})();</pre>
+
+```
+<h2>Loading Gate 規則</h2>
+
+<pre>外部 App 的 html 必須宣告：
+```
+
+data-skhps-loading-tasks="css-runtime,app-ready"
+
+css-runtime：
+由 css-sheet-runtime.js 回報。
+
+app-ready：
+由外部 App 自己的 assets/js/app.js 回報。
+
+App 初始化完成：
+SKHPSLoading.done("app-ready");
+
+App 初始化失敗但仍要放行：
+SKHPSLoading.fail("app-ready", error);</pre>
+
+```
+<h2>CSS 原則</h2>
+
+<pre>正式畫面樣式：
+```
+
+CSS Sheet / css-sheet-runtime.js / cache
+
+唯一獨立 CSS：
+skhpsv2/assets/CSS/skhps-loading.css
+
+外部 App 不應：
+
+* 不寫大量 inline style
+* 不複製 skhpsv2 共通 CSS
+* 不自己載 CSS runtime
+* 不自己管理 header/footer 樣式
+
+外部 App 可以使用既有語意 class：
+skhps-page
+skhps-container
+skhps-hero
+skhps-hero-card
+skhps-section
+skhps-section-head
+skhps-page-title
+skhps-page-subtitle
+skhps-btn</pre>
+
+```
+<h2>後端原則</h2>
+
+<pre>外部 App 需要後端時，前端統一呼叫：
+```
+
+SKHPSBackend.call("actionName", payload);
+
+不要在外部 App repo 複製：
+backend-client.js
+config.js
+Apps Script router
+共通 action wrapper
+
+外部 App 可以有自己的後端 action / Sheet / database。
+但前端呼叫入口仍然走水庫提供的 SKHPSBackend.call()。</pre>
+
+```
+<h2>Registry / 啟用 / 顯示位置</h2>
+
+<pre>外部 App 不自己決定：
+```
+
+是否啟用
+顯示在前台或後台
+排序
+顯示群組最終位置
+哪個環境開放
+是否出現在首頁
+
+這些由 skhpsv2 後台 registry 管理。
+
+外部 App 的 app-card.json 只提供：
+appId
+title
+group 初始分類
+order 初始排序
+href
+versionUrl
+afterScripts
+registerExternalApp</pre>
+
+```
+<h2>Smoke test 待辦</h2>
+
+<pre>真正外部 smoke test 專案之後再建立。
+```
+
+建議 smoke 專案名稱：
+skhps-external-smoke
+
+最小驗證項目：
+
+1. 外部 index.html 只直接載入 skhps-loading.css + app-entry.js
+2. app-entry.js 成功讀 app-card.json
+3. app-entry.js 成功讀 version.js
+4. entry-core.js 成功載入共通 runtime
+5. css-sheet-runtime.js 成功回報 css-runtime
+6. header/footer 成功掛載
+7. entry-core.js 成功 done("skhps-shell")
+8. assets/js/app.js 成功 done("app-ready")
+9. loading 畫面等 all-ready 後才關
+10. header/footer/main 一起出現
+11. registerExternalApp 背景報到失敗時不阻塞頁面
+12. footer CSS 按鈕可清 cache + reload</pre>
+
+    <h2>常見錯誤</h2>
+
+    <pre>錯誤 1：
+
+外部 App 自己直接載入 runtime.js / loading-gate.js / backend-client.js / css-sheet-runtime.js / header.js / footer.js。
+
+正確：
+外部 App 只直接載入 app-entry.js。
+
+錯誤 2：
+loading 動畫跟 skhps-css-loading 綁死。
+
+正確：
+skhps-loading 是 loading 畫面總開關。
+skhps-css-loading 只代表 CSS runtime 未完成。
+
+錯誤 3：
+Shell ready 後 header/footer 先露出。
+
+正確：
+Shell ready 只代表 header/footer 已完成。
+畫面仍被 skhps-loading 擋住。
+Page ready 後 header/footer/main 一起出現。
+
+錯誤 4：
+忘記呼叫 app-ready。
+
+正確：
+assets/js/app.js 初始化完成後必須呼叫：
+SKHPSLoading.done("app-ready");</pre>
+
   </main>
-
-  <footer data-skhps-footer class="skhps-footer">
-    Footer 載入中...
-  </footer>
-
-  <!--
-    Viewer-only:
-    這幾支 script 只讓此模板檔在 skhpsv2 裡可以用共用樣式閱讀。
-    複製成真正外部 App 時，不要複製這段；請使用上方「head 最小呼叫範本」裡的 app-entry.js。
-  -->
-  <script src="assets/js/runtime.js?v=202606141725"></script>
-  <script src="assets/js/loading-gate.js?v=20260612"></script>
-  <script src="assets/js/config.js?v=20260612"></script>
-  <script src="assets/js/backend-client.js?v=20260612"></script>
-  <script src="assets/js/css-sheet-runtime.js?v=202606141725"></script>
-  <script src="assets/js/header.js?v=20260612"></script>
-  <script src="assets/js/page-map.js?v=202606131610"></script>
-  <script src="assets/js/footer.js?v=202606141725"></script>
 </body>
 </html>

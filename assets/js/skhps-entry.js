@@ -1,7 +1,17 @@
 /*
 檔案位置：skhpsv2/assets/js/skhps-entry.js
 時間戳記：2026-06-16 UTC+8
-用途：skhpsv2 本體頁唯一入口；一載入先裝 loading guard，DOM ready 後再交給 entry-core.js。
+用途：skhpsv2 本體頁唯一入口；只負責辨識 skhpsv2 本體頁身分，然後交給 entry-core.js。
+
+責任切分：
+- 本檔是 skhpsv2 本體頁 adapter。
+- 不動態插入 loading style。
+- loading 階段樣式由唯一固定 CSS：assets/CSS/skhps-loading.css 管理。
+- 共通 JS 載入順序、shell/main 分層、header/footer/main release 由 entry-core.js + loading-gate.js 管理。
+
+目前套用：
+- skhpsv2/index.html
+- index 額外載入 assets/js/external-apps-runtime.js
 */
 
 (function () {
@@ -9,65 +19,6 @@
 
   var currentScript = document.currentScript;
   var SOURCE = "skhps-entry.js";
-
-  function installEntryLoadingGuard() {
-    var html = document.documentElement;
-    var styleId = "skhps-entry-loading-guard";
-    var style;
-
-    html.classList.add("skhps-loading");
-    html.classList.add("skhps-css-loading");
-    html.classList.add("skhps-main-loading");
-    html.setAttribute("data-skhps-entry-guard", "true");
-
-    if (document.getElementById(styleId)) {
-      return;
-    }
-
-    style = document.createElement("style");
-    style.id = styleId;
-    style.setAttribute("data-skhps-entry-guard-style", "true");
-    style.textContent = [
-      "html.skhps-loading body > header,",
-      "html.skhps-loading body > main,",
-      "html.skhps-loading body > footer,",
-      "html.skhps-css-loading body > header,",
-      "html.skhps-css-loading body > main,",
-      "html.skhps-css-loading body > footer,",
-      "html.skhps-main-loading body > header,",
-      "html.skhps-main-loading body > main,",
-      "html.skhps-main-loading body > footer {",
-      "  opacity: 0 !important;",
-      "  visibility: hidden !important;",
-      "}",
-      "",
-      "html.skhps-loading,",
-      "html.skhps-css-loading,",
-      "html.skhps-main-loading {",
-      "  background: #eef3f8;",
-      "}",
-      "",
-      "html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading) body > header,",
-      "html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading) body > main,",
-      "html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading) body > footer {",
-      "  opacity: 1;",
-      "  visibility: visible;",
-      "}"
-    ].join("\n");
-
-    document.head.appendChild(style);
-  }
-
-  function onDomReady(fn) {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", fn, { once: true });
-      return;
-    }
-
-    fn();
-  }
-
-  installEntryLoadingGuard();
 
   var PAGE_SCRIPTS = {
     index: [
@@ -88,6 +39,24 @@
     ],
     "backend-project-launcher": []
   };
+
+  function installMinimalLoadingClasses() {
+    var html = document.documentElement;
+
+    html.classList.add("skhps-loading");
+    html.classList.add("skhps-css-loading");
+    html.classList.add("skhps-shell-loading");
+    html.classList.add("skhps-main-loading");
+    html.setAttribute("data-skhps-entry-guard", "true");
+
+    if (html.getAttribute("data-skhps-shell-ready") !== "true") {
+      html.setAttribute("data-skhps-shell-ready", "false");
+    }
+
+    if (html.getAttribute("data-skhps-page-ready") !== "true") {
+      html.setAttribute("data-skhps-page-ready", "false");
+    }
+  }
 
   function earlyRuntimeLog(status, action, detail, durationMs) {
     try {
@@ -244,7 +213,11 @@
       return "local-dev";
     }
 
-    if (host === "dev-skhps.jonaminz.com" || host.indexOf("dev-") === 0 || host.indexOf("dev-skhps") >= 0) {
+    if (
+      host === "dev-skhps.jonaminz.com" ||
+      host.indexOf("dev-") === 0 ||
+      host.indexOf("dev-skhps") >= 0
+    ) {
       return "dev";
     }
 
@@ -253,12 +226,13 @@
 
   function inferPageId() {
     var fromHtml = String(document.documentElement.getAttribute("data-skhps-page-id") || "").trim();
+    var filename;
 
     if (fromHtml) {
       return fromHtml;
     }
 
-    var filename = String(window.location.pathname || "").split("/").pop() || "index.html";
+    filename = String(window.location.pathname || "").split("/").pop() || "index.html";
 
     if (!filename || filename === "index.html") {
       return "index";
@@ -299,20 +273,39 @@
     return "skhps-entry";
   }
 
+  function releaseAllForEntryFailure(error) {
+    var html = document.documentElement;
+
+    html.classList.remove("skhps-css-loading");
+    html.classList.remove("skhps-loading");
+    html.classList.remove("skhps-shell-loading");
+    html.classList.remove("skhps-main-loading");
+
+    html.setAttribute("data-skhps-css-ready", "false");
+    html.setAttribute("data-skhps-shell-ready", "true");
+    html.setAttribute("data-skhps-shell-ready-reason", "skhps-entry-failed");
+    html.setAttribute("data-skhps-page-ready", "true");
+    html.setAttribute("data-skhps-page-ready-reason", "skhps-entry-failed");
+
+    try {
+      document.dispatchEvent(new CustomEvent("skhps-entry-failed", {
+        detail: {
+          error: error && error.message ? error.message : String(error || "")
+        }
+      }));
+    } catch (eventError) {}
+  }
+
   function markFailed(error) {
     console.error("[SKHPSEntry]", error);
+    earlyRuntimeLog("FAIL", "skhpsEntryFailed", error && error.message ? error.message : String(error));
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
       window.SKHPSLoading.fail("skhps-entry", error);
       return;
     }
 
-    document.documentElement.classList.remove("skhps-css-loading");
-    document.documentElement.classList.remove("skhps-loading");
-    document.documentElement.classList.remove("skhps-shell-loading");
-    document.documentElement.classList.remove("skhps-main-loading");
-    document.documentElement.setAttribute("data-skhps-shell-ready", "true");
-    document.documentElement.setAttribute("data-skhps-page-ready", "true");
+    releaseAllForEntryFailure(error);
   }
 
   function init() {
@@ -321,6 +314,9 @@
     var pageId = inferPageId();
     var env = inferEnvFromLocation();
     var pageScripts = getPageScripts(pageId);
+    var requestedRuntime = getRuntimeParam() || "";
+
+    installMinimalLoadingClasses();
 
     window.SKHPS_ENTRY_BASE_URL = sharedBaseUrl;
     window.SKHPS_CONFIG_BASE_URL = sharedBaseUrl;
@@ -328,7 +324,7 @@
     window.SKHPS_PAGE_ENV = {
       pageId: pageId,
       env: env,
-      requestedRuntime: getRuntimeParam() || "",
+      requestedRuntime: requestedRuntime,
       sharedBaseUrl: sharedBaseUrl,
       version: version,
       pageScripts: pageScripts
@@ -341,6 +337,7 @@
     earlyRuntimeLog("RUN", "init", {
       pageId: pageId,
       env: env,
+      requestedRuntime: requestedRuntime,
       sharedBaseUrl: sharedBaseUrl,
       pageScripts: pageScripts
     });
@@ -351,7 +348,7 @@
           scope: "skhps-core",
           pageId: pageId,
           env: env,
-          requestedRuntime: getRuntimeParam() || "",
+          requestedRuntime: requestedRuntime,
           sharedBaseUrl: sharedBaseUrl,
           coreVersion: version,
           specificBaseUrl: sharedBaseUrl,
@@ -363,11 +360,9 @@
       .then(function (options) {
         window.SKHPS_CORE_ENTRY_LOADED = true;
 
-        try {
-          document.dispatchEvent(new CustomEvent("skhps-entry-ready", {
-            detail: options
-          }));
-        } catch (error) {}
+        document.dispatchEvent(new CustomEvent("skhps-entry-ready", {
+          detail: options
+        }));
 
         return options;
       });
@@ -379,9 +374,6 @@
     getPageScripts: getPageScripts
   };
 
-  earlyRuntimeLog("OK", "moduleReady", "skhps-entry.js");
-
-  onDomReady(function () {
-    init().catch(markFailed);
-  });
+  installMinimalLoadingClasses();
+  init().catch(markFailed);
 })();

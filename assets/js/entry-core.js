@@ -1,7 +1,29 @@
 /*
 檔案位置：skhpsv2/assets/js/entry-core.js
 時間戳記：2026-06-16 UTC+8
-用途：SKHPS 共用 entry core；只負責依序載入共用 JS、頁面/外部專案自己的 JS，最後載 footer。
+用途：SKHPS 共用 entry core；統一載入共通 JS、掛載 shell、回報 skhps-shell，再載入頁面/外部專案自己的 JS。
+
+責任切分：
+- skhps-entry.js：只負責 skhpsv2 本體頁身份 adapter。
+- app-entry.js：只負責外部專案身份 adapter。
+- entry-core.js：負責真正共通啟動流程。
+- loading-gate.js：負責 shell/main 分段 release。
+- skhps-loading.css：唯一 loading CSS，負責 loading 階段視覺與隱藏規則。
+
+流程：
+1. 載 runtime.js
+2. 載 loading-gate.js
+3. require("skhps-shell")
+4. 載 config.js
+5. 載 route.js
+6. 載 backend-client.js
+7. 載 css-sheet-runtime.js
+8. DOM ready
+9. 載 header.js
+10. 載 page-map.js
+11. 載 footer.js
+12. done("skhps-shell")
+13. 載 page/app-specific JS
 */
 
 (function () {
@@ -10,18 +32,20 @@
   var currentScript = document.currentScript;
   var SOURCE = "entry-core.js";
 
-  var DEFAULT_CORE_SCRIPTS = [
+  var DEFAULT_BOOT_SCRIPTS = [
     "assets/js/runtime.js",
     "assets/js/loading-gate.js",
     "assets/js/config.js",
     "assets/js/route.js",
     "assets/js/backend-client.js",
-    "assets/js/css-sheet-runtime.js",
-    "assets/js/header.js",
-    "assets/js/page-map.js"
+    "assets/js/css-sheet-runtime.js"
   ];
 
-  var DEFAULT_FOOTER_SCRIPT = "assets/js/footer.js";
+  var DEFAULT_SHELL_SCRIPTS = [
+    "assets/js/header.js",
+    "assets/js/page-map.js",
+    "assets/js/footer.js"
+  ];
 
   function earlyRuntimeLog(status, action, detail, durationMs) {
     try {
@@ -69,13 +93,20 @@
   }
 
   function joinUrl(baseUrl, path) {
-    if (isAbsoluteUrl(path)) return path;
+    if (isAbsoluteUrl(path)) {
+      return path;
+    }
+
     return normalizeBaseUrl(baseUrl) + String(path || "").replace(/^\/+/, "");
   }
 
   function withVersion(url, version) {
     version = String(version || "").trim();
-    if (!version) return url;
+
+    if (!version) {
+      return url;
+    }
+
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(version);
   }
 
@@ -131,6 +162,19 @@
     };
   }
 
+  function onDomReady() {
+    return new Promise(function (resolve) {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+          resolve();
+        }, { once: true });
+        return;
+      }
+
+      resolve();
+    });
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve, reject) {
       var startedAt = Date.now();
@@ -181,15 +225,49 @@
     return chain;
   }
 
-  function resolveCoreScripts(options) {
-    return (options.coreScripts || DEFAULT_CORE_SCRIPTS).map(function (entry) {
-      var normalized = normalizeScriptEntry(entry);
+  function resolveSharedScript(options, entry) {
+    var normalized = normalizeScriptEntry(entry);
 
-      return {
-        path: normalized.path,
-        optional: normalized.optional,
-        url: withVersion(joinUrl(options.sharedBaseUrl, normalized.path), options.coreVersion)
-      };
+    return {
+      path: normalized.path,
+      optional: normalized.optional,
+      url: withVersion(joinUrl(options.sharedBaseUrl, normalized.path), options.coreVersion)
+    };
+  }
+
+  function resolveSpecificScript(options, entry) {
+    var normalized = normalizeScriptEntry(entry);
+    var path = normalized.path;
+    var url = "";
+
+    if (isAbsoluteUrl(path)) {
+      url = path;
+    } else {
+      try {
+        url = new URL(path, options.specificBaseUrl || window.location.href).toString();
+      } catch (error) {
+        url = path;
+      }
+    }
+
+    return {
+      path: path,
+      optional: normalized.optional,
+      url: withVersion(url, options.specificVersion || options.coreVersion)
+    };
+  }
+
+  function resolveBootScripts(options) {
+    return (options.coreScripts || DEFAULT_BOOT_SCRIPTS).map(function (entry) {
+      return resolveSharedScript(options, entry);
+    }).filter(function (entry) {
+      return Boolean(entry.path);
+    });
+  }
+
+  function resolveShellScripts(options) {
+    return (options.shellScripts || DEFAULT_SHELL_SCRIPTS).map(function (entry) {
+      return resolveSharedScript(options, entry);
     }).filter(function (entry) {
       return Boolean(entry.path);
     });
@@ -197,38 +275,10 @@
 
   function resolveSpecificScripts(options) {
     return (options.specificScripts || options.afterScripts || []).map(function (entry) {
-      var normalized = normalizeScriptEntry(entry);
-      var path = normalized.path;
-      var url = "";
-
-      if (isAbsoluteUrl(path)) {
-        url = path;
-      } else {
-        try {
-          url = new URL(path, options.specificBaseUrl || window.location.href).toString();
-        } catch (error) {
-          url = path;
-        }
-      }
-
-      return {
-        path: path,
-        optional: normalized.optional,
-        url: withVersion(url, options.specificVersion || options.coreVersion)
-      };
+      return resolveSpecificScript(options, entry);
     }).filter(function (entry) {
       return Boolean(entry.path);
     });
-  }
-
-  function resolveFooterScript(options) {
-    var path = options.footerScript || DEFAULT_FOOTER_SCRIPT;
-
-    return {
-      path: path,
-      optional: true,
-      url: withVersion(joinUrl(options.sharedBaseUrl, path), options.coreVersion)
-    };
   }
 
   function normalizeOptions(rawOptions) {
@@ -242,14 +292,73 @@
     return options;
   }
 
+  function ensureLoadingClasses() {
+    var html = document.documentElement;
+
+    html.classList.add("skhps-loading");
+    html.classList.add("skhps-css-loading");
+    html.classList.add("skhps-shell-loading");
+    html.classList.add("skhps-main-loading");
+
+    if (html.getAttribute("data-skhps-shell-ready") !== "true") {
+      html.setAttribute("data-skhps-shell-ready", "false");
+    }
+
+    if (html.getAttribute("data-skhps-page-ready") !== "true") {
+      html.setAttribute("data-skhps-page-ready", "false");
+    }
+  }
+
+  function requireShellTask() {
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.require === "function") {
+      window.SKHPSLoading.require("skhps-shell");
+      earlyRuntimeLog("RUN", "requireShellTask", "skhps-shell");
+      return true;
+    }
+
+    earlyRuntimeLog("WARN", "requireShellTaskSkipped", "SKHPSLoading.require not available");
+    return false;
+  }
+
+  function doneShellTask() {
+    document.documentElement.setAttribute("data-skhps-shell-mounted", "true");
+
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.done === "function") {
+      window.SKHPSLoading.done("skhps-shell");
+      earlyRuntimeLog("OK", "doneShellTask", "skhps-shell");
+      return true;
+    }
+
+    earlyRuntimeLog("WARN", "doneShellTaskSkipped", "SKHPSLoading.done not available");
+    return false;
+  }
+
+  function failShellTask(error) {
+    if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
+      window.SKHPSLoading.fail("skhps-shell", error);
+      earlyRuntimeLog("FAIL", "failShellTask", error && error.message ? error.message : String(error));
+      return true;
+    }
+
+    earlyRuntimeLog("WARN", "failShellTaskSkipped", "SKHPSLoading.fail not available");
+    return false;
+  }
+
   function markFailed(error, options) {
     options = options || {};
 
     console.error("[SKHPSEntryCore]", error);
-    earlyRuntimeLog("FAIL", "entryCoreError", error && error.message ? error.message : String(error));
+    earlyRuntimeLog("FAIL", "entryCoreFailed", error && error.message ? error.message : String(error));
+
+    failShellTask(error);
+
+    if (options.failureTask && window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
+      window.SKHPSLoading.fail(options.failureTask, error);
+      return;
+    }
 
     if (window.SKHPSLoading && typeof window.SKHPSLoading.fail === "function") {
-      window.SKHPSLoading.fail(options.failureTask || "entry-core", error);
+      window.SKHPSLoading.fail("entry-core", error);
       return;
     }
 
@@ -258,55 +367,86 @@
     document.documentElement.classList.remove("skhps-shell-loading");
     document.documentElement.classList.remove("skhps-main-loading");
     document.documentElement.setAttribute("data-skhps-shell-ready", "true");
+    document.documentElement.setAttribute("data-skhps-shell-ready-reason", "entry-core-failed");
     document.documentElement.setAttribute("data-skhps-page-ready", "true");
+    document.documentElement.setAttribute("data-skhps-page-ready-reason", "entry-core-failed");
   }
 
-  function dispatchReady(options) {
+  function dispatchEvent(name, detail) {
     try {
-      document.dispatchEvent(new CustomEvent("skhps-entry-core-ready", {
-        detail: options
+      document.dispatchEvent(new CustomEvent(name, {
+        detail: detail || {}
       }));
     } catch (error) {}
   }
 
   function load(rawOptions) {
-    var options = normalizeOptions(rawOptions);
+    var options = normalizeOptions(rawOptions || {});
+    var bootScripts = resolveBootScripts(options);
+    var shellScripts = resolveShellScripts(options);
+    var specificScripts = resolveSpecificScripts(options);
+
+    ensureLoadingClasses();
 
     window.SKHPS_ENTRY_CORE_OPTIONS = options;
-    window.SKHPS_ENTRY_BASE_URL = options.sharedBaseUrl;
-    window.SKHPS_CONFIG_BASE_URL = options.sharedBaseUrl;
 
-    earlyRuntimeLog("RUN", "entryCoreStart", {
+    earlyRuntimeLog("RUN", "load:start", {
       scope: options.scope || "",
       pageId: options.pageId || "",
       appId: options.appId || "",
       sharedBaseUrl: options.sharedBaseUrl,
-      coreVersion: options.coreVersion
+      specificBaseUrl: options.specificBaseUrl,
+      bootScripts: bootScripts.map(function (item) { return item.path; }),
+      shellScripts: shellScripts.map(function (item) { return item.path; }),
+      specificScripts: specificScripts.map(function (item) { return item.path; })
     });
 
-    return loadSequential(resolveCoreScripts(options), "entry-core:core")
+    dispatchEvent("skhps-entry-core-start", {
+      options: options
+    });
+
+    return loadSequential(bootScripts, "bootScripts")
       .then(function () {
-        if (typeof options.beforeSpecific === "function") {
-          return options.beforeSpecific(options);
-        }
-        return null;
+        requireShellTask();
+
+        dispatchEvent("skhps-entry-core-boot-ready", {
+          options: options
+        });
+
+        return onDomReady();
       })
       .then(function () {
-        return loadSequential(resolveSpecificScripts(options), "entry-core:specific");
+        document.documentElement.setAttribute("data-skhps-dom-ready", "true");
+
+        dispatchEvent("skhps-entry-core-dom-ready", {
+          options: options
+        });
+
+        return loadSequential(shellScripts, "shellScripts");
       })
       .then(function () {
-        if (typeof options.afterSpecific === "function") {
-          return options.afterSpecific(options);
-        }
-        return null;
-      })
-      .then(function () {
-        return loadSequential([resolveFooterScript(options)], "entry-core:footer");
+        doneShellTask();
+
+        dispatchEvent("skhps-entry-core-shell-ready", {
+          options: options
+        });
+
+        return loadSequential(specificScripts, "specificScripts");
       })
       .then(function () {
         window.SKHPS_ENTRY_CORE_LOADED = true;
-        earlyRuntimeLog("OK", "entryCoreReady", options.scope || "");
-        dispatchReady(options);
+
+        earlyRuntimeLog("OK", "load:done", {
+          scope: options.scope || "",
+          pageId: options.pageId || "",
+          appId: options.appId || "",
+          specificScripts: specificScripts.map(function (item) { return item.path; })
+        });
+
+        dispatchEvent("skhps-entry-core-ready", {
+          options: options
+        });
+
         return options;
       })
       .catch(function (error) {
@@ -317,13 +457,11 @@
 
   window.SKHPSEntryCore = {
     load: load,
+    normalizeOptions: normalizeOptions,
     loadScript: loadScript,
     loadSequential: loadSequential,
-    normalizeBaseUrl: normalizeBaseUrl,
-    joinUrl: joinUrl,
-    withVersion: withVersion,
-    inferSharedBaseUrl: inferSharedBaseUrl
+    onDomReady: onDomReady,
+    requireShellTask: requireShellTask,
+    doneShellTask: doneShellTask
   };
-
-  earlyRuntimeLog("OK", "moduleReady", "entry-core.js");
 })();

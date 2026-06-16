@@ -2,44 +2,55 @@
 <!--
 檔案位置：skhpsv2/index.html
 時間戳記：2026-06-16 UTC+8
-首頁調整：改由 assets/js/skhps-entry.js 作為 skhpsv2 本體頁唯一入口；共通 JS 由 entry-core.js 依序載入。
 用途：整外資訊系統首頁。
+
+本版調整：
+- 首頁改為 skhpsv2 本體頁，由 assets/js/skhps-entry.js 作為唯一入口。
+- loading 階段只載唯一固定 loading CSS：assets/CSS/skhps-loading.css。
+- 移除 loading-cache-probe.js。
+- 共通 JS 由 entry-core.js 依序載入。
+- Header/Footer 先由 shell gate 顯示；main 等 page gate 完成後顯示。
 
 Loading Gate：
 - 首頁使用 AND gate。
 - 必須等待：
   1. css-runtime
   2. external-apps-runtime
+- skhps-shell 不寫在 HTML，由 entry-core.js 動態 require / done。
 - 任何任務成功或失敗都必須回報 loading gate。
-- 8 秒後若仍未 all-ready，首頁 fallback 強制解除，診斷資訊先由 script 保留，之後交給 footer 顯示。
 
 重要規則：
 - 首頁不是外部專案，不載入 app-entry.js。
 - 首頁不會 registerExternalApp。
 - 首頁不放 inline CSS。
-- 首頁只提供語意結構與 class，樣式由 CSS Sheet / 共用 CSS 管理。
+- 首頁不直接載入共通 runtime scripts。
+- 首頁只提供語意結構與 class，正式樣式由 CSS Sheet / css-sheet-runtime.js / cache 管理。
+- loading 階段樣式只由 assets/CSS/skhps-loading.css 管理。
 -->
 <html
   lang="zh-Hant"
-  class="skhps-loading skhps-css-loading skhps-main-loading"
+  class="skhps-loading skhps-css-loading skhps-shell-loading skhps-main-loading"
+  data-skhps-entry-scope="skhps-core"
   data-skhps-page-id="index"
   data-skhps-page-map-current="首頁"
   data-loading-title="整外資訊系統首頁"
   data-skhps-loading-tasks="css-runtime,external-apps-runtime"
+  data-skhps-shell-ready="false"
+  data-skhps-page-ready="false"
 >
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <script src="assets/js/loading-cache-probe.js?v=20260611"></script>
-  <script src="assets/js/skhps-entry.js?v=2026061609"></script>
+  <link rel="stylesheet" href="assets/CSS/skhps-loading.css?v=2026061610">
+  <script src="assets/js/skhps-entry.js?v=2026061610"></script>
   <title>整外資訊系統首頁</title>
 </head>
 
 <body class="skhps-body">
-  <!-- Header 暫時拆除：改由 assets/js/header.js 掛載 -->
+  <!-- Header 由 skhpsv2 共用 header.js 掛載 -->
   <header id="header" class="skhps-header" data-skhps-header></header>
 
-  <main class="skhps-page skhps-index-page">
+  <main class="skhps-page skhps-index-page" data-skhps-main>
     <div class="skhps-container skhps-index-shell">
       <section class="skhps-hero skhps-index-hero" aria-labelledby="indexTitle">
         <div class="skhps-hero-card skhps-index-hero-card">
@@ -103,7 +114,7 @@ Loading Gate：
     </div>
   </main>
 
-  <footer data-skhps-footer class="skhps-footer">
+  <footer id="footer" data-skhps-footer class="skhps-footer">
     Footer 載入中...
   </footer>
 </body>

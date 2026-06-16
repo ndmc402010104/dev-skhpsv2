@@ -1,22 +1,40 @@
 /*
-檔案位置：skhpsv2/assets/css/skhps-loading.css
-時間戳記：2026-06-10 07:58 UTC+8
-用途：全站唯一固定載入動畫；所有頁面在 CSS Sheet runtime 完成前共用此動畫。此檔為前端固定動畫，不由 Sheet 控制。
+檔案位置：skhpsv2/assets/CSS/skhps-loading.css
+時間戳記：2026-06-16 UTC+8
+用途：全站唯一固定載入動畫；所有頁面在正式 CSS runtime 完成前與 page ready 前共用此動畫。
+此檔為前端固定 loading CSS，不由 CSS Sheet 控制。
+
+設計原則：
+- 這是唯一獨立 loading CSS。
+- 正式頁面樣式由 CSS Sheet / css-sheet-runtime.js / cache 負責。
+- skhps-loading：loading 畫面總開關；只有 page ready / all-ready 才移除。
+- skhps-css-loading：只表示 CSS runtime 尚未完成；移除它不代表 loading 畫面結束。
+- skhps-shell-loading：只表示 header/footer shell 尚未 ready。
+- skhps-main-loading：只表示 main/page 尚未 ready。
+- header/footer 可以先 mount、先 ready，但在 skhps-loading 移除前不能露出畫面。
 */
 
 /*
   Theme 40｜Indigo Paper Admin 方向：
-  - 去掉原本偏綠的 #0f8178 / #344f9f
-  - 改成靛藍灰 + 和紙米白 + 淡紙棕
-  - 保留：純文字 + 下方光條
+  - 靛藍灰 + 和紙米白 + 淡紙棕
+  - 純文字 + 下方光條
   - 不要圈圈
   - 不要膠囊
   - 不要外框
-  - loading 階段分層隱藏 shell / main，不隱藏 body
   - loading 文案由 <html data-loading-title="..."> 控制
 */
 
-html.skhps-css-loading {
+/* =========================================================
+   0. Loading 畫面總開關
+   ========================================================= */
+
+/*
+  注意：
+  loading 動畫與 loading 背景一定綁 skhps-loading。
+  不要綁 skhps-css-loading。
+  因為 CSS ready 後 skhps-css-loading 會先被移除，但畫面還不能露出。
+*/
+html.skhps-loading {
   min-height: 100%;
   overflow: hidden;
   scrollbar-width: none;
@@ -41,6 +59,25 @@ html.skhps-css-loading {
   animation: skhps-loading-bg 9s ease-in-out infinite;
 }
 
+/*
+  css-loading 只保留「CSS runtime 還沒好」的狀態意義。
+  若某個舊頁只有 css-loading 沒有 skhps-loading，仍給它基本背景保護。
+*/
+html.skhps-css-loading:not(.skhps-loading) {
+  min-height: 100%;
+  overflow: hidden;
+  scrollbar-width: none;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(81, 109, 135, .18), transparent 34%),
+    radial-gradient(circle at 78% 24%, rgba(167, 141, 114, .13), transparent 30%),
+    linear-gradient(135deg, #eceff3 0%, #f4f6f8 42%, #edf3f6 100%);
+}
+
+/* =========================================================
+   1. Loading 階段鎖住捲動
+   ========================================================= */
+
+html.skhps-css-loading,
 html.skhps-loading,
 html.skhps-shell-loading,
 html.skhps-main-loading,
@@ -76,34 +113,110 @@ html.skhps-main-loading body::-webkit-scrollbar {
   display: none;
 }
 
+/* =========================================================
+   2. 全域 loading 遮罩邏輯
+   ========================================================= */
+
+/*
+  只要 skhps-loading 還在，正式畫面一律不能露出。
+  這是本次修正重點：
+  header/footer 即使 shell ready，也只能先 mount 好，不能先出現在畫面上。
+*/
+html.skhps-loading [data-skhps-header],
+html.skhps-loading [data-skhps-footer],
+html.skhps-loading body > header,
+html.skhps-loading body > footer,
+html.skhps-loading main,
+html.skhps-loading [data-skhps-main],
+html.skhps-loading .skhps-loading-gated {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+  CSS runtime 還沒完成時，也不能露出正式畫面。
+  但 css-loading 移除後，若 skhps-loading 還在，仍會由上面的全域 loading 擋住。
+*/
+html.skhps-css-loading [data-skhps-header],
+html.skhps-css-loading [data-skhps-footer],
+html.skhps-css-loading body > header,
+html.skhps-css-loading body > footer,
+html.skhps-css-loading main,
+html.skhps-css-loading [data-skhps-main],
+html.skhps-css-loading .skhps-loading-gated {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+  Shell 尚未 ready：
+  只藏 header/footer。
+  但真正能不能顯示，還要同時看 skhps-loading 是否已經移除。
+*/
 html.skhps-shell-loading [data-skhps-header],
 html.skhps-shell-loading [data-skhps-footer],
-html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-header],
-html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-footer],
+html.skhps-shell-loading body > header,
+html.skhps-shell-loading body > footer {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+  Main 尚未 ready：
+  只藏 main。
+*/
 html.skhps-main-loading main,
 html.skhps-main-loading [data-skhps-main],
-html.skhps-css-loading:not([data-skhps-page-ready="true"]) main,
-html.skhps-css-loading:not([data-skhps-page-ready="true"]) [data-skhps-main],
-html.skhps-css-loading .skhps-loading-gated,
-html.skhps-loading .skhps-loading-gated,
 html.skhps-main-loading .skhps-loading-gated {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
 }
 
-html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-header],
-html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-footer],
-html:not(.skhps-main-loading)[data-skhps-page-ready="true"] main,
-html:not(.skhps-main-loading)[data-skhps-page-ready="true"] [data-skhps-main],
-html:not(.skhps-css-loading):not(.skhps-loading):not(.skhps-main-loading) .skhps-loading-gated {
+/*
+  Shell ready 後的可顯示條件：
+  - 不在全域 loading
+  - 不在 css-loading
+  - 不在 shell-loading
+  - data-skhps-shell-ready="true"
+
+  這代表 header/footer 不會在 loading 畫面關掉前露出。
+*/
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-header],
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-footer],
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] body > header,
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] body > footer {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
 }
 
+/*
+  Page ready 後的可顯示條件：
+  - 不在全域 loading
+  - 不在 css-loading
+  - 不在 main-loading
+  - data-skhps-page-ready="true"
+*/
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-skhps-page-ready="true"] main,
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-skhps-page-ready="true"] [data-skhps-main],
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-skhps-page-ready="true"] .skhps-loading-gated {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* =========================================================
+   3. Loading 階段淡入淡出
+   ========================================================= */
+
 [data-skhps-header],
 [data-skhps-footer],
+body > header,
+body > footer,
 main,
 [data-skhps-main],
 .skhps-loading-gated {
@@ -115,8 +228,13 @@ main,
 }
 
 [data-skhps-header],
-[data-skhps-footer] {
+body > header {
   transform: translateY(-6px);
+}
+
+[data-skhps-footer],
+body > footer {
+  transform: translateY(6px);
 }
 
 main,
@@ -125,11 +243,13 @@ main,
   transform: translateY(8px);
 }
 
-html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-header],
-html:not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-footer],
-html:not(.skhps-main-loading)[data-skhps-page-ready="true"] main,
-html:not(.skhps-main-loading)[data-skhps-page-ready="true"] [data-skhps-main],
-html:not(.skhps-css-loading):not(.skhps-loading):not(.skhps-main-loading) .skhps-loading-gated {
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-header],
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] [data-skhps-footer],
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] body > header,
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-shell-loading)[data-skhps-shell-ready="true"] body > footer,
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-skhps-page-ready="true"] main,
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-skhps-page-ready="true"] [data-skhps-main],
+html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-skhps-page-ready="true"] .skhps-loading-gated {
   transform: translateY(0);
   transition:
     opacity .32s ease,
@@ -137,20 +257,17 @@ html:not(.skhps-css-loading):not(.skhps-loading):not(.skhps-main-loading) .skhps
     visibility 0s linear 0s;
 }
 
+/*
+  loading-gate.js 會把 header/footer 等殼元素標記為 spared。
+  spared 只表示不屬於 main gate，不代表可以越過 skhps-loading。
+*/
 .skhps-loading-spared {
-  visibility: visible;
-  opacity: 1;
   pointer-events: auto;
 }
 
-html.skhps-shell-loading [data-skhps-header].skhps-loading-spared,
-html.skhps-shell-loading [data-skhps-footer].skhps-loading-spared,
-html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-header].skhps-loading-spared,
-html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-footer].skhps-loading-spared {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
+/* =========================================================
+   4. Footer loading 階段基本樣式
+   ========================================================= */
 
 .skhps-footer {
   box-sizing: border-box;
@@ -230,11 +347,15 @@ html.skhps-css-loading:not([data-skhps-css-cache-ready="true"]) [data-skhps-foot
   }
 }
 
+/* =========================================================
+   5. 純文字 loading
+   ========================================================= */
+
 /*
-  純文字 loading。
-  Theme 40：文字改深靛藍，不再用偏綠色系。
+  loading 文案跟著 skhps-loading。
+  page ready 前都維持顯示。
 */
-html.skhps-css-loading::before {
+html.skhps-loading::before {
   content: attr(data-loading-title) " 載入中";
   position: fixed;
   left: 50%;
@@ -257,16 +378,16 @@ html.skhps-css-loading::before {
   animation: skhps-loading-text 1.65s ease-in-out infinite;
 }
 
-html.skhps-css-loading:not([data-loading-title])::before,
-html.skhps-css-loading[data-loading-title=""]::before {
+html.skhps-loading:not([data-loading-title])::before,
+html.skhps-loading[data-loading-title=""]::before {
   content: "載入中";
 }
 
-/*
-  下方光條。
-  Theme 40：靛藍灰主色 + 紙棕副色，不再偏綠。
-*/
-html.skhps-css-loading::after {
+/* =========================================================
+   6. 下方光條
+   ========================================================= */
+
+html.skhps-loading::after {
   content: "";
   position: fixed;
   left: 50%;
@@ -297,6 +418,10 @@ html.skhps-css-loading::after {
     0 0 1px rgba(167, 141, 114, .28);
   animation: skhps-loading-bar 1.9s linear infinite;
 }
+
+/* =========================================================
+   7. Animations
+   ========================================================= */
 
 @keyframes skhps-loading-bg {
   0% {

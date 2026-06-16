@@ -1,20 +1,22 @@
 /*
 檔案位置：skhpsv2/assets/js/external-app-loader.js
-時間戳：2026-06-13 00:00 UTC+8
-用途：include loader for SKHPS external child apps；外部專案只接入 skhpsv2 水庫，並以 registry 名片報到。
+時間戳：2026-06-16 UTC+8
+用途：include loader for SKHPS external child apps；正式標準只吃 window.SKHPS_APP_MANIFEST / app.json。
 
-設計：
-- 這支檔案是外部 App 接入 skhpsv2 共用 runtime 的 include loader。
-- skhpsv2 是水庫 / 共通地基；外部 App 只透過此 loader 接入共用 runtime。
-- 載入 skhpsv2 核心水庫資源後，背景 registerExternalApp，再載入外部 App 自己的 afterScripts。
-- registerExternalApp 失敗只 console.warn，不阻斷外部專案 afterScripts。
-- window.SKHPSBootstrap 僅保留為 legacy alias，新的使用者請改用 window.SKHPSExternalAppLoader。
+水庫標準：
+- 外部專案 manifest 一律為 app.json。
+- 外部專案資訊統一由 window.SKHPS_APP_MANIFEST 提供。
+- 外部專案腳本只讀 manifest.entry.afterScripts。
+- 外部專案 loading task 只讀 manifest.entry.loadingTasks。
+- 不再讀 window.SKHPS_APP_CONFIG / window.SKHPS_APP_CARD。
+- 不再支援 top-level afterScripts / loadingTasks。
+- 不再提供 window.SKHPSBootstrap legacy alias。
 */
 
 (function () {
   "use strict";
 
-  var BOOTSTRAP_SOURCE = "skhps-bootstrap.js";
+  var BOOTSTRAP_SOURCE = "external-app-loader.js";
 
   function earlyRuntimeLog(status, action, detail, durationMs) {
     try {
@@ -124,8 +126,31 @@
     };
   }
 
+  function requireManifest() {
+    var manifest = window.SKHPS_APP_MANIFEST || (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.manifest) || null;
+
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+      throw new Error("SKHPS_APP_MANIFEST missing; external apps must use app.json");
+    }
+
+    if (!manifest.entry || typeof manifest.entry !== "object" || Array.isArray(manifest.entry)) {
+      throw new Error("SKHPS_APP_MANIFEST.entry missing");
+    }
+
+    if (!Array.isArray(manifest.entry.afterScripts)) {
+      throw new Error("SKHPS_APP_MANIFEST.entry.afterScripts must be an array");
+    }
+
+    if (!Array.isArray(manifest.entry.loadingTasks)) {
+      throw new Error("SKHPS_APP_MANIFEST.entry.loadingTasks must be an array");
+    }
+
+    return manifest;
+  }
+
   function getAppEnv() {
     var appEnv = window.SKHPS_APP_ENV || {};
+    var manifest = requireManifest();
     var version = appEnv.version || currentScriptVersion() || Date.now();
 
     mark("external-app-loader:init", {
@@ -139,18 +164,20 @@
     }
 
     var options = {
-      appId: appEnv.appId || window.SKHPS_APP_ID || "unknown",
+      appId: appEnv.appId || manifest.appId || window.SKHPS_APP_ID || "unknown",
       env: appEnv.env || "prod",
       requestedRuntime: appEnv.requestedRuntime || "",
       sharedBaseUrl: normalizeBaseUrl(appEnv.sharedBaseUrl),
       version: version,
-      title: appEnv.title || "",
-      href: appEnv.href || window.location.href,
-      group: appEnv.group || "",
-      displayPosition: appEnv.displayPosition || appEnv["顯示位置"] || "",
-      order: appEnv.order || 9999,
-      coreScripts: appEnv.coreScripts || CORE_SCRIPTS.slice(),
-      afterScripts: appEnv.afterScripts || []
+      title: manifest.title || appEnv.title || "",
+      href: manifest.href || appEnv.href || window.location.href,
+      group: manifest.group || appEnv.group || "",
+      displayPosition: "",
+      order: 9999,
+      coreScripts: CORE_SCRIPTS.slice(),
+      afterScripts: manifest.entry.afterScripts.slice(),
+      loadingTasks: manifest.entry.loadingTasks.slice(),
+      manifest: manifest
     };
 
     mark("external-app-loader:env", Object.assign({
@@ -245,7 +272,9 @@
   }
 
   function resolveAfterUrls(options) {
-    return options.afterScripts.map(function (path) {
+    return options.afterScripts.map(function (entry) {
+      var normalized = normalizeScriptEntry(entry);
+      var path = normalized.path;
       var url = "";
 
       if (isAbsoluteUrl(path)) {
@@ -260,9 +289,11 @@
 
       return {
         path: path,
-        optional: false,
+        optional: normalized.optional,
         url: url
       };
+    }).filter(function (entry) {
+      return Boolean(entry.path);
     });
   }
 
@@ -286,66 +317,21 @@
   }
 
   function normalizeRegisterPayload(options) {
-    var config = window.SKHPS_APP_CONFIG || {};
-
-    var appId = String(
-      config.appId ||
-      config.id ||
-      options.appId ||
-      window.SKHPS_APP_ID ||
-      ""
-    ).trim();
-
-    var title = String(
-      config.title ||
-      config.name ||
-      options.title ||
-      document.title ||
-      appId ||
-      ""
-    ).trim();
-
-    var href = String(
-      config.href ||
-      config.url ||
-      options.href ||
-      window.location.href ||
-      ""
-    ).trim();
-
-    var group = String(
-      config.group ||
-      options.group ||
-      ""
-    ).trim();
-
-    var displayPosition = String(
-      config["顯示位置"] ||
-      config.displayPosition ||
-      options.displayPosition ||
-      ""
-    ).trim();
-
-    var order = Number(
-      config.order ||
-      options.order ||
-      9999
-    ) || 9999;
-
-    var version = String(
-      config.version ||
-      options.version ||
-      ""
-    ).trim();
+    var manifest = options.manifest || window.SKHPS_APP_MANIFEST || {};
+    var appId = String(manifest.appId || options.appId || window.SKHPS_APP_ID || "").trim();
+    var title = String(manifest.title || manifest.name || options.title || document.title || appId || "").trim();
+    var href = String(manifest.href || options.href || window.location.href || "").trim();
+    var group = String(manifest.group || options.group || "").trim();
+    var version = String(options.version || "").trim();
 
     return {
       appId: appId,
       title: title,
       href: href,
       group: group,
-      displayPosition: displayPosition,
-      "顯示位置": displayPosition,
-      order: order,
+      displayPosition: "",
+      "顯示位置": "",
+      order: 9999,
       version: version,
       env: options.env || "",
       requestedRuntime: options.requestedRuntime || "",
@@ -356,19 +342,13 @@
   }
 
   function registerExternalAppIfNeeded(options) {
-    var config = window.SKHPS_APP_CONFIG || {};
-    var shouldRegister = config.registerExternalApp;
+    var manifest = options.manifest || window.SKHPS_APP_MANIFEST || {};
 
-    /*
-      預設：有 SKHPS_APP_CONFIG 且不是明確 false，就報到。
-      若某些外部頁不想報到，可設：
-      window.SKHPS_APP_CONFIG.registerExternalApp = false;
-    */
-    if (!config || typeof config !== "object") {
+    if (!manifest || typeof manifest !== "object") {
       return;
     }
 
-    if (shouldRegister === false) {
+    if (manifest.registerExternalApp === false) {
       return;
     }
 
@@ -390,11 +370,7 @@
       action: "registerExternalApp"
     }, payload));
 
-    /*
-      重要：
-      這是背景報到，不 await。
-      報到失敗不能卡住 quick-login 或其他外部專案自己的功能。
-    */
+    /* 背景報到，不 await，不擋外部 app 自己的 afterScripts。 */
     window.SKHPS_EXTERNAL_APP_REGISTER_PROMISE = window.SKHPSBackend
       .call("registerExternalApp", payload, {
         timeoutMs: 8000
@@ -429,12 +405,7 @@
   function load() {
     var options = getAppEnv();
 
-    window.SKHPS_BOOTSTRAP_OPTIONS = options;
     window.SKHPS_EXTERNAL_APP_LOADER_OPTIONS = options;
-
-    /*
-      確保 config.js 從 skhpsv2 sharedBaseUrl 抓 config.json。
-    */
     window.SKHPS_CONFIG_BASE_URL = options.sharedBaseUrl;
 
     return loadSequential(resolveCoreUrls(options), "external-app-loader:core-script")
@@ -447,17 +418,12 @@
         return loadSequential(resolveAfterUrls(options), "external-app-loader:after-script");
       })
       .then(function () {
-        window.SKHPS_BOOTSTRAP_LOADED = true;
         window.SKHPS_EXTERNAL_APP_LOADER_LOADED = true;
 
         mark("external-app-loader:ready", Object.assign({
           file: "external-app-loader.js",
           functionName: "load"
         }, options));
-
-        document.dispatchEvent(new CustomEvent("skhps-bootstrap-ready", {
-          detail: options
-        }));
 
         document.dispatchEvent(new CustomEvent("skhps-external-app-loader-ready", {
           detail: options
@@ -473,13 +439,7 @@
     registerExternalAppIfNeeded: registerExternalAppIfNeeded
   };
 
-  /*
-    Legacy alias for pages that still listen for the old bootstrap object name.
-    New external child apps should use window.SKHPSExternalAppLoader.
-  */
-  window.SKHPSBootstrap = window.SKHPSExternalAppLoader;
-
   load().then(function () {
-    earlyRuntimeLog("OK", "bootstrapDone", "scheduled");
+    earlyRuntimeLog("OK", "externalAppLoaderDone", "scheduled");
   }).catch(markFailed);
 })();

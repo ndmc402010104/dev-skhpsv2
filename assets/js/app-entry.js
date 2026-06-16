@@ -312,6 +312,135 @@
     return value;
   }
 
+  function getCurrentPageId() {
+    var html = document.documentElement;
+    var body = document.body;
+
+    return String(
+      html.getAttribute("data-skhps-page-id") ||
+      html.getAttribute("data-page-id") ||
+      body && body.getAttribute("data-skhps-page-id") ||
+      body && body.getAttribute("data-page-id") ||
+      ""
+    ).trim();
+  }
+
+  function mergeObject(base, override) {
+    return Object.assign({}, base || {}, override || {});
+  }
+
+  function normalizeHrefForEnv(value, env, fallback) {
+    var href = pickEnvValue(value, env) || fallback || window.location.href;
+    return withRuntimeParam(href, env);
+  }
+
+  function getVersionGlobalName(manifest) {
+    var versionConfig = manifest && manifest.version && typeof manifest.version === "object"
+      ? manifest.version
+      : {};
+    return String(versionConfig.globalName || "SKHPS_APP_VERSION").trim() || "SKHPS_APP_VERSION";
+  }
+
+  function getVersionTextFromObject(info) {
+    if (!info || typeof info !== "object") {
+      return "";
+    }
+
+    return String(
+      info.version ||
+      info.appVersion ||
+      info.buildVersion ||
+      info.buildTime ||
+      ""
+    ).trim();
+  }
+
+  function getLoadedAppVersion(manifest, versionInfo) {
+    var globalName = getVersionGlobalName(manifest);
+    var candidates = [
+      versionInfo,
+      window.SKHPS_APP_VERSION_INFO,
+      window[globalName],
+      window.SKHPS_APP_VERSION
+    ];
+    var i;
+    var version;
+
+    for (i = 0; i < candidates.length; i += 1) {
+      version = getVersionTextFromObject(candidates[i]);
+      if (version) {
+        return version;
+      }
+    }
+
+    return "";
+  }
+
+  function resolveEffectiveManifest(rootManifest, env) {
+    var pageId = getCurrentPageId();
+    var pages = rootManifest && rootManifest.pages && typeof rootManifest.pages === "object" && !Array.isArray(rootManifest.pages)
+      ? rootManifest.pages
+      : {};
+    var page = pageId && pages[pageId] && typeof pages[pageId] === "object" && !Array.isArray(pages[pageId])
+      ? pages[pageId]
+      : null;
+    var entry;
+    var effective;
+
+    window.SKHPS_APP_ROOT_MANIFEST = rootManifest;
+
+    if (!page) {
+      window.SKHPS_APP_EFFECTIVE_MANIFEST = rootManifest;
+      return rootManifest;
+    }
+
+    entry = page.entry || rootManifest.entry || {};
+
+    effective = Object.assign({}, rootManifest, page, {
+      appId: rootManifest.appId,
+      rootAppId: rootManifest.appId,
+      pageId: page.pageId || pageId,
+      title: page.title || rootManifest.title || "",
+      description: page.description || rootManifest.description || "",
+      group: page.group || rootManifest.group || "",
+      href: normalizeHrefForEnv(page.href, env, rootManifest.href || window.location.href),
+      version: rootManifest.version || {},
+      entry: {
+        afterScripts: normalizeScriptList(entry.afterScripts || [], "afterScripts"),
+        loadingTasks: normalizeTaskList(entry.loadingTasks || [])
+      },
+      features: mergeObject(rootManifest.features, page.features),
+      backend: mergeObject(rootManifest.backend, page.backend),
+      pages: rootManifest.pages
+    });
+
+    if (page.registerExternalApp !== undefined) {
+      effective.registerExternalApp = page.registerExternalApp;
+    } else {
+      effective.registerExternalApp = rootManifest.registerExternalApp;
+    }
+
+    if (page.configUrl === undefined && rootManifest.configUrl !== undefined) {
+      effective.configUrl = rootManifest.configUrl;
+    }
+
+    if (page.signPageUrl === undefined && rootManifest.signPageUrl !== undefined) {
+      effective.signPageUrl = rootManifest.signPageUrl;
+    }
+
+    window.SKHPS_APP_EFFECTIVE_MANIFEST = effective;
+
+    earlyRuntimeLog("OK", "resolveEffectiveManifest", {
+      appId: rootManifest.appId || "",
+      pageId: pageId,
+      title: effective.title || "",
+      afterScripts: effective.entry.afterScripts || [],
+      loadingTasks: effective.entry.loadingTasks || []
+    });
+
+    return effective;
+  }
+
   function getAppManifestUrl() {
     var url = String(window.SKHPS_APP_MANIFEST_URL || "app.json").trim();
     return resolveRelativeUrl(window.location.href, url);
@@ -458,24 +587,35 @@
   }
 
   function buildAppVersion(manifest, versionInfo) {
-    if (versionInfo && versionInfo.version) {
-      return String(versionInfo.version || "").trim();
+    var loadedVersion = getLoadedAppVersion(manifest, versionInfo);
+
+    if (loadedVersion) {
+      return loadedVersion;
     }
 
     if (manifest && manifest.version && typeof manifest.version === "object" && manifest.version.value) {
       return String(manifest.version.value || "").trim();
     }
 
-    return getEntryVersion();
+    /*
+      SKHPS_ENTRY_VERSION 是水庫資源 cache buster，不是外部 App 業務版本。
+      沒讀到 version.js 時讓 register payload 自己顯示 unknown，
+      不要把 coreVersion / Date.now() 當成 App 版本。
+    */
+    return "";
   }
 
   function normalizeRegisterPayload(options) {
-    var manifest = window.SKHPS_APP_MANIFEST || {};
-    var appId = String(manifest.appId || options.appId || window.SKHPS_APP_ID || "").trim();
-    var title = String(manifest.title || manifest.name || options.title || document.title || appId || "").trim();
-    var href = String(manifest.href || options.href || window.location.href || "").trim();
-    var group = String(manifest.group || options.group || "").trim();
-    var version = String(options.appVersion || options.version || "").trim();
+    var effectiveManifest = options.manifest || window.SKHPS_APP_EFFECTIVE_MANIFEST || window.SKHPS_APP_MANIFEST || {};
+    var rootManifest = options.rootManifest || window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || effectiveManifest || {};
+    var appId = String(rootManifest.appId || effectiveManifest.rootAppId || effectiveManifest.appId || options.appId || window.SKHPS_APP_ID || "").trim();
+    var title = String(rootManifest.title || rootManifest.name || appId || "").trim();
+    var href = String(rootManifest.href || options.href || window.location.href || "").trim();
+    var group = String(rootManifest.group || options.group || "").trim();
+    var pageId = String(effectiveManifest.pageId || options.pageId || getCurrentPageId() || "").trim();
+    var pageTitle = String(effectiveManifest.title || options.title || document.title || "").trim();
+    var pageHref = String(effectiveManifest.href || window.location.href || "").trim();
+    var version = String(getLoadedAppVersion(rootManifest) || options.appVersion || "").trim();
 
     return {
       appId: appId,
@@ -488,6 +628,10 @@
       version: version,
       env: options.env || "",
       requestedRuntime: options.requestedRuntime || "",
+      rootAppId: appId,
+      pageId: pageId,
+      pageTitle: pageTitle,
+      pageHref: pageHref,
       origin: window.location.origin || "",
       pageUrl: window.location.href || "",
       userAgent: navigator.userAgent || ""
@@ -556,34 +700,49 @@
 
     return loadAppManifest()
       .then(function (rawManifest) {
-        var manifest = normalizeManifest(rawManifest, env);
-        window.SKHPS_APP_MANIFEST = manifest;
-        applyManifestLoadingTasks(manifest);
+        var rootManifest = normalizeManifest(rawManifest, env);
+        var effectiveManifest = resolveEffectiveManifest(rootManifest, env);
 
-        return loadVersionForManifest(manifest).then(function (versionInfo) {
+        window.SKHPS_APP_MANIFEST = rootManifest;
+        window.SKHPS_APP_ROOT_MANIFEST = rootManifest;
+        window.SKHPS_APP_EFFECTIVE_MANIFEST = effectiveManifest;
+
+        applyManifestLoadingTasks(effectiveManifest);
+
+        return loadVersionForManifest(rootManifest).then(function (versionInfo) {
           return {
-            manifest: manifest,
+            rootManifest: rootManifest,
+            manifest: effectiveManifest,
             versionInfo: versionInfo
           };
         });
       })
       .then(function (loaded) {
+        var rootManifest = loaded.rootManifest || loaded.manifest;
         var manifest = loaded.manifest;
-        var appId = getAppId(manifest);
-        var appVersion = buildAppVersion(manifest, loaded.versionInfo);
+        var appId = getAppId(rootManifest);
+        var appVersion = buildAppVersion(rootManifest, loaded.versionInfo);
 
         if (!appId) {
           throw new Error("SKHPS appId missing in app.json");
         }
 
+        rootManifest.appId = appId;
         manifest.appId = appId;
+        manifest.rootAppId = appId;
+
+        if (!rootManifest.title && document.title) {
+          rootManifest.title = document.title;
+        }
 
         if (!manifest.title && document.title) {
           manifest.title = document.title;
         }
 
         window.SKHPS_APP_ID = appId;
-        window.SKHPS_APP_MANIFEST = manifest;
+        window.SKHPS_APP_MANIFEST = rootManifest;
+        window.SKHPS_APP_ROOT_MANIFEST = rootManifest;
+        window.SKHPS_APP_EFFECTIVE_MANIFEST = manifest;
 
         window.SKHPS_APP_ENV = {
           appId: appId,
@@ -600,6 +759,8 @@
           order: 9999,
           displayPosition: "",
           manifest: manifest,
+          rootManifest: rootManifest,
+          pageId: manifest.pageId || getCurrentPageId() || "",
           manifestUrl: window.SKHPS_APP_MANIFEST_URL_RESOLVED || "",
           afterScripts: manifest.entry.afterScripts || [],
           loadingTasks: manifest.entry.loadingTasks || []
@@ -662,7 +823,9 @@
     inferEnvFromPageLocation: inferEnvFromPageLocation,
     getAppManifestUrl: getAppManifestUrl,
     loadAppManifest: loadAppManifest,
-    loadVersionForManifest: loadVersionForManifest
+    loadVersionForManifest: loadVersionForManifest,
+    resolveEffectiveManifest: resolveEffectiveManifest,
+    getLoadedAppVersion: getLoadedAppVersion
   };
 
   installMinimalLoadingClasses();

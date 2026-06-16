@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/footer.js
-時間戳記：2026-06-14 16:45 UTC+8
+時間戳記：2026-06-16 19:05 UTC+8
 用途：Footer 三區 runtime 摘要與單一完整 runtime panel；只保留 closed/full；full 開啟時立刻展開 tail。短頁會補足 tail 前導距離；長頁原頁底開啟時允許 signed tail spacer，把 flow runtime 上緣直接對齊「footer 上緣 - summary cards 高度」。
 */
 
@@ -318,8 +318,36 @@
     return href;
   }
 
+  function getBusinessVersionInfo() {
+    var appEnv = window.SKHPS_APP_ENV || {};
+    var appVersion = window.SKHPS_APP_VERSION || window.SKHPS_APP_VERSION_INFO || null;
+    var envVersion = appEnv.appVersion || appEnv.version || "";
+
+    if (appVersion && typeof appVersion === "object" && appVersion.version) {
+      return appVersion;
+    }
+
+    if (envVersion) {
+      return {
+        appId: appEnv.appId || window.SKHPS_APP_ID || "",
+        version: String(envVersion || "").trim(),
+        source: "SKHPS_APP_ENV"
+      };
+    }
+
+    /*
+      Legacy fallback 只給舊頁面過渡用。
+      新外部專案標準仍是 version.js -> window.SKHPS_APP_VERSION。
+    */
+    if (window.SKHPS_VERSION && window.SKHPS_VERSION.version) {
+      return window.SKHPS_VERSION;
+    }
+
+    return null;
+  }
+
   function loadVersionJsIfNeeded() {
-    if (window.SKHPS_VERSION || versionLoadStarted) return;
+    if (getBusinessVersionInfo() || versionLoadStarted) return;
     versionLoadStarted = true;
 
     var script = document.createElement("script");
@@ -327,6 +355,9 @@
     script.async = true;
     rlog("RUN", "loadScript", script.src);
     script.onload = function () {
+      if (window.SKHPS_APP_VERSION && !window.SKHPS_APP_VERSION_INFO) {
+        window.SKHPS_APP_VERSION_INFO = window.SKHPS_APP_VERSION;
+      }
       rlog("OK", "scriptLoaded", script.src);
       render();
     };
@@ -338,9 +369,10 @@
   }
 
   function versionText() {
-    return window.SKHPS_VERSION && window.SKHPS_VERSION.version
-      ? String(window.SKHPS_VERSION.version)
-      : "v.unknown";
+    var versionInfo = getBusinessVersionInfo();
+    var version = versionInfo && versionInfo.version ? String(versionInfo.version || "").trim() : "";
+
+    return version || "v.unknown";
   }
 
   function failedTasks(gate) {

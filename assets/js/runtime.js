@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/runtime.js
 時間戳記：2026-06-14 16:45 UTC+8
-用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、模組狀態與最近 logs。
+用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、data source、模組狀態與最近 logs。
 */
 
 (function () {
@@ -539,7 +539,8 @@
     emitUpdated();
   }
 
-  function taskDone(taskName) {
+  function taskDone(taskName, extraData) {
+    extraData = extraData || {};
     taskName = String(taskName || "").trim();
     if (!taskName) return;
     state.loadingGate.taskStates = state.loadingGate.taskStates || {};
@@ -562,7 +563,7 @@
       requiredAt: now
     };
     var started = taskState.requiredAt ? Date.parse(taskState.requiredAt) : NaN;
-    state.loadingGate.taskStates[taskName] = Object.assign({}, taskState, {
+    state.loadingGate.taskStates[taskName] = Object.assign({}, taskState, extraData || {}, {
       status: "ok",
       completedAt: now,
       durationMs: isNaN(started) ? taskState.durationMs || null : Date.now() - started,
@@ -572,7 +573,8 @@
     emitUpdated();
   }
 
-  function taskFailed(taskName, error) {
+  function taskFailed(taskName, error, extraData) {
+    extraData = extraData || {};
     taskName = String(taskName || "").trim();
     if (!taskName) return;
     state.loadingGate.taskStates = state.loadingGate.taskStates || {};
@@ -599,7 +601,7 @@
       requiredAt: now
     };
     var started = taskState.requiredAt ? Date.parse(taskState.requiredAt) : NaN;
-    state.loadingGate.taskStates[taskName] = Object.assign({}, taskState, {
+    state.loadingGate.taskStates[taskName] = Object.assign({}, taskState, extraData || {}, {
       status: "fail",
       completedAt: now,
       durationMs: isNaN(started) ? taskState.durationMs || null : Date.now() - started,
@@ -769,6 +771,14 @@
         duration = elapsedSince(taskState.requiredAt);
       }
 
+      var sourceParts = [
+        taskState.sourceLabel ? "source=" + taskState.sourceLabel : "",
+        taskState.provider ? "provider=" + taskState.provider : "",
+        taskState.transport ? "via=" + taskState.transport : "",
+        taskState.table ? "table=" + taskState.table : "",
+        taskState.dataType ? "data=" + taskState.dataType : ""
+      ].filter(Boolean);
+
       return {
         name: taskName,
         status: status,
@@ -776,6 +786,7 @@
         detail: [
           status === "waiting" ? "waiting" : status === "ok" ? "completed" : "failed",
           formatDuration(duration),
+          sourceParts.join(" | "),
           failed || ""
         ].filter(Boolean).join(" | "),
         error: failed || ""
@@ -1088,14 +1099,35 @@
 
   function summarizeData() {
     var data = state.data || {};
+    var detail = data.detail && typeof data.detail === "object" ? data.detail : {};
     var status = String(data.status || "").toLowerCase();
+    var isStaffDirectory = detail.dataType === "staff-directory" || data.task === "quick-login-staff";
     var label = data.message || data.task || "not specified";
+    var reason;
+
+    if (isStaffDirectory) {
+      reason = detail.sourceLabel || detail.table || "人員主檔";
+
+      if (status === "ok" || status === "green" || status === "success") {
+        label = reason;
+      } else if (status === "waiting" || status === "loading" || status === "pending" || status === "run") {
+        label = "人員主檔載入中";
+      } else if (status === "fail" || status === "failed" || status === "error" || status === "red") {
+        label = "人員主檔讀取失敗";
+      }
+    } else {
+      reason = [
+        data.task || "",
+        detail.dataType ? "data=" + detail.dataType : "",
+        detail.sourceLabel ? "source=" + detail.sourceLabel : ""
+      ].filter(Boolean).join(" | ");
+    }
 
     if (status === "ok" || status === "green" || status === "success") {
       return {
         label: label,
         className: "skhps-runtime-ok",
-        reason: data.task || "data ok"
+        reason: reason || data.task || "data ok"
       };
     }
 
@@ -1103,7 +1135,7 @@
       return {
         label: label,
         className: "skhps-runtime-fail",
-        reason: data.task || "data failed"
+        reason: reason || data.task || "data failed"
       };
     }
 
@@ -1111,7 +1143,7 @@
       return {
         label: label,
         className: "skhps-runtime-waiting",
-        reason: data.task || "data warning"
+        reason: reason || data.task || "data warning"
       };
     }
 
@@ -1119,7 +1151,7 @@
       return {
         label: label,
         className: "skhps-runtime-waiting",
-        reason: data.task || "data loading"
+        reason: reason || data.task || "data loading"
       };
     }
 
@@ -1823,7 +1855,7 @@
     addRow(traffic, "Config", configSummary.reason || configSummary.label, configSummary.className);
     addRow(traffic, "Backend", backendSummary.reason || backendSummary.label, backendSummary.className);
     addRow(traffic, "CSS", cssSummary.reason || cssSummary.label, cssSummary.className);
-    addRow(traffic, "Data", dataSummary.reason + " | " + dataSummary.label, dataSummary.className);
+    addRow(traffic, "Data", dataSummary.reason || dataSummary.label, dataSummary.className);
     addRow(traffic, "Overall", overall.label, overall.className);
 
     var env = addSection(panel, "Environment");
@@ -1923,10 +1955,14 @@
       diagnostics.visibleCalendarsSample
     );
     var dataSection = addSection(panel, "Data");
+    var isStaffDirectoryData = dataDetail && (dataDetail.dataType === "staff-directory" || (state.data && state.data.task === "quick-login-staff"));
     addRow(dataSection, "Task", state.data && state.data.task || "-", dataSummary.className);
     addRow(dataSection, "Status", state.data && state.data.status || "-", dataSummary.className);
-    addRow(dataSection, "Message", state.data && state.data.message || "-", dataSummary.className);
-    if (hasCalendarDetail) {
+    addRow(dataSection, "Message", dataSummary.label || state.data && state.data.message || "-", dataSummary.className);
+    if (isStaffDirectoryData) {
+      addRow(dataSection, "Source", dataDetail.sourceLabel || "-");
+      addRow(dataSection, "Table", dataDetail.table || "-");
+    } else if (hasCalendarDetail) {
       addRow(dataSection, "Calendar Name", calendarDetail.name || diagnostics.calendarName || "-");
       addRow(dataSection, "Calendar ID", calendarDetail.id || diagnostics.calendarId || "-");
       addRow(dataSection, "Running Window", calendarDetail.runningWindow ? ("before " + calendarDetail.runningWindow.beforeMinutes + " min / after " + calendarDetail.runningWindow.afterMinutes + " min") : "-");
@@ -1936,8 +1972,10 @@
       addRow(dataSection, "Target Calendar Visible", diagnostics.targetCalendarVisible === undefined ? "-" : String(diagnostics.targetCalendarVisible), statusClass(diagnostics.targetCalendarVisible === false ? "fail" : diagnostics.targetCalendarVisible === true ? "ok" : ""));
       addRow(dataSection, "Accessible Calendar Count", diagnostics.accessibleCalendarCount === undefined ? "-" : diagnostics.accessibleCalendarCount);
       addRow(dataSection, "Visible Calendars Sample", diagnostics.visibleCalendarsSample || "-");
+      addRow(dataSection, "Raw Detail", dataDetail || "-");
+    } else {
+      addRow(dataSection, "Raw Detail", dataDetail || "-");
     }
-    addRow(dataSection, "Raw Detail", dataDetail || "-");
 
     var scriptRows = scriptStatusFromLogs();
     if (scriptRows.length) {

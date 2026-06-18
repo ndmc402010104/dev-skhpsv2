@@ -88,5 +88,26 @@
   "cssRuntime": {
     "source": "csv",
     "primarySheetKey": "cssMain"
+  },
+  "backend": {
+    "worker": {
+      "enabled": true,
+      "baseUrlByEnv": {
+        "local-dev": "https://skhps-backend.ndmc402010104.workers.dev",
+        "local": "https://skhps-backend.ndmc402010104.workers.dev",
+        "dev": "https://skhps-backend.ndmc402010104.workers.dev",
+        "prod": "https://skhps-backend.ndmc402010104.workers.dev"
+      },
+      "actions": {
+        "uploadFile": {
+          "enabled": true,
+          "route": "/api/upload-file",
+          "method": "POST",
+          "payloadType": "formData",
+          "background": true,
+          "affectsGate": false
+        }
+      }
+    }
   }
 }

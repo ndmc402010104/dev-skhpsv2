@@ -1,7 +1,7 @@
 ﻿/*
 檔案位置：skhpsv2/assets/js/backend-client.js
-時間戳記：2026-06-13 00:00 UTC+8
-用途：全站唯一 Apps Script API 呼叫入口；所有頁面、footer、CSS runtime 都只能透過 SKHPSBackend.call(action, payload) 呼叫後端，並提供通用外部專案 registry 讀寫 wrapper。
+時間戳記：2026-06-18 19:45 UTC+8
+用途：全站唯一後端呼叫入口；預設走 Apps Script JSONP，uploadFile 走 Cloudflare Worker 背景上傳，不影響 loading gate。
 */
 
 (function () {
@@ -346,6 +346,222 @@
     });
   }
 
+  function getBackendWorkerConfig(config) {
+    var backend = config && config.backend ? config.backend : {};
+    var worker = backend && backend.worker ? backend.worker : null;
+
+    if (!worker && config && config.workerBackend) {
+      worker = config.workerBackend;
+    }
+
+    return worker || null;
+  }
+
+  function getWorkerActionConfig(config, action) {
+    var worker = getBackendWorkerConfig(config);
+    var actions = worker && worker.actions ? worker.actions : {};
+    return actions[String(action || "")] || null;
+  }
+
+  function getWorkerBaseUrl(config, env) {
+    var worker = getBackendWorkerConfig(config);
+    var baseUrlByEnv;
+    var baseUrl = "";
+
+    if (!worker || worker.enabled === false) {
+      return "";
+    }
+
+    baseUrlByEnv = worker.baseUrlByEnv || {};
+
+    baseUrl = firstValue(
+      baseUrlByEnv[env],
+      env === "local-dev" ? baseUrlByEnv.local : "",
+      env === "local" ? baseUrlByEnv["local-dev"] : "",
+      baseUrlByEnv[String(config && config.env || "")],
+      worker.baseUrl,
+      worker.url
+    );
+
+    return String(baseUrl || "").replace(/\/+$/, "");
+  }
+
+  function shouldUseWorkerAction(config, action) {
+    var worker = getBackendWorkerConfig(config);
+    var actionConfig = getWorkerActionConfig(config, action);
+
+    if (String(action || "") !== "uploadFile") {
+      return false;
+    }
+
+    if (!worker || worker.enabled === false) {
+      return false;
+    }
+
+    if (!actionConfig || actionConfig.enabled === false) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function isBlobLike(value) {
+    return (
+      value &&
+      typeof value === "object" &&
+      typeof value.size === "number" &&
+      typeof value.arrayBuffer === "function"
+    );
+  }
+
+  function appendFormValue(form, key, value) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      form.append(key, String(value));
+    }
+  }
+
+  function normalizeWorkerUploadPayload(payload, config, env) {
+    payload = payload || {};
+
+    var file = payload.file || payload.blob || payload.attachment;
+    var meta = payload.meta || {};
+    var appId = firstValue(
+      payload.appId,
+      payload.app_id,
+      window.SKHPS_APP_ID,
+      window.SKHPSAppId,
+      config && config.app,
+      "skhpsv2"
+    );
+
+    if (!isBlobLike(file)) {
+      throw new Error("uploadFile 需要 payload.file，而且必須是 File 或 Blob");
+    }
+
+    return {
+      file: file,
+      filename: firstValue(payload.filename, payload.fileName, file.name, "upload.bin"),
+      appId: String(appId),
+      env: String(firstValue(payload.env, env, config && config.env, "unknown")),
+      bucket: payload.bucket,
+      path: payload.path || payload.objectPath || payload.object_path,
+      meta: meta
+    };
+  }
+
+  function callWorkerUploadFile(config, env, action, payload, options) {
+    options = options || {};
+
+    var actionConfig = getWorkerActionConfig(config, action) || {};
+    var workerBase = getWorkerBaseUrl(config, env);
+    var route = String(actionConfig.route || "/api/upload-file");
+    var endpoint = workerBase + route;
+    var uploadStartedAt = Date.now();
+    var normalized;
+    var form;
+    var controller = null;
+    var timer = null;
+    var timeoutMs = Number(options.timeoutMs || actionConfig.timeoutMs || DEFAULT_TIMEOUT_MS);
+
+    if (!workerBase) {
+      throw new Error("找不到 config.json 裡的 backend.worker.baseUrlByEnv." + env);
+    }
+
+    normalized = normalizeWorkerUploadPayload(payload, config, env);
+
+    form = new FormData();
+    form.append("file", normalized.file, normalized.filename);
+    form.append("appId", normalized.appId);
+    form.append("env", normalized.env);
+
+    appendFormValue(form, "bucket", normalized.bucket);
+    appendFormValue(form, "path", normalized.path);
+
+    form.append("meta", JSON.stringify(Object.assign({
+      background: true,
+      affectsGate: false,
+      source: "backend-client.js"
+    }, normalized.meta || {})));
+
+    rlog("RUN", "workerUpload", {
+      action: action,
+      endpoint: endpoint,
+      appId: normalized.appId,
+      env: normalized.env,
+      affectsGate: false
+    });
+
+    if (typeof AbortController !== "undefined" && timeoutMs > 0) {
+      controller = new AbortController();
+      timer = setTimeout(function () {
+        try {
+          controller.abort();
+        } catch (error) {}
+      }, timeoutMs);
+    }
+
+    return fetch(endpoint, {
+      method: String(actionConfig.method || "POST"),
+      body: form,
+      headers: {
+        "X-SKHPS-App-Id": normalized.appId,
+        "X-SKHPS-Env": normalized.env
+      },
+      signal: controller ? controller.signal : undefined
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        var data = null;
+
+        if (timer) {
+          clearTimeout(timer);
+        }
+
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch (error) {
+          data = {
+            raw: text
+          };
+        }
+
+        if (!response.ok || !data || data.ok === false) {
+          var message =
+            data && data.error
+              ? data.error
+              : "Worker upload failed: HTTP " + response.status;
+
+          var workerError = new Error(message);
+          workerError.status = response.status;
+          workerError.response = data;
+          throw workerError;
+        }
+
+        rlog("OK", "workerUpload", {
+          action: action,
+          endpoint: endpoint,
+          path: data.path || "",
+          bucket: data.bucket || "",
+          affectsGate: false
+        }, Date.now() - uploadStartedAt);
+
+        return data;
+      });
+    }).catch(function (error) {
+      if (timer) {
+        clearTimeout(timer);
+      }
+
+      rlog("FAIL", "workerUpload", {
+        action: action,
+        endpoint: endpoint,
+        error: error && error.message ? error.message : String(error),
+        affectsGate: false
+      }, Date.now() - uploadStartedAt);
+
+      throw error;
+    });
+  }
+
   function call(action, payload, options) {
     var startedAt = Date.now();
     var resource = inferResource(action, payload);
@@ -405,6 +621,10 @@
         endpoint: endpoint,
         env: env
       }, Date.now() - startedAt);
+
+      if (shouldUseWorkerAction(config, action)) {
+        return callWorkerUploadFile(config, env, action, payload, options);
+      }
 
       return callJsonp(endpoint, action, payload, options);
     }).then(function (response) {
@@ -529,12 +749,17 @@
     return call("updateExternalProjectActivation", payload || {}, options);
   }
 
+  function uploadFile(payload, options) {
+    return call("uploadFile", payload || {}, options);
+  }
+
   window.SKHPSBackend = {
     loadConfig: loadConfig,
     getEndpoint: getEndpoint,
     call: call,
     listExternalProjects: listExternalProjects,
     updateExternalProjectActivation: updateExternalProjectActivation,
+    uploadFile: uploadFile,
     bindHealthButton: bindHealthButton
   };
   rlog("OK", "moduleReady", "backend-client.js");

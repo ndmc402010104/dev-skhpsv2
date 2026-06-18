@@ -1,7 +1,7 @@
-﻿/*
+/*
 檔案位置：skhpsv2/assets/js/backend-client.js
-時間戳記：2026-06-18 19:45 UTC+8
-用途：全站唯一後端呼叫入口；預設走 Apps Script JSONP，uploadFile 走 Cloudflare Worker 背景上傳，不影響 loading gate。
+時間戳記：2026-06-19 00:45 UTC+8
+用途：全站唯一後端呼叫入口；registry 讀取支援 Apps Script / Cloudflare Worker 競速，registry 寫入支援 Sheet / Supabase 雙寫，uploadFile 走 Cloudflare Worker 背景上傳。
 */
 
 (function () {
@@ -9,6 +9,19 @@
 
   var DEFAULT_TIMEOUT_MS = 15000;
   var configPromise = null;
+
+  var WORKER_READ_RACE_ACTIONS = {
+    listExternalProjects: true,
+    listExternalApps: true,
+    listExternalProjectsForLauncher: true
+  };
+
+  var WORKER_DUAL_WRITE_ACTIONS = {
+    registerExternalApp: true,
+    updateExternalProjectActivation: true,
+    updateExternalAppSettings: true,
+    setExternalAppActive: true
+  };
 
   function runtime() {
     return window.SKHPSRuntime || null;
@@ -30,6 +43,79 @@
   }
 
   rlog("RUN", "moduleStart", "backend-client.js");
+
+
+  function currentPageHint() {
+    var html = document.documentElement;
+    var body = document.body || {};
+    var values = [
+      html && html.getAttribute && html.getAttribute("data-skhps-page-id"),
+      html && html.getAttribute && html.getAttribute("data-page-id"),
+      body && body.getAttribute && body.getAttribute("data-skhps-page-id"),
+      body && body.getAttribute && body.getAttribute("data-page-id"),
+      window.SKHPS_PAGE_ID,
+      window.SKHPS_CURRENT_PAGE_ID,
+      location && location.pathname,
+      location && location.href
+    ];
+
+    return values.map(function (value) {
+      return String(value || "").toLowerCase();
+    }).join(" | ");
+  }
+
+  function isBackendProjectLauncherPage() {
+    var hint = currentPageHint();
+
+    return Boolean(
+      hint.indexOf("backend-project-launcher") >= 0 ||
+      hint.indexOf("project-launcher") >= 0 ||
+      document.querySelector("[data-backend-project-launcher-list]") ||
+      document.querySelector("[data-backend-project-launcher-editor]") ||
+      document.querySelector("[data-backend-project-launcher-status]")
+    );
+  }
+
+  function normalizeLauncherRegistryReadAction(action, payload) {
+    var normalizedAction = String(action || "");
+    var normalizedPayload = Object.assign({}, payload || {});
+
+    /*
+      後台專案啟動器是管理頁，必須讀完整 registry。
+      舊版前端仍可能呼叫首頁用 listExternalProjects，這裡強制轉成專用 action，避免只拿到前台啟用項目。
+    */
+    if (
+      isBackendProjectLauncherPage() &&
+      (normalizedAction === "listExternalProjects" || normalizedAction === "listExternalApps")
+    ) {
+      normalizedAction = "listExternalProjectsForLauncher";
+      normalizedPayload.activeOnly = false;
+      normalizedPayload.includeDisabled = true;
+      normalizedPayload.includeInactive = true;
+      normalizedPayload.launcherMode = true;
+      normalizedPayload.forceFresh = true;
+      normalizedPayload.source = normalizedPayload.source || "backend-client-launcher-force-all";
+
+      rlog("INFO", "launcherRegistryActionForced", {
+        fromAction: action,
+        toAction: normalizedAction,
+        payload: normalizedPayload
+      });
+
+      try {
+        console.info("[SKHPSBackend] launcherRegistryActionForced", {
+          fromAction: action,
+          toAction: normalizedAction,
+          payload: normalizedPayload
+        });
+      } catch (error) {}
+    }
+
+    return {
+      action: normalizedAction,
+      payload: normalizedPayload
+    };
+  }
 
   function runtimeStart(name) {
     if (runtime() && typeof runtime().start === "function") {
@@ -562,7 +648,388 @@
     });
   }
 
+
+  function workerActionEnabledForRegistry(config, action) {
+    var worker = getBackendWorkerConfig(config);
+    var actionConfig = getWorkerActionConfig(config, action);
+
+    if (!worker || worker.enabled === false) {
+      return false;
+    }
+
+    /*
+      Registry action 預設可走 /api/action。
+      若 config.json 有明確 actions[action].enabled=false，才關閉。
+      這樣不需要為每個 registry action 都先寫死 route。
+    */
+    if (actionConfig && actionConfig.enabled === false) {
+      return false;
+    }
+
+    return Boolean(getWorkerBaseUrl(config, getCurrentEnv(config)) || getWorkerBaseUrl(config, config && config.env));
+  }
+
+  function getCurrentEnv(config) {
+    if (window.SKHPSConfig && typeof window.SKHPSConfig.getEnv === "function") {
+      return window.SKHPSConfig.getEnv(config);
+    }
+
+    if (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.env) {
+      return window.SKHPS_APP_ENV.env;
+    }
+
+    if (document.documentElement && document.documentElement.getAttribute("data-skhps-runtime")) {
+      return document.documentElement.getAttribute("data-skhps-runtime");
+    }
+
+    return config && (config.runtimeEnv || config.env) || "";
+  }
+
+  function normalizeWorkerEnv(env) {
+    env = String(env || "").trim();
+
+    if (env === "LOCAL") return "local-dev";
+    if (env === "DEV") return "dev";
+    if (env === "PROD") return "prod";
+
+    return env || "prod";
+  }
+
+  function normalizeRegistryResponse(response, source) {
+    response = response || {};
+
+    var items =
+      Array.isArray(response.apps) ? response.apps :
+        Array.isArray(response.projects) ? response.projects :
+          Array.isArray(response.items) ? response.items :
+            response.data && Array.isArray(response.data.apps) ? response.data.apps :
+              response.data && Array.isArray(response.data.projects) ? response.data.projects :
+                response.data && Array.isArray(response.data.items) ? response.data.items :
+                  [];
+
+    if (!Array.isArray(response.apps)) {
+      response.apps = items;
+    }
+
+    if (!Array.isArray(response.projects)) {
+      response.projects = items;
+    }
+
+    response.count = Number(response.count || items.length || 0) || 0;
+    response.source = response.source || source || "unknown";
+    response.sourceLabel = response.sourceLabel ||
+      (source === "cloudflare" ? "Supabase Registry / Cloudflare Worker" :
+        source === "apps-script" ? "Google Sheet / Apps Script" :
+          response.source);
+
+    return response;
+  }
+
+  function isRegistryListResponseValid(response) {
+    var items;
+
+    if (!response || response.ok === false) {
+      return false;
+    }
+
+    items = Array.isArray(response.apps) ? response.apps :
+      Array.isArray(response.projects) ? response.projects :
+        Array.isArray(response.items) ? response.items :
+          response.data && Array.isArray(response.data.apps) ? response.data.apps :
+            response.data && Array.isArray(response.data.projects) ? response.data.projects :
+              response.data && Array.isArray(response.data.items) ? response.data.items :
+                null;
+
+    if (!Array.isArray(items)) {
+      return false;
+    }
+
+    /*
+      避免 Supabase 新表還沒匯入 CSV 時，空陣列太快回來，反而搶贏 Apps Script。
+      若未來真的有合法空 registry，可在 response.allowEmptyRegistry=true 放行。
+    */
+    if (!items.length && response.allowEmptyRegistry !== true) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function callWorkerJsonAction(config, env, action, payload, options) {
+    options = options || {};
+
+    var actionConfig = getWorkerActionConfig(config, action) || {};
+    var workerBase = getWorkerBaseUrl(config, env);
+    var route = String(actionConfig.route || "/api/action");
+    var endpoint = workerBase + route;
+    var workerStartedAt = Date.now();
+    var controller = null;
+    var timer = null;
+    var timeoutMs = Number(options.timeoutMs || actionConfig.timeoutMs || DEFAULT_TIMEOUT_MS);
+    var normalizedEnv = normalizeWorkerEnv(env);
+
+    if (!workerBase) {
+      return Promise.reject(new Error("找不到 config.json 裡的 backend.worker.baseUrlByEnv." + env));
+    }
+
+    rlog("RUN", "workerAction", {
+      action: action,
+      endpoint: endpoint,
+      env: normalizedEnv
+    });
+
+    if (typeof AbortController !== "undefined" && timeoutMs > 0) {
+      controller = new AbortController();
+      timer = setTimeout(function () {
+        try {
+          controller.abort();
+        } catch (error) {}
+      }, timeoutMs);
+    }
+
+    return fetch(endpoint, {
+      method: String(actionConfig.method || "POST"),
+      headers: {
+        "Content-Type": "application/json",
+        "X-SKHPS-App-Id": payload && payload.appId || payload && payload.projectId || "skhpsv2",
+        "X-SKHPS-Env": normalizedEnv
+      },
+      body: JSON.stringify({
+        action: action,
+        env: normalizedEnv,
+        payload: payload || {}
+      }),
+      signal: controller ? controller.signal : undefined
+    }).then(function (response) {
+      return response.text().then(function (text) {
+        var data = null;
+
+        if (timer) {
+          clearTimeout(timer);
+        }
+
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch (error) {
+          data = {
+            ok: false,
+            error: "INVALID_WORKER_JSON",
+            raw: text
+          };
+        }
+
+        if (!response.ok || !data || data.ok === false) {
+          var message =
+            data && (data.message || data.error)
+              ? (data.message || data.error)
+              : "Worker action failed: HTTP " + response.status;
+
+          var workerError = new Error(message);
+          workerError.status = response.status;
+          workerError.response = data;
+          throw workerError;
+        }
+
+        rlog("OK", "workerAction", {
+          action: action,
+          endpoint: endpoint,
+          env: normalizedEnv,
+          source: data.source || "cloudflare"
+        }, Date.now() - workerStartedAt);
+
+        return data;
+      });
+    }).catch(function (error) {
+      if (timer) {
+        clearTimeout(timer);
+      }
+
+      rlog("FAIL", "workerAction", {
+        action: action,
+        endpoint: endpoint,
+        env: normalizedEnv,
+        error: error && error.message ? error.message : String(error)
+      }, Date.now() - workerStartedAt);
+
+      throw error;
+    });
+  }
+
+  function firstSuccessfulRegistryRead(loaders) {
+    return new Promise(function (resolve, reject) {
+      var pending = loaders.length;
+      var errors = [];
+      var resolved = false;
+
+      if (!pending) {
+        reject(new Error("No registry source available"));
+        return;
+      }
+
+      loaders.forEach(function (loader) {
+        loader.promise
+          .then(function (response) {
+            var normalized = normalizeRegistryResponse(response, loader.source);
+
+            if (!isRegistryListResponseValid(normalized)) {
+              throw new Error(loader.source + " returned invalid registry payload");
+            }
+
+            if (resolved) {
+              rlog("INFO", "registryLateSourceIgnored", {
+                action: loader.action,
+                source: loader.source,
+                count: normalized.count
+              });
+              return;
+            }
+
+            resolved = true;
+            normalized.winner = loader.source;
+            normalized.mode = "parallel-first-available";
+            resolve(normalized);
+          })
+          .catch(function (error) {
+            errors.push({
+              source: loader.source,
+              error: error
+            });
+
+            pending -= 1;
+            if (pending <= 0 && !resolved) {
+              reject(new Error(
+                "listExternalProjects all sources failed: " +
+                  errors.map(function (item) {
+                    return item.source + ": " + (item.error && item.error.message ? item.error.message : String(item.error));
+                  }).join(" | ")
+              ));
+            }
+          });
+      });
+    });
+  }
+
+  function callRegistryReadRace(config, env, endpoint, action, payload, options) {
+    var loaders = [];
+    var normalizedEnv = normalizeWorkerEnv(env);
+
+    if (endpoint) {
+      loaders.push({
+        source: "apps-script",
+        action: action,
+        promise: callJsonp(endpoint, action, payload, options)
+      });
+    }
+
+    if (workerActionEnabledForRegistry(config, action)) {
+      loaders.push({
+        source: "cloudflare",
+        action: action,
+        promise: callWorkerJsonAction(config, normalizedEnv, action, payload, options)
+      });
+    }
+
+    if (loaders.length === 1) {
+      return loaders[0].promise.then(function (response) {
+        return normalizeRegistryResponse(response, loaders[0].source);
+      });
+    }
+
+    return firstSuccessfulRegistryRead(loaders);
+  }
+
+  function resultOk(result) {
+    return result && result.ok !== false;
+  }
+
+  function callRegistryDualWrite(config, env, endpoint, action, payload, options) {
+    var loaders = [];
+    var normalizedEnv = normalizeWorkerEnv(env);
+
+    if (endpoint) {
+      loaders.push({
+        source: "apps-script",
+        promise: callJsonp(endpoint, action, payload, options)
+      });
+    }
+
+    if (workerActionEnabledForRegistry(config, action)) {
+      loaders.push({
+        source: "cloudflare",
+        promise: callWorkerJsonAction(config, normalizedEnv, action, payload, options)
+      });
+    }
+
+    if (!loaders.length) {
+      return Promise.reject(new Error("No registry write source available"));
+    }
+
+    return Promise.all(loaders.map(function (loader) {
+      return loader.promise
+        .then(function (result) {
+          return {
+            source: loader.source,
+            ok: resultOk(result),
+            result: result
+          };
+        })
+        .catch(function (error) {
+          return {
+            source: loader.source,
+            ok: false,
+            error: error && error.message ? error.message : String(error)
+          };
+        });
+    })).then(function (results) {
+      var okResults = results.filter(function (item) {
+        return item.ok === true;
+      });
+      var writes = {};
+
+      results.forEach(function (item) {
+        writes[item.source] = item.error
+          ? {
+            ok: false,
+            error: item.error
+          }
+          : Object.assign({
+            ok: item.ok
+          }, item.result || {});
+      });
+
+      if (!okResults.length) {
+        return {
+          ok: false,
+          action: action,
+          source: "dual-write",
+          sourceLabel: "Sheet / Supabase 都失敗",
+          error: results.map(function (item) {
+            return item.source + ": " + (item.error || item.result && (item.result.message || item.result.error) || "ok=false");
+          }).join(" | "),
+          writes: writes
+        };
+      }
+
+      return {
+        ok: true,
+        action: action,
+        source: "dual-write",
+        sourceLabel: "Google Sheet / Apps Script + Supabase Registry",
+        primarySource: okResults[0].source,
+        partialWrite: okResults.length < loaders.length,
+        writes: writes,
+        result: okResults[0].result || null,
+        data: okResults[0].result && okResults[0].result.data || null
+      };
+    });
+  }
+
+
   function call(action, payload, options) {
+    var normalizedLauncherCall = normalizeLauncherRegistryReadAction(action, payload);
+    action = normalizedLauncherCall.action;
+    payload = normalizedLauncherCall.payload;
+
     var startedAt = Date.now();
     var resource = inferResource(action, payload);
     var callId =
@@ -621,6 +1088,14 @@
         endpoint: endpoint,
         env: env
       }, Date.now() - startedAt);
+
+      if (WORKER_READ_RACE_ACTIONS[action]) {
+        return callRegistryReadRace(config, env, endpoint, action, payload || {}, options);
+      }
+
+      if (WORKER_DUAL_WRITE_ACTIONS[action]) {
+        return callRegistryDualWrite(config, env, endpoint, action, payload || {}, options);
+      }
 
       if (shouldUseWorkerAction(config, action)) {
         return callWorkerUploadFile(config, env, action, payload, options);
@@ -745,8 +1220,28 @@
     return call("listExternalProjects", payload || {}, options);
   }
 
+  function listExternalProjectsForLauncher(payload, options) {
+    payload = Object.assign({
+      activeOnly: false,
+      includeDisabled: true,
+      includeInactive: true,
+      launcherMode: true,
+      forceFresh: true
+    }, payload || {});
+
+    return call("listExternalProjectsForLauncher", payload, options);
+  }
+
   function updateExternalProjectActivation(payload, options) {
     return call("updateExternalProjectActivation", payload || {}, options);
+  }
+
+  function updateExternalAppSettings(payload, options) {
+    return call("updateExternalAppSettings", payload || {}, options);
+  }
+
+  function registerExternalApp(payload, options) {
+    return call("registerExternalApp", payload || {}, options);
   }
 
   function uploadFile(payload, options) {
@@ -758,7 +1253,10 @@
     getEndpoint: getEndpoint,
     call: call,
     listExternalProjects: listExternalProjects,
+    listExternalProjectsForLauncher: listExternalProjectsForLauncher,
     updateExternalProjectActivation: updateExternalProjectActivation,
+    updateExternalAppSettings: updateExternalAppSettings,
+    registerExternalApp: registerExternalApp,
     uploadFile: uploadFile,
     bindHealthButton: bindHealthButton
   };

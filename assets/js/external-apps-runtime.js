@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/external-apps-runtime.js
-時間戳：2026-06-16 UTC+8
-用途：首頁讀取 Sheet「外部專案」，只顯示目前 runtime、啟用=true、且「顯示位置」為前台的外部專案。
+時間戳：2026-06-18 23:55 UTC+8
+用途：首頁讀取 external app registry（Apps Script / Sheet 或 Cloudflare / Supabase 競速），只顯示目前 runtime、啟用=true、且「顯示位置」為前台的外部專案。
 
 Loading Gate：
 - 任務名稱：external-apps-layout
@@ -185,7 +185,11 @@ Loading Gate：
   function normalizeApps(response) {
     if (!response) return [];
     if (Array.isArray(response.apps)) return response.apps;
+    if (Array.isArray(response.projects)) return response.projects;
+    if (Array.isArray(response.items)) return response.items;
     if (response.data && Array.isArray(response.data.apps)) return response.data.apps;
+    if (response.data && Array.isArray(response.data.projects)) return response.data.projects;
+    if (response.data && Array.isArray(response.data.items)) return response.data.items;
     return [];
   }
 
@@ -201,6 +205,8 @@ Loading Gate：
     var value = app && (
       app["顯示位置"] ||
       app.displayPosition ||
+      app.placement ||
+      app.location ||
       ""
     );
 
@@ -220,6 +226,8 @@ Loading Gate：
     var value = app && (
       app.order ||
       app.sort ||
+      app.sortOrder ||
+      app.sort_order ||
       app["排序"] ||
       9999
     );
@@ -325,9 +333,18 @@ Loading Gate：
 
       var apps = filterHomeApps(normalizeApps(response));
 
+      /*
+        Array 可以帶少量 metadata，避免改動既有 API 回傳型態。
+        init() 仍然把 apps 當陣列用，但 Runtime Panel 可以看到來源。
+      */
+      apps.registrySource = response && (response.source || response.winner || response.primarySource || "");
+      apps.registrySourceLabel = response && (response.sourceLabel || "");
+      apps.registryMode = response && (response.mode || "");
+
       rlog("OK", "listExternalApps", {
         env: runtime,
-        count: apps.length
+        count: apps.length,
+        source: apps.registrySource || "backend"
       }, Date.now() - loadStartedAt);
 
       return apps;
@@ -355,7 +372,9 @@ Loading Gate：
         setRuntimeExternalApps({
           loaded: true,
           task: TASK_NAME,
-          source: "backend",
+          source: apps.registrySource || "backend",
+          sourceLabel: apps.registrySourceLabel || "",
+          mode: apps.registryMode || "",
           count: apps.length,
           env: runtime,
           error: "",

@@ -1,6 +1,6 @@
 /**
  * 檔案位置：skhpsv2/apps-script/Code.gs
- * 時間戳記：2026-06-13 00:00 UTC+8
+ * 時間戳記：2026-06-19 00:45 UTC+8
  * 用途：skhpsv2 Apps Script API 入口與 action router；統一 JSON / JSONP 回傳，任何例外都包成 JSONP，並提供外部專案 Sheet registry 通用讀寫 action。
  */
 
@@ -64,6 +64,7 @@ function routeAction_(action, params) {
     'setExternalAppActive',
     'updateExternalAppSettings',
     'listExternalProjects',
+    'listExternalProjectsForLauncher',
     'updateExternalProjectActivation'
   ];
 
@@ -209,6 +210,28 @@ function routeAction_(action, params) {
     projectListResult.serverTime = getServerTime_();
 
     return projectListResult;
+  }
+
+  if (action === 'listExternalProjectsForLauncher') {
+    var launcherListPayload = parsePayload_(params);
+    var launcherListResult;
+
+    if (typeof listExternalProjectsForLauncher === 'function') {
+      launcherListResult = listExternalProjectsForLauncher(launcherListPayload);
+    } else {
+      launcherListPayload.activeOnly = false;
+      launcherListPayload.includeDisabled = true;
+      launcherListPayload.includeInactive = true;
+      launcherListPayload.launcherMode = true;
+      launcherListResult = listExternalProjects(launcherListPayload);
+    }
+
+    launcherListResult.action = action;
+    launcherListResult.app = 'skhpsv2';
+    launcherListResult.env = getServerEnv_();
+    launcherListResult.serverTime = getServerTime_();
+
+    return launcherListResult;
   }
 
   if (action === 'setExternalAppActive') {

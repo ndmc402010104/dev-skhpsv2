@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/runtime.js
-時間戳記：2026-06-14 16:45 UTC+8
-用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、data source、模組狀態與最近 logs。
+時間戳記：2026-06-18 17:20 UTC+8
+用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、data source、模組狀態與最近 logs；Data 區會顯示實際放行資料來源。
 */
 
 (function () {
@@ -218,6 +218,17 @@
       status: "",
       message: "",
       detail: null,
+      source: "",
+      sourceLabel: "",
+      provider: "",
+      transport: "",
+      table: "",
+      action: "",
+      dataType: "",
+      count: null,
+      env: "",
+      gateTask: "",
+      winner: "",
       updatedAt: ""
     },
     modules: {},
@@ -452,6 +463,9 @@
   function setDataStatus(data) {
     data = data || {};
 
+    var inputDetail = data.detail || data.data || null;
+    var dataSourceInfo = normalizeDataSourceInfo(data, data.task || data.name || state.data.task || "");
+
     var status = String(data.status || data.state || "").trim().toLowerCase();
     var allowed = {
       ok: true,
@@ -477,8 +491,19 @@
     mergeSection("data", {
       task: String(data.task || data.name || state.data.task || "").trim(),
       status: status,
-      message: String(data.message || data.error || "").trim(),
-      detail: data.detail || data.data || null,
+      message: String(data.message || data.error || dataSourceInfo.sourceLabel || "").trim(),
+      detail: inputDetail,
+      source: dataSourceInfo.source || state.data.source || "",
+      sourceLabel: dataSourceInfo.sourceLabel || state.data.sourceLabel || "",
+      provider: dataSourceInfo.provider || state.data.provider || "",
+      transport: dataSourceInfo.transport || state.data.transport || "",
+      table: dataSourceInfo.table || state.data.table || "",
+      action: dataSourceInfo.action || state.data.action || "",
+      dataType: dataSourceInfo.dataType || state.data.dataType || "",
+      count: dataSourceInfo.count !== null && dataSourceInfo.count !== undefined ? dataSourceInfo.count : state.data.count,
+      env: dataSourceInfo.env || state.data.env || "",
+      gateTask: dataSourceInfo.gateTask || state.data.gateTask || "",
+      winner: dataSourceInfo.winner || state.data.winner || "",
       updatedAt: nowIso()
     });
 
@@ -501,7 +526,17 @@
   }
 
   function setExternalApps(data) {
+    data = data || {};
     mergeSection("externalApps", data);
+
+    if (data.loaded || data.source || data.sourceLabel || data.table || data.registryTable || data.count !== undefined) {
+      promoteDataSource("external-apps-runtime", Object.assign({
+        status: data.error ? "fail" : data.loaded ? "ok" : "waiting",
+        message: data.message || data.sourceLabel || "外部專案資料",
+        dataType: data.dataType || "external-project-registry",
+        count: data.count
+      }, data));
+    }
   }
 
   function uniqueList(items) {
@@ -569,6 +604,11 @@
       durationMs: isNaN(started) ? taskState.durationMs || null : Date.now() - started,
       error: ""
     });
+
+    promoteDataSource(taskName, Object.assign({
+      status: "ok",
+      gateTask: taskName
+    }, extraData || {}));
 
     emitUpdated();
   }
@@ -728,6 +768,364 @@
     }
 
     return value;
+  }
+
+
+  function firstValue() {
+    var i;
+
+    for (i = 0; i < arguments.length; i += 1) {
+      if (arguments[i] !== null && arguments[i] !== undefined && arguments[i] !== "") {
+        return arguments[i];
+      }
+    }
+
+    return "";
+  }
+
+  function objectValue(source, keys) {
+    var i;
+
+    if (!source || typeof source !== "object") return "";
+
+    for (i = 0; i < keys.length; i += 1) {
+      if (source[keys[i]] !== null && source[keys[i]] !== undefined && source[keys[i]] !== "") {
+        return source[keys[i]];
+      }
+    }
+
+    return "";
+  }
+
+  function normalizeSourceKey(value) {
+    value = String(value || "").trim();
+
+    if (!value || value === "runtime.js" || value === "runtime") return "";
+    return value;
+  }
+
+  function cleanDataSourceLabel(value) {
+    value = String(value || "").trim();
+    if (!value) return "";
+
+    value = value
+      .replace(/\s*\/\s*Cloudflare Worker\s*/gi, "")
+      .replace(/\s*\/\s*cloudflare-worker\s*/gi, "")
+      .replace(/\s*\/\s*Worker\s*/gi, "")
+      .replace(/\s*via\s+Cloudflare Worker\s*/gi, "")
+      .replace(/\s*\|\s*transport=cloudflare-worker\s*/gi, "")
+      .trim();
+
+    if (/^Google Sheet\s*\/\s*Apps Script$/i.test(value)) return "Google Sheet";
+
+    /*
+      統一 Runtime Panel > Data 的來源格式：
+      - Supabase / StaffMaster
+      - Supabase / ExternalProject
+      這裡只顯示「資料來源 / 資料表或資料集」，不把 Cloudflare Worker 這類傳輸層當 data source 顯示。
+    */
+    value = value.replace(/^Supabase\s+\/\s+/i, "Supabase / ");
+    if (/^Supabase\s+[^/]+$/i.test(value)) {
+      value = value.replace(/^Supabase\s+/i, "Supabase / ");
+    }
+
+    return value;
+  }
+
+  function sourceLabelFromSource(source, table, fallback) {
+    var key = String(source || "").toLowerCase();
+    var tableName = String(table || "").trim();
+
+    if (fallback) return cleanDataSourceLabel(fallback);
+
+    if (key.indexOf("supabase") >= 0) {
+      return cleanDataSourceLabel(tableName ? "Supabase / " + tableName : "Supabase");
+    }
+
+    if (key.indexOf("apps-script") >= 0 || key.indexOf("appscript") >= 0 || key.indexOf("jsonp") >= 0) {
+      return "Google Sheet";
+    }
+
+    if (key.indexOf("sheet") >= 0 || key === "csv") {
+      return "Google Sheet";
+    }
+
+    if (key.indexOf("cloudflare") >= 0 || key.indexOf("worker") >= 0 || key.indexOf("skhps-backend") >= 0) {
+      return cleanDataSourceLabel(tableName || "Backend");
+    }
+
+    return cleanDataSourceLabel(source || tableName || "");
+  }
+
+  function normalizeCount(value) {
+    if (value === null || value === undefined || value === "") return null;
+    if (Array.isArray(value)) return value.length;
+    var numberValue = Number(value);
+    return isNaN(numberValue) ? value : numberValue;
+  }
+
+  function normalizeDataSourceInfo(input, fallbackTask) {
+    input = input || {};
+
+    var detail = input.detail || input.data || null;
+    var detailObject = detail && typeof detail === "object" && !Array.isArray(detail) ? detail : {};
+    var nestedDetail = detailObject.detail && typeof detailObject.detail === "object" ? detailObject.detail : {};
+    var diagnostics = detailObject.diagnostics && typeof detailObject.diagnostics === "object" ? detailObject.diagnostics : {};
+    var source = normalizeSourceKey(firstValue(
+      objectValue(input, ["sourceKey", "source", "winnerSource", "currentSource"]),
+      objectValue(detailObject, ["sourceKey", "source", "winnerSource", "currentSource"]),
+      objectValue(nestedDetail, ["sourceKey", "source", "winnerSource", "currentSource"]),
+      objectValue(diagnostics, ["sourceKey", "source", "winnerSource", "currentSource"])
+    ));
+    var table = firstValue(
+      objectValue(input, ["registryTable", "table", "tableName", "sheetName"]),
+      objectValue(detailObject, ["registryTable", "table", "tableName", "sheetName"]),
+      objectValue(nestedDetail, ["registryTable", "table", "tableName", "sheetName"]),
+      objectValue(diagnostics, ["registryTable", "table", "tableName", "sheetName"])
+    );
+    var sourceLabel = firstValue(
+      objectValue(input, ["sourceLabel", "winnerLabel", "label"]),
+      objectValue(detailObject, ["sourceLabel", "winnerLabel", "label"]),
+      objectValue(nestedDetail, ["sourceLabel", "winnerLabel", "label"]),
+      objectValue(diagnostics, ["sourceLabel", "winnerLabel", "label"])
+    );
+    var action = firstValue(
+      objectValue(input, ["action", "resourceName", "name"]),
+      objectValue(detailObject, ["action", "resourceName", "name"]),
+      objectValue(nestedDetail, ["action", "resourceName", "name"]),
+      fallbackTask
+    );
+    var count = firstValue(
+      objectValue(input, ["count", "rowsCount", "rowCount", "projectsCount", "appsCount", "total"]),
+      objectValue(detailObject, ["count", "rowsCount", "rowCount", "projectsCount", "appsCount", "total"]),
+      objectValue(nestedDetail, ["count", "rowsCount", "rowCount", "projectsCount", "appsCount", "total"])
+    );
+
+    if (count === "" && Array.isArray(input.projects)) count = input.projects.length;
+    if (count === "" && Array.isArray(input.apps)) count = input.apps.length;
+    if (count === "" && Array.isArray(detailObject.projects)) count = detailObject.projects.length;
+    if (count === "" && Array.isArray(detailObject.apps)) count = detailObject.apps.length;
+
+    return {
+      task: String(fallbackTask || input.task || input.name || "").trim(),
+      status: String(input.status || input.state || "").trim().toLowerCase(),
+      source: source,
+      sourceLabel: sourceLabelFromSource(source, table, sourceLabel),
+      provider: firstValue(
+        objectValue(input, ["provider"]),
+        objectValue(detailObject, ["provider"]),
+        source.indexOf("supabase") >= 0 ? "supabase" : ""
+      ),
+      transport: firstValue(
+        objectValue(input, ["transport", "via"]),
+        objectValue(detailObject, ["transport", "via"]),
+        source.indexOf("supabase") >= 0 || source.indexOf("cloudflare") >= 0 || source.indexOf("skhps-backend") >= 0 ? "cloudflare-worker" : ""
+      ),
+      table: table,
+      action: action,
+      dataType: firstValue(
+        objectValue(input, ["dataType", "type"]),
+        objectValue(detailObject, ["dataType", "type"]),
+        objectValue(nestedDetail, ["dataType", "type"])
+      ),
+      count: normalizeCount(count),
+      env: firstValue(
+        objectValue(input, ["env", "runtime", "runtimeEnv"]),
+        objectValue(detailObject, ["env", "runtime", "runtimeEnv"]),
+        objectValue(nestedDetail, ["env", "runtime", "runtimeEnv"])
+      ),
+      gateTask: firstValue(
+        objectValue(input, ["gateTask", "task"]),
+        objectValue(detailObject, ["gateTask", "task"]),
+        fallbackTask
+      ),
+      winner: firstValue(
+        objectValue(input, ["winner", "winnerSource"]),
+        objectValue(detailObject, ["winner", "winnerSource"])
+      ),
+      updatedAt: firstValue(
+        objectValue(input, ["updatedAt", "finishedAt", "completedAt", "timestamp"]),
+        objectValue(detailObject, ["updatedAt", "finishedAt", "completedAt", "timestamp"])
+      )
+    };
+  }
+
+  function hasDataSourceInfo(info) {
+    if (!info) return false;
+
+    return Boolean(
+      info.source ||
+      info.sourceLabel ||
+      info.provider ||
+      info.transport ||
+      info.table ||
+      info.count !== null && info.count !== undefined ||
+      info.action && isDataAction(info.action)
+    );
+  }
+
+  function isDataAction(action) {
+    action = String(action || "").toLowerCase();
+
+    return Boolean(
+      action.indexOf("externalprojects") >= 0 ||
+      action.indexOf("externalapps") >= 0 ||
+      action.indexOf("quickloginstaff") >= 0 ||
+      action.indexOf("staff") >= 0 ||
+      action.indexOf("signin") >= 0 ||
+      action.indexOf("inventory") >= 0 ||
+      action.indexOf("registry") >= 0 ||
+      action.indexOf("launcher") >= 0
+    );
+  }
+
+  function isDataGateTask(taskName, extraData) {
+    taskName = String(taskName || "").toLowerCase();
+
+    return Boolean(
+      hasDataSourceInfo(normalizeDataSourceInfo(extraData || {}, taskName)) ||
+      taskName.indexOf("external-apps") >= 0 ||
+      taskName.indexOf("backend-project-launcher") >= 0 ||
+      taskName.indexOf("quick-login-staff") >= 0 ||
+      taskName.indexOf("qr-signin") >= 0 ||
+      taskName.indexOf("dressing-inventory") >= 0
+    );
+  }
+
+  function promoteDataSource(taskName, extraData) {
+    var info;
+
+    if (!isDataGateTask(taskName, extraData)) return;
+
+    info = normalizeDataSourceInfo(extraData || {}, taskName);
+
+    if (!hasDataSourceInfo(info)) return;
+
+    mergeSection("data", {
+      task: info.task || taskName || state.data.task || "",
+      status: info.status || "ok",
+      message: info.sourceLabel || state.data.message || info.task || taskName || "data ready",
+      detail: state.data.detail || null,
+      source: info.source || state.data.source || "",
+      sourceLabel: info.sourceLabel || state.data.sourceLabel || "",
+      provider: info.provider || state.data.provider || "",
+      transport: info.transport || state.data.transport || "",
+      table: info.table || state.data.table || "",
+      action: info.action || state.data.action || "",
+      dataType: info.dataType || state.data.dataType || "",
+      count: info.count !== null && info.count !== undefined ? info.count : state.data.count,
+      env: info.env || state.data.env || "",
+      gateTask: info.gateTask || taskName || state.data.gateTask || "",
+      winner: info.winner || state.data.winner || "",
+      updatedAt: nowIso()
+    });
+  }
+
+  function dataSourceFromBackendCalls() {
+    var calls = state.backend && state.backend.calls ? state.backend.calls : [];
+    var i;
+    var info;
+
+    for (i = calls.length - 1; i >= 0; i -= 1) {
+      if (!calls[i]) continue;
+      if (String(calls[i].status || "").toLowerCase() === "running") continue;
+      if (!isDataAction(calls[i].action || calls[i].resourceName || "")) continue;
+
+      info = normalizeDataSourceInfo(calls[i], calls[i].action || calls[i].resourceName || "");
+      if (hasDataSourceInfo(info)) return info;
+    }
+
+    return null;
+  }
+
+  function dataSourceFromLogs() {
+    var i;
+    var entry;
+    var data;
+    var action;
+    var source;
+    var info;
+
+    for (i = state.logs.length - 1; i >= 0; i -= 1) {
+      entry = state.logs[i] || {};
+      data = entry.data && typeof entry.data === "object" ? entry.data : {};
+      action = data.action || entry.action || entry.message || "";
+      source = normalizeSourceKey(data.source || data.sourceKey || data.winnerSource || "");
+
+      if (!isDataAction(action) && source.indexOf("supabase") < 0 && source.indexOf("apps-script") < 0 && source.indexOf("skhps-backend") < 0) {
+        continue;
+      }
+
+      if (entry.status === "RUN" && !source && !data.sourceLabel) continue;
+
+      info = normalizeDataSourceInfo(Object.assign({}, data, {
+        source: source || data.source,
+        status: entry.status === "FAIL" ? "fail" : entry.status === "RUN" ? "waiting" : "ok",
+        action: action,
+        timestamp: entry.timestamp
+      }), action);
+
+      if (hasDataSourceInfo(info)) return info;
+    }
+
+    return null;
+  }
+
+  function dataSourceFromLoadingGate() {
+    var completed = state.loadingGate.completedTasks || [];
+    var taskStates = state.loadingGate.taskStates || {};
+    var i;
+    var taskName;
+    var info;
+
+    for (i = completed.length - 1; i >= 0; i -= 1) {
+      taskName = completed[i];
+      info = normalizeDataSourceInfo(taskStates[taskName] || {}, taskName);
+      if (hasDataSourceInfo(info)) return info;
+    }
+
+    return null;
+  }
+
+  function resolveActiveDataSource() {
+    var explicit = normalizeDataSourceInfo(Object.assign({}, state.data || {}, {
+      detail: state.data && state.data.detail
+    }), state.data && state.data.task || "");
+    var fromGate;
+    var fromExternalApps;
+    var fromBackend;
+    var fromLogs;
+
+    if (hasDataSourceInfo(explicit)) return explicit;
+
+    fromGate = dataSourceFromLoadingGate();
+    if (fromGate) return fromGate;
+
+    fromExternalApps = normalizeDataSourceInfo(state.externalApps || {}, "external-apps-runtime");
+    if (state.externalApps && state.externalApps.loaded && hasDataSourceInfo(fromExternalApps)) return fromExternalApps;
+
+    fromBackend = dataSourceFromBackendCalls();
+    if (fromBackend) return fromBackend;
+
+    fromLogs = dataSourceFromLogs();
+    if (fromLogs) return fromLogs;
+
+    return explicit;
+  }
+
+  function dataSourceReason(info, fallback) {
+    var parts;
+
+    info = info || {};
+    parts = [
+      info.sourceLabel || "",
+      info.source ? "source=" + info.source : "",
+      info.table ? "table=" + info.table : "",
+      info.action ? "action=" + info.action : "",
+      info.count !== null && info.count !== undefined && info.count !== "" ? "rows=" + info.count : ""
+    ].filter(Boolean);
+
+    return parts.join(" | ") || fallback || "";
   }
 
   function formatDuration(ms) {
@@ -1100,9 +1498,10 @@
   function summarizeData() {
     var data = state.data || {};
     var detail = data.detail && typeof data.detail === "object" ? data.detail : {};
-    var status = String(data.status || "").toLowerCase();
-    var isStaffDirectory = detail.dataType === "staff-directory" || data.task === "quick-login-staff";
-    var label = data.message || data.task || "not specified";
+    var activeDataSource = resolveActiveDataSource();
+    var status = String(data.status || activeDataSource.status || "").toLowerCase();
+    var isStaffDirectory = detail.dataType === "staff-directory" || data.dataType === "staff-directory" || data.task === "quick-login-staff";
+    var label = data.message || activeDataSource.sourceLabel || data.task || "not specified";
     var reason;
 
     if (isStaffDirectory) {
@@ -1116,11 +1515,11 @@
         label = "人員主檔讀取失敗";
       }
     } else {
-      reason = [
+      reason = dataSourceReason(activeDataSource, [
         data.task || "",
-        detail.dataType ? "data=" + detail.dataType : "",
-        detail.sourceLabel ? "source=" + detail.sourceLabel : ""
-      ].filter(Boolean).join(" | ");
+        detail.dataType || data.dataType ? "data=" + (detail.dataType || data.dataType) : "",
+        detail.sourceLabel || data.sourceLabel ? "source=" + (detail.sourceLabel || data.sourceLabel) : ""
+      ].filter(Boolean).join(" | "));
     }
 
     if (status === "ok" || status === "green" || status === "success") {
@@ -1152,6 +1551,14 @@
         label: label,
         className: "skhps-runtime-waiting",
         reason: reason || data.task || "data loading"
+      };
+    }
+
+    if (activeDataSource && (activeDataSource.sourceLabel || activeDataSource.source || activeDataSource.action)) {
+      return {
+        label: activeDataSource.sourceLabel || activeDataSource.action || "data source detected",
+        className: "skhps-runtime-ok",
+        reason: dataSourceReason(activeDataSource, "data source detected")
       };
     }
 
@@ -1945,37 +2352,18 @@
     addRow(dom, "css-runtime", domState.cssRuntimeReady ? "done" : "pending", statusClass(domState.cssRuntimeReady ? "ok" : "waiting"));
 
     var dataDetail = state.data && state.data.detail ? state.data.detail : {};
-    var calendarDetail = dataDetail.calendar || {};
-    var diagnostics = dataDetail.diagnostics || dataDetail.detail && dataDetail.detail.diagnostics || {};
-    var hasCalendarDetail = Boolean(
-      calendarDetail.id ||
-      calendarDetail.name ||
-      diagnostics.calendarId ||
-      diagnostics.calendarName ||
-      diagnostics.visibleCalendarsSample
-    );
+    var activeDataSource = resolveActiveDataSource();
     var dataSection = addSection(panel, "Data");
-    var isStaffDirectoryData = dataDetail && (dataDetail.dataType === "staff-directory" || (state.data && state.data.task === "quick-login-staff"));
-    addRow(dataSection, "Task", state.data && state.data.task || "-", dataSummary.className);
-    addRow(dataSection, "Status", state.data && state.data.status || "-", dataSummary.className);
-    addRow(dataSection, "Message", dataSummary.label || state.data && state.data.message || "-", dataSummary.className);
-    if (isStaffDirectoryData) {
-      addRow(dataSection, "Source", dataDetail.sourceLabel || "-");
-      addRow(dataSection, "Table", dataDetail.table || "-");
-    } else if (hasCalendarDetail) {
-      addRow(dataSection, "Calendar Name", calendarDetail.name || diagnostics.calendarName || "-");
-      addRow(dataSection, "Calendar ID", calendarDetail.id || diagnostics.calendarId || "-");
-      addRow(dataSection, "Running Window", calendarDetail.runningWindow ? ("before " + calendarDetail.runningWindow.beforeMinutes + " min / after " + calendarDetail.runningWindow.afterMinutes + " min") : "-");
-      addRow(dataSection, "Calendar Settings", calendarDetail.settingsUrl || diagnostics.calendarSettingsUrl || "-");
-      addRow(dataSection, "Calendar Subscribe", calendarDetail.subscribeUrl || diagnostics.calendarSubscribeUrl || "-");
-      addRow(dataSection, "Can List Calendars", diagnostics.canListCalendars === undefined ? "-" : String(diagnostics.canListCalendars), statusClass(diagnostics.canListCalendars === false ? "fail" : diagnostics.canListCalendars === true ? "ok" : ""));
-      addRow(dataSection, "Target Calendar Visible", diagnostics.targetCalendarVisible === undefined ? "-" : String(diagnostics.targetCalendarVisible), statusClass(diagnostics.targetCalendarVisible === false ? "fail" : diagnostics.targetCalendarVisible === true ? "ok" : ""));
-      addRow(dataSection, "Accessible Calendar Count", diagnostics.accessibleCalendarCount === undefined ? "-" : diagnostics.accessibleCalendarCount);
-      addRow(dataSection, "Visible Calendars Sample", diagnostics.visibleCalendarsSample || "-");
-      addRow(dataSection, "Raw Detail", dataDetail || "-");
-    } else {
-      addRow(dataSection, "Raw Detail", dataDetail || "-");
-    }
+    var conciseSourceLabel = cleanDataSourceLabel(activeDataSource.sourceLabel || "");
+    var conciseCount = activeDataSource.count === null || activeDataSource.count === undefined || activeDataSource.count === ""
+      ? "-"
+      : activeDataSource.count;
+
+    addRow(dataSection, "Task", activeDataSource.task || state.data && state.data.task || "-", dataSummary.className);
+    addRow(dataSection, "Status", state.data && state.data.status || activeDataSource.status || "-", dataSummary.className);
+    addRow(dataSection, "Source", conciseSourceLabel || dataSummary.label || "-", conciseSourceLabel ? "skhps-runtime-ok" : dataSummary.className);
+    addRow(dataSection, "Rows", conciseCount);
+    addRow(dataSection, "Updated", activeDataSource.updatedAt || state.data && state.data.updatedAt || "-");
 
     var scriptRows = scriptStatusFromLogs();
     if (scriptRows.length) {

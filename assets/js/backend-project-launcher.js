@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/backend-project-launcher.js
-時間戳：2026-06-13 00:00 UTC+8
-用途：skhpsv2 後台專案啟動器；讀取外部專案 Sheet registry，管理既有欄位「啟用」與「顯示位置」。
+時間戳：2026-06-19 00:58 UTC+8
+用途：skhpsv2 後台專案啟動器；讀取完整外部專案 registry，停用只改 enabled，不刪除、不隱藏、不清空顯示位置。
 */
 
 (function () {
@@ -125,25 +125,46 @@
     if (!response) return [];
     if (Array.isArray(response.projects)) return response.projects;
     if (Array.isArray(response.apps)) return response.apps;
+    if (Array.isArray(response.items)) return response.items;
     if (response.data && Array.isArray(response.data.projects)) return response.data.projects;
     if (response.data && Array.isArray(response.data.apps)) return response.data.apps;
+    if (response.data && Array.isArray(response.data.items)) return response.data.items;
     return [];
+  }
+
+  function normalizeDisplayPositionValue(raw) {
+    var value = raw && (
+      raw.displayPosition ||
+      raw["顯示位置"] ||
+      raw.placement ||
+      raw.location ||
+      ""
+    );
+    var text = String(value || "").trim().toLowerCase();
+
+    if (value === "前台" || text === "front" || text === "frontend") return "前台";
+    if (value === "後台" || text === "back" || text === "backend" || text === "admin") return "後台";
+    if (text === "hidden" || text === "none") return "";
+    return String(value || "").trim();
   }
 
   function normalizeProject(raw) {
     raw = raw || {};
+    var metadata = raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {};
+    var envMeta = metadata.environment && typeof metadata.environment === "object" ? metadata.environment : metadata;
+
     return {
-      projectId: String(raw.projectId || raw.appId || raw["專案ID"] || "").trim(),
+      projectId: String(raw.projectId || raw.appId || raw.app_id || raw["專案ID"] || "").trim(),
       env: String(raw.env || raw["環境"] || "").trim(),
-      title: String(raw.title || raw["專案名稱"] || "").trim(),
-      href: String(raw.href || raw["入口網址"] || "").trim(),
-      displayPosition: String(raw.displayPosition || raw["顯示位置"] || "").trim(),
-      group: String(raw.group || raw["顯示群組"] || "").trim(),
-      sort: Number(raw.sort || raw.order || raw["排序"] || 9999) || 9999,
+      title: String(raw.title || raw.name || raw.appName || raw["專案名稱"] || "").trim(),
+      href: String(raw.href || raw.url || raw["入口網址"] || "").trim(),
+      displayPosition: normalizeDisplayPositionValue(raw),
+      group: String(raw.group || raw.groupKey || raw.group_key || raw["顯示群組"] || "").trim(),
+      sort: Number(raw.sort || raw.order || raw.sortOrder || raw.sort_order || raw["排序"] || 9999) || 9999,
       enabled: projectEnabled(raw),
-      version: String(raw.version || raw["版本"] || "").trim(),
-      lastReportAt: raw.lastReportAt || raw.lastSeenAt || raw["最後報到時間"] || "",
-      reportCount: Number(raw.reportCount || raw.registerCount || raw["報到次數"] || 0) || 0
+      version: String(raw.version || envMeta.version || raw["版本"] || "").trim(),
+      lastReportAt: raw.lastReportAt || raw.lastSeenAt || envMeta.lastReportAt || envMeta.lastSeenAt || raw["最後報到時間"] || "",
+      reportCount: Number(raw.reportCount || raw.registerCount || envMeta.reportCount || envMeta.registerCount || raw["報到次數"] || 0) || 0
     };
   }
 
@@ -285,10 +306,17 @@
     var enabledInput = editor.querySelector('input[name="launcher-enabled"]:checked');
     var positionInput = editor.querySelector('input[name="launcher-position"]:checked');
     var enabled = enabledInput && enabledInput.value === "true";
-    var displayPosition = positionInput ? positionInput.value : "";
+    var selectedDisplayPosition = positionInput ? positionInput.value : "";
+    var displayPosition = enabled
+      ? selectedDisplayPosition
+      : (project.displayPosition || selectedDisplayPosition || "");
 
     if (!project) return Promise.resolve();
 
+    /*
+      重要：停用不是刪除，也不是 hidden。
+      停用時保留原本顯示位置，讓管理頁下次仍可在「不啟用」區找回。
+    */
     if (enabled && !displayPosition) {
       if (status) status.textContent = "啟用專案必須選擇顯示位置。";
       return Promise.resolve({
@@ -313,14 +341,17 @@
       projectId: project.projectId,
       env: project.env,
       enabled: enabled,
-      displayPosition: displayPosition
+      displayPosition: displayPosition,
+      preserveDisplayPosition: !enabled,
+      launcherMode: true,
+      includeDisabled: true
     }).then(function (response) {
       if (!response || response.ok === false) {
         throw new Error(response && response.message || response && response.error || "updateExternalProjectActivation failed");
       }
 
       project.enabled = enabled;
-      if (enabled) project.displayPosition = displayPosition;
+      project.displayPosition = displayPosition || project.displayPosition;
       renderProjectList();
       renderEditor(project);
       if (status) status.textContent = "已儲存。";
@@ -384,17 +415,25 @@
 
     return waitForBackend()
       .then(function (backend) {
-        if (typeof backend.listExternalProjects === "function") {
-          return backend.listExternalProjects({
-            activeOnly: false,
-            env: runtime
-          });
+        var payload = {
+          env: runtime,
+          activeOnly: false,
+          includeDisabled: true,
+          includeInactive: true,
+          launcherMode: true,
+          forceFresh: true,
+          source: "backend-project-launcher"
+        };
+
+        /*
+          後台專案啟動器是管理頁，必須讀全部 registry。
+          不可使用首頁用的 listExternalProjects active filter，否則停用項目會消失。
+        */
+        if (typeof backend.listExternalProjectsForLauncher === "function") {
+          return backend.listExternalProjectsForLauncher(payload);
         }
 
-        return backend.call("listExternalProjects", {
-          activeOnly: false,
-          env: runtime
-        });
+        return backend.call("listExternalProjectsForLauncher", payload);
       })
       .then(function (response) {
         projects = normalizeProjects(response).map(normalizeProject);

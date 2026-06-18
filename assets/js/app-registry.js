@@ -19,7 +19,7 @@ window.SKHPS_APP_REGISTRY = {
         "prod": "https://ndmc402010104.github.io/skhps-quick-login/"
       },
       afterScripts: [
-        "assets/js/login.js"
+        "assets/js/app.js"
       ]
     }
   }

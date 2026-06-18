@@ -105,7 +105,44 @@
           "method": "POST",
           "payloadType": "formData",
           "background": true,
-          "affectsGate": false
+          "affectsGate": false,
+          "timeoutMs": 15000
+        },
+        "listExternalProjects": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 8000
+        },
+        "listExternalApps": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 8000
+        },
+        "registerExternalApp": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 8000
+        },
+        "updateExternalProjectActivation": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 8000
+        },
+        "updateExternalAppSettings": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 8000
+        },
+        "setExternalAppActive": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 8000
         }
       }
     }

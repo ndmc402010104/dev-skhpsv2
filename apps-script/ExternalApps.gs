@@ -1,6 +1,6 @@
 /**
  * 檔案位置：skhpsv2/apps-script/ExternalApps.gs
- * 時間戳：2026-06-14 01:25 UTC+8
+ * 時間戳：2026-06-19 00:42 UTC+8
  * 用途：skhpsv2 外部專案報到 / 清單 / 啟用管理；使用 Sheet 既有欄位「顯示位置」分流前台 / 後台。
  *
  * Sheet：外部專案
@@ -91,6 +91,8 @@ function registerExternalApp(payload) {
 
     return {
       ok: true,
+      source: 'apps-script',
+      sourceLabel: 'Google Sheet / Apps Script',
       status: 'created',
       appId: app.appId,
       env: app.env,
@@ -113,6 +115,8 @@ function registerExternalApp(payload) {
 
   return {
     ok: true,
+    source: 'apps-script',
+    sourceLabel: 'Google Sheet / Apps Script',
     status: 'updated',
     appId: app.appId,
     env: app.env,
@@ -124,7 +128,12 @@ function registerExternalApp(payload) {
 function listExternalApps(payload) {
   payload = payload || {};
 
-  const activeOnly = payload.activeOnly === true;
+  const activeOnly = isTruthy_(payload.activeOnly);
+  const includeDisabled =
+    isTruthy_(payload.includeDisabled) ||
+    isTruthy_(payload.includeInactive) ||
+    isTruthy_(payload.launcherMode) ||
+    String(payload.activeOnly || '').trim().toLowerCase() === 'false';
   const env = String(payload.env || payload.runtime || '').trim();
 
   const sheet = getExternalAppsSheet_();
@@ -154,7 +163,7 @@ function listExternalApps(payload) {
     return app.appId && app.env && app.title && app.href;
   });
 
-  if (activeOnly) {
+  if (activeOnly && !includeDisabled) {
     apps = apps.filter(function (app) {
       return app.active === true;
     });
@@ -173,7 +182,10 @@ function listExternalApps(payload) {
 
   return {
     ok: true,
+    source: 'apps-script',
+    sourceLabel: 'Google Sheet / Apps Script',
     apps: apps,
+    projects: apps,
     count: apps.length
   };
 }
@@ -181,6 +193,21 @@ function listExternalApps(payload) {
 function listExternalProjects(payload) {
   const result = listExternalApps(payload || {});
   result.projects = result.apps || [];
+  return result;
+}
+
+function listExternalProjectsForLauncher(payload) {
+  payload = payload || {};
+  payload.activeOnly = false;
+  payload.includeDisabled = true;
+  payload.includeInactive = true;
+  payload.launcherMode = true;
+  payload.forceFresh = true;
+
+  const result = listExternalProjects(payload);
+  result.launcherMode = true;
+  result.includeDisabled = true;
+  result.message = '後台專案啟動器清單：包含啟用與不啟用項目';
   return result;
 }
 
@@ -256,23 +283,29 @@ function updateExternalProjectActivation(payload) {
 
   if (hasDisplayPosition) {
     if (!displayPosition) {
-      return {
-        ok: false,
-        error: 'MISSING_DISPLAY_POSITION',
-        message: '顯示位置不可為空'
-      };
-    }
+      /*
+       * 停用不是刪除。
+       * 如果停用時前端沒有送顯示位置，就保留 Sheet 既有「顯示位置」，不要清空、不要 hidden、不要讓管理頁下次找不到。
+       */
+      if (!(hasActive && active === false)) {
+        return {
+          ok: false,
+          error: 'MISSING_DISPLAY_POSITION',
+          message: '顯示位置不可為空'
+        };
+      }
+    } else {
+      if (displayPosition !== '前台' && displayPosition !== '後台') {
+        return {
+          ok: false,
+          error: 'INVALID_DISPLAY_POSITION',
+          message: '顯示位置只能是「前台」或「後台」',
+          displayPosition: displayPosition
+        };
+      }
 
-    if (displayPosition !== '前台' && displayPosition !== '後台') {
-      return {
-        ok: false,
-        error: 'INVALID_DISPLAY_POSITION',
-        message: '顯示位置只能是「前台」或「後台」',
-        displayPosition: displayPosition
-      };
+      patch['顯示位置'] = displayPosition;
     }
-
-    patch['顯示位置'] = displayPosition;
   }
 
   if (hasSort) {
@@ -303,11 +336,13 @@ function updateExternalProjectActivation(payload) {
   SpreadsheetApp.flush();
 
   const nextActive = hasActive ? active : toBoolean_(found['啟用']);
-  const nextPosition = hasDisplayPosition ? displayPosition : normalizeExternalAppDisplayPosition_(found['顯示位置']);
+  const nextPosition = displayPosition || normalizeExternalAppDisplayPosition_(found['顯示位置']);
   const nextSort = hasSort ? Number(patch['排序']) : (Number(found['排序'] || 9999) || 9999);
 
   return {
     ok: true,
+    source: 'apps-script',
+    sourceLabel: 'Google Sheet / Apps Script',
     appId: appId,
     projectId: appId,
     env: env,
@@ -374,6 +409,8 @@ function setExternalAppActive(payload) {
 
   return {
     ok: true,
+    source: 'apps-script',
+    sourceLabel: 'Google Sheet / Apps Script',
     appId: appId,
     env: env,
     active: active,
@@ -437,12 +474,31 @@ function normalizeExternalAppPayload_(payload) {
       9999
     ) || 9999,
 
-    version: String(
+    version: normalizeExternalAppVersion_(
       config.version ||
       payload.version ||
       ''
-    ).trim()
+    )
   };
+}
+
+function normalizeExternalAppVersion_(value) {
+  if (value === undefined || value === null) {
+    return '';
+  }
+
+  if (typeof value === 'object') {
+    return String(
+      value.version ||
+      value.appVersion ||
+      value.buildVersion ||
+      value.buildTime ||
+      ''
+    ).trim();
+  }
+
+  const text = String(value || '').trim();
+  return text === '[object Object]' ? '' : text;
 }
 
 function getExternalAppsSheet_() {
@@ -572,6 +628,12 @@ function updateExternalAppRow_(sheet, rowIndex, patch) {
 
     sheet.getRange(rowIndex, colIndex).setValue(patch[key]);
   });
+}
+
+function isTruthy_(value) {
+  if (value === true || value === 1) return true;
+  const text = String(value || '').trim().toLowerCase();
+  return text === 'true' || text === '1' || text === 'yes' || text === 'y' || text === 'on' || text === '是' || text === '啟用';
 }
 
 function toBoolean_(value) {

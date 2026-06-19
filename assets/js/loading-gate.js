@@ -25,6 +25,7 @@
 
   var state = {
     required: {},
+    background: {},
     done: {},
     failed: {},
     released: false,
@@ -35,6 +36,221 @@
     releaseReason: "",
     timer: null
   };
+
+
+  var progressState = {
+    current: 6,
+    target: 6,
+    timer: null,
+    settleTimer: null,
+    softCap: 88,
+    startedAt: Date.now(),
+    lastTickAt: Date.now(),
+    finishRequested: false,
+    releasedAfterFill: false
+  };
+
+  function setProgressValue(value, reason) {
+    var next = Math.max(0, Math.min(100, Number(value) || 0));
+
+    progressState.current = next;
+    html.style.setProperty("--skhps-loading-progress", String(Math.round(next * 10) / 10));
+    html.setAttribute("data-skhps-loading-progress", String(Math.round(next)));
+
+    try {
+      document.dispatchEvent(new CustomEvent("skhps-loading-progress", {
+        detail: Object.assign(getState ? getState() : {}, {
+          progress: progressState.current,
+          progressTarget: progressState.target,
+          progressReason: reason || ""
+        })
+      }));
+    } catch (error) {}
+  }
+
+  function setProgressTarget(value, reason) {
+    var next = Math.max(6, Math.min(100, Number(value) || 6));
+
+    if (next > progressState.target || reason === "finish" || reason === "reset") {
+      progressState.target = next;
+      html.setAttribute("data-skhps-loading-progress-target", String(Math.round(next)));
+    }
+
+    startProgressTicker();
+  }
+
+  function getTaskProgressTarget() {
+    var tasks = blockingTasks();
+    var total = Math.max(1, tasks.length);
+    var complete = tasks.filter(function (task) {
+      return isTaskComplete(task);
+    }).length;
+
+    /*
+      分母只算 blocking tasks。
+      background tasks 只記錄，不擋畫面、不進讀條分母。
+    */
+    return Math.min(92, 6 + (complete / total) * 86);
+  }
+
+  function updateProgressTarget(reason) {
+    if (state.released || progressState.finishRequested) {
+      return;
+    }
+
+    setProgressTarget(getTaskProgressTarget(), reason || "tasks");
+  }
+
+  function getSoftCreepTarget(now) {
+    var elapsed = Math.max(0, now - progressState.startedAt);
+    return Math.min(progressState.softCap, 6 + (elapsed / 8000) * (progressState.softCap - 6));
+  }
+
+  function tickProgress() {
+    var now = Date.now();
+
+    if (!hasLoadingClass() && !progressState.finishRequested) {
+      stopProgressTicker();
+      return;
+    }
+
+    var dt = Math.max(16, now - progressState.lastTickAt);
+    progressState.lastTickAt = now;
+
+    if (!progressState.finishRequested) {
+      var creepTarget = getSoftCreepTarget(now);
+      if (creepTarget > progressState.target) {
+        progressState.target = creepTarget;
+        html.setAttribute("data-skhps-loading-progress-target", String(Math.round(progressState.target)));
+      }
+    }
+
+    var diff = progressState.target - progressState.current;
+
+    if (Math.abs(diff) < 0.08) {
+      if (progressState.finishRequested) {
+        setProgressValue(100, "finish");
+        releaseAfterProgressFill();
+      }
+      return;
+    }
+
+    var chaseFactor = progressState.finishRequested ? 0.26 : 0.055;
+    var minStep = progressState.finishRequested ? 0.9 : 0.10;
+    var maxStep = progressState.finishRequested ? 9.0 : 1.15;
+    var step = Math.max(minStep, Math.min(maxStep, Math.abs(diff) * chaseFactor * (dt / 16.7)));
+
+    setProgressValue(progressState.current + Math.sign(diff) * step, progressState.finishRequested ? "finish-chase" : "creep-chase");
+  }
+
+  function startProgressTicker() {
+    if (progressState.timer) {
+      return;
+    }
+
+    progressState.lastTickAt = Date.now();
+    progressState.timer = window.setInterval(tickProgress, 16);
+  }
+
+  function stopProgressTicker() {
+    if (!progressState.timer) {
+      return;
+    }
+
+    window.clearInterval(progressState.timer);
+    progressState.timer = null;
+  }
+
+  function requestProgressFinish() {
+    progressState.finishRequested = true;
+    setProgressTarget(100, "finish");
+    startProgressTicker();
+
+    if (progressState.settleTimer) {
+      window.clearTimeout(progressState.settleTimer);
+    }
+
+    /*
+      讀條只是視覺，不能卡住進畫面。
+      Gate 已通過後，最多 280ms 補滿，最多 420ms 強制移除 class。
+    */
+    progressState.settleTimer = window.setTimeout(function () {
+      setProgressValue(100, "finish-force");
+      releaseAfterProgressFill();
+    }, 280);
+
+    window.setTimeout(function () {
+      if (html.classList.contains(GLOBAL_LOADING_CLASS) ||
+          html.classList.contains(CSS_LOADING_CLASS) ||
+          html.classList.contains(SHELL_LOADING_CLASS) ||
+          html.classList.contains(MAIN_LOADING_CLASS)) {
+        setProgressValue(100, "force-remove-classes");
+        removeLoadingClassesNow();
+        stopProgressTicker();
+      }
+    }, 420);
+  }
+
+  function releaseAfterProgressFill() {
+    if (progressState.releasedAfterFill) {
+      return;
+    }
+
+    progressState.releasedAfterFill = true;
+
+    if (progressState.settleTimer) {
+      window.clearTimeout(progressState.settleTimer);
+      progressState.settleTimer = null;
+    }
+
+    /*
+      100% 後只留一個很短的視覺尾巴，然後直接移除 loading class。
+      這裡絕對不能再呼叫 requestProgressFinish，避免遞迴卡住。
+    */
+    window.setTimeout(function () {
+      setProgressValue(100, "classes-remove");
+      removeLoadingClassesNow();
+      stopProgressTicker();
+    }, 70);
+  }
+
+  function resetProgress() {
+    progressState.current = 6;
+    progressState.target = 6;
+    progressState.startedAt = Date.now();
+    progressState.lastTickAt = Date.now();
+    progressState.finishRequested = false;
+    progressState.releasedAfterFill = false;
+
+    if (progressState.settleTimer) {
+      window.clearTimeout(progressState.settleTimer);
+      progressState.settleTimer = null;
+    }
+
+    setProgressValue(6, "reset");
+    setProgressTarget(6, "reset");
+    startProgressTicker();
+  }
+
+  function removeLoadingClassesNow() {
+    html.setAttribute("data-skhps-loading-progress", "100");
+
+    html.classList.remove(GLOBAL_LOADING_CLASS);
+    html.classList.remove(CSS_LOADING_CLASS);
+    html.classList.remove(SHELL_LOADING_CLASS);
+    html.classList.remove(MAIN_LOADING_CLASS);
+
+    if (document.body) {
+      document.body.classList.remove(GLOBAL_LOADING_CLASS);
+      document.body.classList.remove(CSS_LOADING_CLASS);
+      document.body.classList.remove(SHELL_LOADING_CLASS);
+      document.body.classList.remove(MAIN_LOADING_CLASS);
+    }
+
+    html.setAttribute("data-skhps-loading-classes-removed", "true");
+  }
+
+
 
   function keys(obj) {
     return Object.keys(obj || {});
@@ -109,6 +325,16 @@
     return keys(state.required);
   }
 
+  function backgroundTasks() {
+    return keys(state.background);
+  }
+
+  function blockingTasks() {
+    return requiredTasks().filter(function (task) {
+      return !state.background[task];
+    });
+  }
+
   function failedTasks() {
     return keys(state.failed);
   }
@@ -137,7 +363,9 @@
   }
 
   function hasAnyFailure() {
-    return failedTasks().length > 0;
+    return blockingTasks().some(function (task) {
+      return isTaskFailed(task);
+    });
   }
 
   function hasLoadingClass() {
@@ -169,6 +397,8 @@
       if (runtime() && typeof runtime().setLoadingGate === "function") {
         runtime().setLoadingGate({
           required: requiredTasks(),
+          background: backgroundTasks(),
+          blocking: blockingTasks(),
           done: doneTasks(),
           failed: failedTasks(),
           cssReady: state.cssReady,
@@ -215,6 +445,8 @@
   function getState() {
     return {
       required: requiredTasks(),
+      background: backgroundTasks(),
+      blocking: blockingTasks(),
       done: doneTasks(),
       failed: failedTasks().map(function (task) {
         return {
@@ -363,7 +595,7 @@
   }
 
   function allRequiredTasksComplete() {
-    var tasks = requiredTasks();
+    var tasks = blockingTasks();
 
     if (!tasks.length) {
       return false;
@@ -478,17 +710,11 @@
       markPageReady(state.releaseReason, status || "OK");
     }
 
-    html.classList.remove(GLOBAL_LOADING_CLASS);
-    html.classList.remove(CSS_LOADING_CLASS);
-    html.classList.remove(SHELL_LOADING_CLASS);
-    html.classList.remove(MAIN_LOADING_CLASS);
-
-    if (document.body) {
-      document.body.classList.remove(GLOBAL_LOADING_CLASS);
-      document.body.classList.remove(CSS_LOADING_CLASS);
-      document.body.classList.remove(SHELL_LOADING_CLASS);
-      document.body.classList.remove(MAIN_LOADING_CLASS);
-    }
+    /*
+      先讓 progress 補滿，再移除 loading class。
+      保底 timer 會避免動畫卡住畫面。
+    */
+    requestProgressFinish();
 
     html.setAttribute("data-skhps-loading-released", "true");
     html.setAttribute("data-skhps-loading-release-reason", state.releaseReason);
@@ -503,6 +729,8 @@
       if (runtime() && typeof runtime().setLoadingGate === "function") {
         runtime().setLoadingGate({
           required: requiredTasks(),
+          background: backgroundTasks(),
+          blocking: blockingTasks(),
           done: doneTasks(),
           failed: failedTasks(),
           released: true,
@@ -529,7 +757,44 @@
     });
   }
 
-  function requireTask(task) {
+
+  function isBackgroundTask(task) {
+    task = normalizeTask(task);
+    return Boolean(task && state.background[task]);
+  }
+
+  function requireBackgroundTask(task) {
+    task = normalizeTask(task);
+
+    if (options && (options.blocking === false || options.affectsGate === false || options.background === true || options.nonBlocking === true)) {
+      requireBackgroundTask(task);
+      return;
+    }
+
+    if (!task) {
+      return;
+    }
+
+    /*
+      background task 只記錄，不擋 loading release。
+      若先前被 required，這裡會把它標記成 background，從 blocking 分母移除。
+    */
+    state.required[task] = true;
+    state.background[task] = true;
+    setTaskAttr(task, "background");
+    setRuntimeRequired();
+    updateProgressTarget("background");
+    rlog("RUN", "requireBackground", task);
+    log("requireBackground", task, getState());
+  }
+
+  function requireBackgroundMany(tasks) {
+    parseTaskList(tasks).forEach(requireBackgroundTask);
+    check();
+  }
+
+
+  function requireTask(task, options) {
     task = normalizeTask(task);
 
     if (!task) {
@@ -546,7 +811,11 @@
     }
 
     state.required[task] = true;
-    setTaskAttr(task, "required");
+    if (options && options.blocking === true) {
+      delete state.background[task];
+    }
+    setTaskAttr(task, state.background[task] ? "background" : "required");
+    updateProgressTarget("require");
     setRuntimeRequired();
     rlog("RUN", "require", task);
     log("require", task, getState());
@@ -580,6 +849,7 @@
 
     rlog("OK", "done", task);
     log("done", task, getState());
+    updateProgressTarget("done");
 
     check();
   }
@@ -617,12 +887,13 @@
     });
 
     log("fail", task, error, getState());
+    updateProgressTarget("fail");
 
     check();
   }
 
   function markPendingTasksFailed(reason) {
-    requiredTasks().forEach(function (task) {
+    blockingTasks().forEach(function (task) {
       if (isTaskComplete(task)) {
         return;
       }
@@ -666,15 +937,23 @@
     }
 
     if (input.task) {
+      if (input.blocking === false || input.affectsGate === false || input.background === true || input.nonBlocking === true) {
+        requireBackgroundTask(input.task);
+      }
+
       if (input.status === "done") {
         done(input.task);
       } else if (input.status === "fail" || input.status === "failed") {
         fail(input.task, input.error);
       } else {
-        requireTask(input.task);
+        requireTask(input.task, input);
         check();
       }
       return;
+    }
+
+    if (input.requireBackground || input.backgroundTasks || input.nonBlocking || input.nonBlockingTasks) {
+      requireBackgroundMany(input.requireBackground || input.backgroundTasks || input.nonBlocking || input.nonBlockingTasks);
     }
 
     if (input.require || input.pending || input.tasks) {
@@ -708,6 +987,7 @@
 
   function reset() {
     state.required = {};
+    state.background = {};
     state.done = {};
     state.failed = {};
     state.released = false;
@@ -716,6 +996,7 @@
     state.pageReady = false;
     state.openedAt = Date.now();
     state.releaseReason = "";
+    resetProgress();
 
     if (state.timer) {
       window.clearTimeout(state.timer);
@@ -829,6 +1110,18 @@
 
     requireMany(rawTasks);
 
+    var rawBackgroundTasks =
+      html.getAttribute("data-skhps-background-tasks") ||
+      html.getAttribute("data-skhps-nonblocking-tasks") ||
+      html.getAttribute("data-loading-background-tasks") ||
+      html.getAttribute("data-loading-nonblocking-tasks") ||
+      "";
+
+    if (rawBackgroundTasks) {
+      rlog("INFO", "backgroundTasksFromHtml", rawBackgroundTasks);
+      requireBackgroundMany(rawBackgroundTasks);
+    }
+
     /*
       新架構：
       HTML 不手寫 skhps-shell task，
@@ -879,6 +1172,11 @@
     require: requireTask,
     requireMany: requireMany,
     waitFor: requireMany,
+    background: requireBackgroundTask,
+    requireBackground: requireBackgroundTask,
+    requireBackgroundMany: requireBackgroundMany,
+    nonBlocking: requireBackgroundTask,
+    requireNonBlocking: requireBackgroundTask,
     done: done,
     fail: fail,
     receive: receive,
@@ -898,7 +1196,9 @@
     document.addEventListener("DOMContentLoaded", initSpareLoadingElements);
   }
 
+  resetProgress();
   loadInitialTasksFromHtml();
+  updateProgressTarget("initial-tasks");
 
   /*
     被動模式：
@@ -911,3 +1211,8 @@
 
   rlog("OK", "moduleReady", "loading-gate.js");
 })();
+
+/* SKHPS Loading v5 safety marker */
+try {
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "v5-real-release");
+} catch (error) {}

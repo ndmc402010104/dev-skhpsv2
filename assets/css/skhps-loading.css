@@ -493,17 +493,16 @@ html.skhps-loading::after {
 }
 
 /* =========================================================
-   SKHPS Loading Final｜user tuned single-tone lightbar
-   來源：使用者手調 full parameter tuner
-   特色：
-   - 單色藍灰燈條
-   - 6px 厚度
-   - 速度 3s，不快
-   - 低光暈
-   - 文字不縮放，只保留淡淡 opacity
+   SKHPS Loading｜Gate-aware progress bar
+   搭配 loading-gate.js：
+   - --skhps-loading-progress 由 gate 控制
+   - 分母 = required task 數
+   - 分子 = done/fail 的 required task 數
+   - Gate release 前補滿 100%
    ========================================================= */
 
 html.skhps-loading {
+  --skhps-loading-progress: 6;
   background:
     linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
 }
@@ -517,9 +516,10 @@ html.skhps-loading::before {
   top: 42%;
   color: #12233a;
   font-size: 23px;
-  animation: skhps-loading-title-custom 2.5s ease-in-out infinite;
+  animation: skhps-loading-progress-title 2.4s ease-in-out infinite;
 }
 
+/* progress track */
 html.skhps-loading::after {
   content: "";
   position: fixed;
@@ -527,8 +527,8 @@ html.skhps-loading::after {
   top: calc(42% + 41px);
   z-index: 100000;
   transform: translateX(-50%);
-  width: min(21ch, calc(100vw - 110px));
-  min-width: 270px;
+  width: min(24ch, calc(100vw - 96px));
+  min-width: 280px;
   height: 6px;
   border-radius: 999px;
   overflow: hidden;
@@ -536,29 +536,46 @@ html.skhps-loading::after {
   background:
     linear-gradient(
       90deg,
-      rgba(91, 118, 142, 0.01) 0%,
-      rgba(91, 118, 142, 0.01) 16%,
-      rgba(91, 118, 142, 0.03) 28%,
-      rgba(91, 118, 142, 0.08) 39%,
-      rgba(91, 118, 142, 0.136) 46%,
-      #5b768e 49%,
-      #41586d 50%,
-      #5b768e 54%,
-      rgba(91, 118, 142, 0.106) 63%,
-      rgba(91, 118, 142, 0.06) 73%,
-      rgba(91, 118, 142, 0.028) 84%,
-      rgba(91, 118, 142, 0.01) 94%,
-      rgba(91, 118, 142, 0.01) 100%
+      rgba(91, 118, 142, 0.035) 0%,
+      rgba(91, 118, 142, 0.060) 50%,
+      rgba(91, 118, 142, 0.035) 100%
     );
-  background-size: 290% 100%;
-  background-position: 0% 0;
   box-shadow:
-    0 1px 10px rgba(81, 109, 135, 0.04),
-    0 0 1px rgba(81, 109, 135, .18);
-  animation: skhps-loading-bar-custom 3s linear infinite;
+    inset 0 0 0 1px rgba(81, 109, 135, 0.035),
+    0 1px 10px rgba(81, 109, 135, 0.035);
 }
 
-@keyframes skhps-loading-title-custom {
+/* progress fill */
+html.skhps-loading body::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: calc(42% + 41px);
+  z-index: 100001;
+  width: min(24ch, calc(100vw - 96px));
+  min-width: 280px;
+  height: 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  transform-origin: left center;
+  transform:
+    translateX(-50%)
+    scaleX(calc(max(0, min(100, var(--skhps-loading-progress, 6))) / 100));
+  background:
+    linear-gradient(
+      90deg,
+      rgba(91, 118, 142, 0.52) 0%,
+      #5b768e 42%,
+      #41586d 74%,
+      #516d87 100%
+    );
+  box-shadow:
+    0 0 8px rgba(81, 109, 135, 0.060);
+  will-change: transform;
+  transition: transform 220ms cubic-bezier(.18, .72, .16, 1);
+}
+
+@keyframes skhps-loading-progress-title {
   0%, 100% {
     opacity: .92;
     transform: translate(-50%, -50%) scale(1);
@@ -570,12 +587,109 @@ html.skhps-loading::after {
   }
 }
 
-@keyframes skhps-loading-bar-custom {
-  0% {
-    background-position: 0% 0;
+/* =========================================================
+   SKHPS Loading Progress Continuous v2
+   - 讀條不會停住等 task
+   - loading-gate.js 會持續把 --skhps-loading-progress 往 target 追
+   - task 完成只改 target，不直接跳格
+   ========================================================= */
+
+html.skhps-loading {
+  --skhps-loading-progress: 6;
+}
+
+html.skhps-loading body::after {
+  transition: none;
+  will-change: transform;
+}
+
+/* =========================================================
+   SKHPS Loading Progress v4 blocking/background
+   - 讀條由 loading-gate.js 控制 --skhps-loading-progress
+   - blocking tasks 才是 gate 分母
+   - background tasks 不擋進畫面
+   ========================================================= */
+
+html.skhps-loading {
+  --skhps-loading-progress: 6;
+  background:
+    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+}
+
+html.skhps-css-loading:not(.skhps-loading) {
+  background:
+    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+}
+
+html.skhps-loading::before {
+  top: 42%;
+  color: #12233a;
+  font-size: 23px;
+  animation: skhps-loading-progress-title 2.4s ease-in-out infinite;
+}
+
+html.skhps-loading::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: calc(42% + 41px);
+  z-index: 100000;
+  transform: translateX(-50%);
+  width: min(24ch, calc(100vw - 96px));
+  min-width: 280px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  opacity: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(91, 118, 142, 0.035) 0%,
+      rgba(91, 118, 142, 0.060) 50%,
+      rgba(91, 118, 142, 0.035) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(81, 109, 135, 0.035),
+    0 1px 10px rgba(81, 109, 135, 0.035);
+}
+
+html.skhps-loading body::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: calc(42% + 41px);
+  z-index: 100001;
+  width: min(24ch, calc(100vw - 96px));
+  min-width: 280px;
+  height: 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  transform-origin: left center;
+  transform:
+    translateX(-50%)
+    scaleX(calc(max(0, min(100, var(--skhps-loading-progress, 6))) / 100));
+  background:
+    linear-gradient(
+      90deg,
+      rgba(91, 118, 142, 0.52) 0%,
+      #5b768e 42%,
+      #41586d 74%,
+      #516d87 100%
+    );
+  box-shadow:
+    0 0 8px rgba(81, 109, 135, 0.060);
+  will-change: transform;
+  transition: none;
+}
+
+@keyframes skhps-loading-progress-title {
+  0%, 100% {
+    opacity: .92;
+    transform: translate(-50%, -50%) scale(1);
   }
 
-  100% {
-    background-position: -300% 0;
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
 }

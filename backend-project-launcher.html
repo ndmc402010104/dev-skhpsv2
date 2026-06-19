@@ -804,6 +804,29 @@
         return ["true", "1", "yes", "y", "啟用", "是", "on"].indexOf(text) >= 0;
       }
 
+      function parseShowInLauncher(raw) {
+        var value;
+        var text;
+
+        raw = raw || {};
+        value = raw.showInLauncher;
+
+        if (value === undefined) value = raw.show_in_launcher;
+        if (value === undefined) value = raw.launcherVisible;
+        if (value === undefined) value = raw.visibleInLauncher;
+        if (value === undefined) value = raw["顯示於啟動器"];
+        if (value === undefined && raw.registry && typeof raw.registry === "object") {
+          value = raw.registry.showInLauncher;
+        }
+
+        if (value === false || value === 0) return false;
+
+        text = String(value == null ? "" : value).trim().toLowerCase();
+        if (!text) return true;
+
+        return ["false", "0", "no", "n", "off", "否", "不顯示", "隱藏"].indexOf(text) < 0;
+      }
+
       function normalizePosition(value) {
         return String(value || "").trim() === "後台" ? "後台" : "前台";
       }
@@ -880,6 +903,9 @@
           displayGroup: toText(raw.displayGroup || raw.group || raw["顯示群組"]),
           sort: String(projectSortValue({ sort: raw.sort || raw.order || raw["排序"] }) === 999999 ? 999 : projectSortValue({ sort: raw.sort || raw.order || raw["排序"] })),
           enabled: parseEnabled(enabledValue),
+          showInLauncher: parseShowInLauncher(raw),
+          registryRole: toText(raw.registryRole || raw.registry_role || raw.role || raw["Registry角色"]),
+          registryReason: toText(raw.registryReason || raw.registry_reason || raw.reason || raw["隱藏原因"]),
           version: toText(raw.version || raw["版本"]),
           lastSeenAt: toText(raw.lastSeenAt || raw.lastReportAt || raw["最後報到時間"]),
           reportCount: toText(raw.reportCount || raw.reportTimes || raw["報到次數"])
@@ -902,7 +928,8 @@
         }
 
         return sortProjects(list.map(normalizeProject).filter(function (project) {
-          return project.appId || project.title || project.href;
+          if (!(project.appId || project.title || project.href)) return false;
+          return project.showInLauncher !== false;
         }));
       }
 
@@ -936,9 +963,9 @@
         status.textContent =
           "已載入 " +
           state.projects.length +
-          " 個目前環境外部專案（" +
+          " 個目前環境可管理入口（" +
           state.env +
-          "）。拖曳卡片即可變更啟用狀態、顯示位置與順序。";
+          "）。showInLauncher=false 的流程頁不會顯示；拖曳卡片即可變更啟用狀態、顯示位置與順序。";
       }
 
       function zoneId(enabled, position) {

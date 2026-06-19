@@ -26,6 +26,10 @@ const SKHPS_EXTERNAL_APPS_HEADERS = [
   '顯示群組',
   '排序',
   '啟用',
+  '顯示於啟動器',
+  'Registry角色',
+  '隱藏原因',
+  '預設顯示位置',
   '版本',
   '最後報到時間',
   '報到次數'
@@ -84,6 +88,10 @@ function registerExternalApp(payload) {
       '顯示位置': '',
       '排序': 9999,
       '啟用': false,
+      '顯示於啟動器': app.showInLauncher,
+      'Registry角色': app.registryRole,
+      '隱藏原因': app.registryReason,
+      '預設顯示位置': app.defaultPosition,
       '版本': app.version,
       '最後報到時間': now,
       '報到次數': 1
@@ -108,6 +116,11 @@ function registerExternalApp(payload) {
     '專案名稱': app.title,
     '入口網址': app.href,
     // 重要：啟用 / 顯示位置 / 顯示群組 / 排序不動，避免外部專案報到覆蓋後台設定
+    // registry.showInLauncher / role 是 app.json 對「是否為入口」的宣告，允許每次報到同步。
+    '顯示於啟動器': app.showInLauncher,
+    'Registry角色': app.registryRole,
+    '隱藏原因': app.registryReason,
+    '預設顯示位置': app.defaultPosition,
     '版本': app.version,
     '最後報到時間': now,
     '報到次數': currentCount + 1
@@ -153,6 +166,14 @@ function listExternalApps(payload) {
       sort: Number(row['排序'] || 9999) || 9999,
       active: toBoolean_(row['啟用']),
       enabled: toBoolean_(row['啟用']),
+      showInLauncher: showInLauncherFromRow_(row),
+      show_in_launcher: showInLauncherFromRow_(row),
+      registryRole: String(row['Registry角色'] || '').trim(),
+      registry_role: String(row['Registry角色'] || '').trim(),
+      registryReason: String(row['隱藏原因'] || '').trim(),
+      registry_reason: String(row['隱藏原因'] || '').trim(),
+      defaultPosition: normalizeExternalAppDisplayPosition_(row['預設顯示位置']),
+      default_position: normalizeExternalAppPlacement_(row['預設顯示位置']),
       version: String(row['版本'] || '').trim(),
       lastSeenAt: row['最後報到時間'] || '',
       lastReportAt: row['最後報到時間'] || '',
@@ -165,7 +186,7 @@ function listExternalApps(payload) {
 
   if (activeOnly && !includeDisabled) {
     apps = apps.filter(function (app) {
-      return app.active === true;
+      return app.active === true && app.showInLauncher !== false;
     });
   }
 
@@ -324,6 +345,40 @@ function updateExternalProjectActivation(payload) {
     patch['排序'] = sortNumber;
   }
 
+  if (
+    Object.prototype.hasOwnProperty.call(payload, 'showInLauncher') ||
+    Object.prototype.hasOwnProperty.call(payload, 'show_in_launcher') ||
+    Object.prototype.hasOwnProperty.call(payload, '顯示於啟動器')
+  ) {
+    patch['顯示於啟動器'] = externalAppShowInLauncherFromPayload_(payload, payload);
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(payload, 'registryRole') ||
+    Object.prototype.hasOwnProperty.call(payload, 'registry_role') ||
+    Object.prototype.hasOwnProperty.call(payload, 'role') ||
+    Object.prototype.hasOwnProperty.call(payload, 'Registry角色')
+  ) {
+    patch['Registry角色'] = String(payload.registryRole || payload.registry_role || payload.role || payload['Registry角色'] || '').trim();
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(payload, 'registryReason') ||
+    Object.prototype.hasOwnProperty.call(payload, 'registry_reason') ||
+    Object.prototype.hasOwnProperty.call(payload, 'reason') ||
+    Object.prototype.hasOwnProperty.call(payload, '隱藏原因')
+  ) {
+    patch['隱藏原因'] = String(payload.registryReason || payload.registry_reason || payload.reason || payload['隱藏原因'] || '').trim();
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(payload, 'defaultPosition') ||
+    Object.prototype.hasOwnProperty.call(payload, 'default_position') ||
+    Object.prototype.hasOwnProperty.call(payload, '預設顯示位置')
+  ) {
+    patch['預設顯示位置'] = normalizeExternalAppDisplayPosition_(payload.defaultPosition || payload.default_position || payload['預設顯示位置']);
+  }
+
   if (!Object.keys(patch).length) {
     return {
       ok: false,
@@ -474,6 +529,13 @@ function normalizeExternalAppPayload_(payload) {
       9999
     ) || 9999,
 
+    showInLauncher: externalAppShowInLauncherFromPayload_(payload, config),
+    registryRole: externalAppRegistryTextFromPayload_('role', payload, config),
+    registryReason: externalAppRegistryTextFromPayload_('reason', payload, config),
+    defaultPosition: normalizeExternalAppDisplayPosition_(
+      externalAppRegistryTextFromPayload_('defaultPosition', payload, config)
+    ),
+
     version: normalizeExternalAppVersion_(
       config.version ||
       payload.version ||
@@ -481,6 +543,84 @@ function normalizeExternalAppPayload_(payload) {
     )
   };
 }
+
+
+function externalAppRegistry_(payload, config) {
+  payload = payload || {};
+  config = config || {};
+
+  const fromConfig = config.registry && typeof config.registry === 'object' && !Array.isArray(config.registry)
+    ? config.registry
+    : {};
+  const fromPayload = payload.registry && typeof payload.registry === 'object' && !Array.isArray(payload.registry)
+    ? payload.registry
+    : {};
+
+  return Object.assign({}, fromConfig, fromPayload);
+}
+
+function externalAppShowInLauncherFromPayload_(payload, config) {
+  const registry = externalAppRegistry_(payload, config);
+  const candidates = [
+    registry.showInLauncher,
+    payload.showInLauncher,
+    payload.show_in_launcher,
+    payload['顯示於啟動器']
+  ];
+
+  for (let i = 0; i < candidates.length; i += 1) {
+    const value = candidates[i];
+
+    if (value === true || value === false) return value;
+    if (value === 1) return true;
+    if (value === 0) return false;
+
+    const text = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+    if (!text) continue;
+    if (text === 'true' || text === '1' || text === 'yes' || text === 'y' || text === 'on' || text === '是' || text === '顯示') return true;
+    if (text === 'false' || text === '0' || text === 'no' || text === 'n' || text === 'off' || text === '否' || text === '不顯示') return false;
+  }
+
+  return payload.registerExternalApp === false ? false : true;
+}
+
+function externalAppRegistryTextFromPayload_(key, payload, config) {
+  const registry = externalAppRegistry_(payload, config);
+  let values = [];
+
+  if (key === 'role') {
+    values = [registry.role, registry.registryRole, payload.registryRole, payload.registry_role, payload.role];
+  } else if (key === 'reason') {
+    values = [registry.reason, registry.registryReason, registry.hiddenReason, payload.registryReason, payload.registry_reason, payload.reason];
+  } else if (key === 'defaultPosition') {
+    values = [registry.defaultPosition, registry.defaultDisplayPosition, registry.displayPosition, registry.position, payload.defaultPosition, payload.default_position];
+  }
+
+  for (let i = 0; i < values.length; i += 1) {
+    if (values[i] !== undefined && values[i] !== null && String(values[i]).trim() !== '') {
+      return String(values[i]).trim();
+    }
+  }
+
+  return '';
+}
+
+function showInLauncherFromRow_(row) {
+  const value = row && Object.prototype.hasOwnProperty.call(row, '顯示於啟動器')
+    ? row['顯示於啟動器']
+    : '';
+
+  if (value === '' || value === undefined || value === null) return true;
+  return toBoolean_(value);
+}
+
+function normalizeExternalAppPlacement_(value) {
+  const display = normalizeExternalAppDisplayPosition_(value);
+  if (display === '前台') return 'frontend';
+  if (display === '後台') return 'backend';
+  return 'hidden';
+}
+
 
 function normalizeExternalAppVersion_(value) {
   if (value === undefined || value === null) {

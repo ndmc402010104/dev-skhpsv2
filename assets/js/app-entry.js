@@ -605,6 +605,62 @@
     return "";
   }
 
+
+  function isObject(value) {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  }
+
+  function firstRegistryText() {
+    var values = Array.prototype.slice.call(arguments);
+    var i;
+    var value;
+
+    for (i = 0; i < values.length; i += 1) {
+      value = values[i];
+      if (value !== undefined && value !== null && String(value).trim() !== "") {
+        return String(value).trim();
+      }
+    }
+
+    return "";
+  }
+
+  function registryBoolean(value, fallback) {
+    if (value === true) return true;
+    if (value === false) return false;
+    if (value === 1) return true;
+    if (value === 0) return false;
+
+    var text = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+
+    if (text === "true" || text === "1" || text === "yes" || text === "y" || text === "on" || text === "是" || text === "顯示") return true;
+    if (text === "false" || text === "0" || text === "no" || text === "n" || text === "off" || text === "否" || text === "不顯示") return false;
+
+    return Boolean(fallback);
+  }
+
+  function normalizeRegistryOptions(rootManifest, effectiveManifest) {
+    var rootRegistry = isObject(rootManifest && rootManifest.registry) ? rootManifest.registry : {};
+    var pageRegistry = isObject(effectiveManifest && effectiveManifest.registry) ? effectiveManifest.registry : {};
+    var registry = Object.assign({}, rootRegistry, pageRegistry);
+    var registerExternalApp = effectiveManifest && effectiveManifest.registerExternalApp;
+    var showInLauncher = registry.showInLauncher;
+
+    if (showInLauncher === undefined || showInLauncher === null || String(showInLauncher).trim() === "") {
+      showInLauncher = registerExternalApp === false ? false : true;
+    } else {
+      showInLauncher = registryBoolean(showInLauncher, true);
+    }
+
+    return {
+      showInLauncher: showInLauncher,
+      role: firstRegistryText(registry.role, registry.registryRole),
+      reason: firstRegistryText(registry.reason, registry.registryReason, registry.hiddenReason),
+      defaultPosition: firstRegistryText(registry.defaultPosition, registry.defaultDisplayPosition, registry.displayPosition, registry.position)
+    };
+  }
+
+
   function normalizeRegisterPayload(options) {
     var effectiveManifest = options.manifest || window.SKHPS_APP_EFFECTIVE_MANIFEST || window.SKHPS_APP_MANIFEST || {};
     var rootManifest = options.rootManifest || window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || effectiveManifest || {};
@@ -616,6 +672,7 @@
     var pageTitle = String(effectiveManifest.title || options.title || document.title || "").trim();
     var pageHref = String(effectiveManifest.href || window.location.href || "").trim();
     var version = String(getLoadedAppVersion(rootManifest) || options.appVersion || "").trim();
+    var registry = normalizeRegistryOptions(rootManifest, effectiveManifest);
 
     return {
       appId: appId,
@@ -632,6 +689,11 @@
       pageId: pageId,
       pageTitle: pageTitle,
       pageHref: pageHref,
+      registry: registry,
+      showInLauncher: registry.showInLauncher,
+      registryRole: registry.role,
+      registryReason: registry.reason,
+      defaultPosition: registry.defaultPosition,
       origin: window.location.origin || "",
       pageUrl: window.location.href || "",
       userAgent: navigator.userAgent || ""

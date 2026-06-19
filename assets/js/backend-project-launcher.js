@@ -148,6 +148,29 @@
     return String(value || "").trim();
   }
 
+  function normalizeShowInLauncher(raw) {
+    var value;
+
+    raw = raw || {};
+    value =
+      raw.showInLauncher !== undefined ? raw.showInLauncher :
+      raw.show_in_launcher !== undefined ? raw.show_in_launcher :
+      raw["顯示於啟動器"] !== undefined ? raw["顯示於啟動器"] :
+      raw.launcherVisible !== undefined ? raw.launcherVisible :
+      raw.visibleInLauncher;
+
+    if (value === false || value === 0) return false;
+
+    var text = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+
+    if (!text) return true;
+    return !(text === "false" || text === "0" || text === "no" || text === "n" || text === "off" || text === "否" || text === "不顯示");
+  }
+
+  function isLauncherVisible(project) {
+    return normalizeShowInLauncher(project);
+  }
+
   function normalizeProject(raw) {
     raw = raw || {};
     var metadata = raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {};
@@ -162,6 +185,12 @@
       group: String(raw.group || raw.groupKey || raw.group_key || raw["顯示群組"] || "").trim(),
       sort: Number(raw.sort || raw.order || raw.sortOrder || raw.sort_order || raw["排序"] || 9999) || 9999,
       enabled: projectEnabled(raw),
+      showInLauncher: normalizeShowInLauncher(raw),
+      registryRole: String(raw.registryRole || raw.registry_role || raw["Registry角色"] || raw.role || "").trim(),
+      registryReason: String(raw.registryReason || raw.registry_reason || raw["隱藏原因"] || raw.reason || "").trim(),
+      defaultPosition: normalizeDisplayPositionValue({
+        displayPosition: raw.defaultPosition || raw.default_position || raw["預設位置"] || raw["預設顯示位置"] || ""
+      }),
       version: String(raw.version || envMeta.version || raw["版本"] || "").trim(),
       lastReportAt: raw.lastReportAt || raw.lastSeenAt || envMeta.lastReportAt || envMeta.lastSeenAt || raw["最後報到時間"] || "",
       reportCount: Number(raw.reportCount || raw.registerCount || envMeta.reportCount || envMeta.registerCount || raw["報到次數"] || 0) || 0
@@ -264,6 +293,9 @@
           row("入口網址", project.href),
           row("顯示群組", project.group),
           row("排序", String(project.sort)),
+          row("Registry 角色", project.registryRole),
+          row("預設位置", project.defaultPosition),
+          row("隱藏原因", project.registryReason),
           row("版本", project.version),
           row("最後報到時間", project.lastReportAt),
           row("報到次數", String(project.reportCount)),
@@ -436,16 +468,22 @@
         return backend.call("listExternalProjectsForLauncher", payload);
       })
       .then(function (response) {
-        projects = normalizeProjects(response).map(normalizeProject);
+        var allProjects = normalizeProjects(response).map(normalizeProject);
+        var hiddenProjects = allProjects.filter(function (project) {
+          return !isLauncherVisible(project);
+        });
+
+        projects = allProjects.filter(isLauncherVisible);
         selectedKey = projects.length ? projectKey(projects[0]) : "";
 
         renderProjectList();
         renderEditor(findSelectedProject());
         bindEvents();
-        setStatus("已載入 " + projects.length + " 個目前環境外部專案（" + (runtime || "runtime 未知") + "）。");
+        setStatus("已載入 " + projects.length + " 個可管理入口（隱藏流程頁 " + hiddenProjects.length + " 個，" + (runtime || "runtime 未知") + "）。");
         rlog("OK", "listExternalProjects", {
           env: runtime,
-          count: projects.length
+          count: projects.length,
+          hiddenCount: hiddenProjects.length
         }, Date.now() - startedAt);
         loadingDone();
       })

@@ -114,8 +114,26 @@
     return "";
   }
 
+  function showInLauncher(app) {
+    if (!app) return true;
+
+    var value =
+      app.showInLauncher !== undefined ? app.showInLauncher :
+      app.show_in_launcher !== undefined ? app.show_in_launcher :
+      app["顯示於啟動器"] !== undefined ? app["顯示於啟動器"] :
+      app.launcherVisible !== undefined ? app.launcherVisible :
+      app.visibleInLauncher;
+
+    if (value === false || value === 0) return false;
+
+    var text = String(value === undefined || value === null ? "" : value).trim().toLowerCase();
+
+    if (!text) return true;
+    return !(text === "false" || text === "0" || text === "no" || text === "n" || text === "off" || text === "否" || text === "不顯示");
+  }
+
   function isBackendApp(app) {
-    return isActive(app) && normalizeDisplayLocation(app) === "backend";
+    return showInLauncher(app) && isActive(app) && normalizeDisplayLocation(app) === "backend";
   }
 
   function withRuntime(href, appRuntime) {

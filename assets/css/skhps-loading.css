@@ -491,3 +491,91 @@ html.skhps-loading::after {
     transform: translate(-50%, -50%) scale(1.006);
   }
 }
+
+/* =========================================================
+   SKHPS Loading Final｜user tuned single-tone lightbar
+   來源：使用者手調 full parameter tuner
+   特色：
+   - 單色藍灰燈條
+   - 6px 厚度
+   - 速度 3s，不快
+   - 低光暈
+   - 文字不縮放，只保留淡淡 opacity
+   ========================================================= */
+
+html.skhps-loading {
+  background:
+    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+}
+
+html.skhps-css-loading:not(.skhps-loading) {
+  background:
+    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+}
+
+html.skhps-loading::before {
+  top: 42%;
+  color: #12233a;
+  font-size: 23px;
+  animation: skhps-loading-title-custom 2.5s ease-in-out infinite;
+}
+
+html.skhps-loading::after {
+  content: "";
+  position: fixed;
+  left: 50%;
+  top: calc(42% + 41px);
+  z-index: 100000;
+  transform: translateX(-50%);
+  width: min(21ch, calc(100vw - 110px));
+  min-width: 270px;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  opacity: 1;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(91, 118, 142, 0.01) 0%,
+      rgba(91, 118, 142, 0.01) 16%,
+      rgba(91, 118, 142, 0.03) 28%,
+      rgba(91, 118, 142, 0.08) 39%,
+      rgba(91, 118, 142, 0.136) 46%,
+      #5b768e 49%,
+      #41586d 50%,
+      #5b768e 54%,
+      rgba(91, 118, 142, 0.106) 63%,
+      rgba(91, 118, 142, 0.06) 73%,
+      rgba(91, 118, 142, 0.028) 84%,
+      rgba(91, 118, 142, 0.01) 94%,
+      rgba(91, 118, 142, 0.01) 100%
+    );
+  background-size: 290% 100%;
+  background-position: 0% 0;
+  box-shadow:
+    0 1px 10px rgba(81, 109, 135, 0.04),
+    0 0 1px rgba(81, 109, 135, .18);
+  animation: skhps-loading-bar-custom 3s linear infinite;
+}
+
+@keyframes skhps-loading-title-custom {
+  0%, 100% {
+    opacity: .92;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes skhps-loading-bar-custom {
+  0% {
+    background-position: 0% 0;
+  }
+
+  100% {
+    background-position: -300% 0;
+  }
+}

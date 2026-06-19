@@ -1,18 +1,18 @@
 /*
 檔案位置：skhpsv2/assets/js/header.js
-時間戳記：2026-06-11 UTC+8
+時間戳記：2026-06-19 UTC+8
 用途：
 共用 Header。
 
-目前定案：
+本版重點：
 - Header 掛載到 <header id="header">。
 - Header 左側顯示 SKHPS / Plastic Surgery。
-- Header 左側按下去回目前區域首頁。
-- Header 右側目前只顯示「登入」。
-- 登入先不做 auth，直接連到 admin.html。
-- 外部 App 使用 sharedBaseUrl / SKHPS_ENTRY_BASE_URL 回到 skhpsv2/admin.html。
-- Header 不顯示外部專案入口；外部專案入口留在首頁「系統入口」區塊。
-- Header 不顯示目前頁面標題。
+- Header 左側按下去回「目前被水庫放置的位置」首頁。
+- 外部 App 的回首頁位置不再由 app.json 寫死判斷，而是以 ExternalProject registry 當下 displayPosition 為準。
+  - displayPosition=backend / 後台 → 回 skhpsv2/admin.html
+  - displayPosition=front / 前台 → 回 skhpsv2/index.html
+  - 查不到 registry → fallback 回 skhpsv2/index.html
+- Header 右側目前只顯示「登入」，登入連到 skhpsv2/admin.html。
 - Header 不顯示 runtime / backend / CSS / version 狀態。
 - Header 不進 loading gate，不呼叫 SKHPSLoading.done()。
 */
@@ -41,6 +41,11 @@
   var BRAND_MAIN = "SKHPS";
   var BRAND_SUB = "Plastic Surgery";
   var LOGIN_HREF = "admin.html";
+  var FRONT_HREF = "index.html";
+  var ADMIN_HREF = "admin.html";
+  var currentResolvedPlacement = "";
+  var currentRenderedHomeHref = "";
+  var registryResolveStarted = false;
 
   function getHeaderRoot() {
     return document.getElementById(HEADER_ID);
@@ -64,7 +69,18 @@
   }
 
   function joinUrl(baseUrl, path) {
-    return normalizeBaseUrl(baseUrl) + String(path || "").replace(/^\/+/, "");
+    baseUrl = normalizeText(baseUrl);
+    path = String(path || "").replace(/^\/+/, "");
+
+    if (!baseUrl) {
+      return path;
+    }
+
+    return normalizeBaseUrl(baseUrl) + path;
+  }
+
+  function isAbsoluteUrl(value) {
+    return /^https?:\/\//i.test(String(value || ""));
   }
 
   function getSharedBaseUrl() {
@@ -86,20 +102,186 @@
     return "";
   }
 
+  function sharedHref(path) {
+    var sharedBaseUrl = getSharedBaseUrl();
+
+    if (!sharedBaseUrl) {
+      return path;
+    }
+
+    return joinUrl(sharedBaseUrl, path);
+  }
+
+  function getEntryScope() {
+    return normalizeText(
+      document.documentElement.getAttribute("data-skhps-entry-scope")
+    );
+  }
+
+  function isExternalApp() {
+    return getEntryScope() === "external-app" || Boolean(window.SKHPS_APP_ENV || window.SKHPS_APP_MANIFEST);
+  }
+
+  function getCurrentPageId() {
+    return normalizeText(
+      document.documentElement.getAttribute("data-skhps-page-id")
+    );
+  }
+
+  function getCurrentAppId() {
+    var html = document.documentElement;
+    var appEnv = window.SKHPS_APP_ENV || {};
+    var manifest = window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || {};
+    var effective = window.SKHPS_APP_EFFECTIVE_MANIFEST || {};
+
+    return normalizeText(
+      appEnv.rootAppId ||
+      appEnv.appId ||
+      manifest.appId ||
+      effective.rootAppId ||
+      effective.appId ||
+      html.getAttribute("data-skhps-app-id") ||
+      window.SKHPS_APP_ID ||
+      ""
+    );
+  }
+
+  function normalizePlacement(value) {
+    value = normalizeText(value).toLowerCase();
+
+    if (!value) return "";
+    if (value === "backend" || value === "admin" || value === "back" || value === "後台" || value === "管理") return "backend";
+    if (value === "front" || value === "frontend" || value === "home" || value === "index" || value === "前台" || value === "首頁") return "front";
+
+    return value;
+  }
+
+  function pickPlacementFromObject(item) {
+    if (!item || typeof item !== "object") return "";
+
+    return normalizePlacement(
+      item.displayPosition ||
+      item.display_position ||
+      item.position ||
+      item.placement ||
+      item.area ||
+      item.zone ||
+      item["顯示位置"] ||
+      item["位置"] ||
+      ""
+    );
+  }
+
+  function matchesAppId(item, appId) {
+    var ids;
+
+    if (!item || typeof item !== "object" || !appId) return false;
+
+    ids = [
+      item.appId,
+      item.app_id,
+      item.id,
+      item.key,
+      item.rootAppId,
+      item.root_app_id,
+      item["appId"],
+      item["專案ID"],
+      item["專案Id"],
+      item["專案id"]
+    ].map(function (value) {
+      return normalizeText(value);
+    }).filter(Boolean);
+
+    return ids.indexOf(appId) >= 0;
+  }
+
+  function collectCandidateArrays(value, output) {
+    if (!value || typeof value !== "object") return output;
+
+    if (Array.isArray(value)) {
+      output.push(value);
+      return output;
+    }
+
+    ["projects", "apps", "items", "rows", "data", "result", "records", "list"].forEach(function (key) {
+      if (Array.isArray(value[key])) {
+        output.push(value[key]);
+      } else if (value[key] && typeof value[key] === "object") {
+        collectCandidateArrays(value[key], output);
+      }
+    });
+
+    return output;
+  }
+
+  function findRegistryItemFromResult(result, appId) {
+    var arrays = collectCandidateArrays(result || {}, []);
+    var found = null;
+
+    arrays.some(function (items) {
+      return items.some(function (item) {
+        if (matchesAppId(item, appId)) {
+          found = item;
+          return true;
+        }
+        return false;
+      });
+    });
+
+    return found;
+  }
+
+  function registryResultCandidates() {
+    return [
+      window.SKHPS_CURRENT_APP_REGISTRY,
+      window.SKHPS_EXTERNAL_APP_REGISTER_RESULT,
+      window.SKHPS_EXTERNAL_APP_REGISTRY_RESULT,
+      window.SKHPS_EXTERNAL_PROJECTS_RESULT,
+      window.SKHPS_EXTERNAL_APPS_RESULT
+    ].filter(Boolean);
+  }
+
+  function resolvePlacementFromKnownResults(appId) {
+    var placement = "";
+
+    registryResultCandidates().some(function (result) {
+      var item;
+
+      if (matchesAppId(result, appId)) {
+        placement = pickPlacementFromObject(result);
+        if (placement) return true;
+      }
+
+      item = findRegistryItemFromResult(result, appId);
+      placement = pickPlacementFromObject(item);
+      if (placement) {
+        window.SKHPS_CURRENT_APP_REGISTRY = item;
+        return true;
+      }
+
+      return false;
+    });
+
+    return placement;
+  }
+
   function getHeaderMode() {
     var fromHtml = normalizeText(
       document.documentElement.getAttribute("data-skhps-header-mode")
     );
+    var pageId;
 
     if (fromHtml) {
       return fromHtml;
     }
 
-    var pageId = normalizeText(
-      document.documentElement.getAttribute("data-skhps-page-id")
-    );
+    if (isExternalApp()) {
+      return currentResolvedPlacement === "backend" ? "admin" : "front";
+    }
 
-    if (pageId === "admin" || pageId === "css-setting") {
+    pageId = getCurrentPageId();
+
+    if (pageId === "admin" || pageId === "backend-project-launcher") {
       return "admin";
     }
 
@@ -110,20 +292,25 @@
     var fromHtml = normalizeText(
       document.documentElement.getAttribute("data-skhps-header-home-href")
     );
+    var mode = getHeaderMode();
 
     if (fromHtml) {
       return fromHtml;
     }
 
-    if (getHeaderMode() === "admin") {
-      return "admin.html";
+    if (isExternalApp()) {
+      return sharedHref(mode === "admin" ? ADMIN_HREF : FRONT_HREF);
     }
 
-    if (window.SKHPS_ENTRY_BASE_URL) {
+    if (mode === "admin") {
+      return ADMIN_HREF;
+    }
+
+    if (window.SKHPS_ENTRY_BASE_URL && isAbsoluteUrl(window.SKHPS_ENTRY_BASE_URL)) {
       return window.SKHPS_ENTRY_BASE_URL;
     }
 
-    return "index.html";
+    return FRONT_HREF;
   }
 
   function getLoginHref() {
@@ -135,26 +322,97 @@
       return fromHtml;
     }
 
-    var sharedBaseUrl = getSharedBaseUrl();
+    return sharedHref(LOGIN_HREF);
+  }
 
-    if (sharedBaseUrl) {
-      return joinUrl(sharedBaseUrl, LOGIN_HREF);
+  function applyResolvedPlacement(placement, reason) {
+    placement = normalizePlacement(placement);
+
+    if (!placement) return false;
+    if (placement !== "backend" && placement !== "front") return false;
+    if (currentResolvedPlacement === placement) return false;
+
+    currentResolvedPlacement = placement;
+    document.documentElement.setAttribute("data-skhps-current-display-position", placement);
+
+    rlog("OK", "resolvePlacement", {
+      appId: getCurrentAppId(),
+      placement: placement,
+      reason: reason || ""
+    });
+
+    renderHeader();
+    return true;
+  }
+
+  function resolvePlacementFromBackend() {
+    var appId = getCurrentAppId();
+    var knownPlacement;
+
+    if (!isExternalApp() || !appId || registryResolveStarted) {
+      return;
     }
 
-    return LOGIN_HREF;
+    knownPlacement = resolvePlacementFromKnownResults(appId);
+    if (applyResolvedPlacement(knownPlacement, "known-result")) {
+      return;
+    }
+
+    if (!window.SKHPSBackend || typeof window.SKHPSBackend.call !== "function") {
+      rlog("WARN", "resolvePlacementSkipped", "SKHPSBackend.call not available");
+      return;
+    }
+
+    registryResolveStarted = true;
+
+    window.SKHPSBackend.call("listExternalProjects", {}, {
+      timeoutMs: 8000
+    }).then(function (result) {
+      var item = findRegistryItemFromResult(result, appId);
+      var placement = pickPlacementFromObject(item);
+
+      if (item) {
+        window.SKHPS_CURRENT_APP_REGISTRY = item;
+      }
+
+      if (!applyResolvedPlacement(placement, "listExternalProjects")) {
+        rlog("WARN", "resolvePlacementNoMatch", {
+          appId: appId,
+          hasResult: Boolean(result)
+        });
+      }
+
+      try {
+        document.dispatchEvent(new CustomEvent("skhps-current-app-registry-resolved", {
+          detail: {
+            appId: appId,
+            placement: placement,
+            item: item || null,
+            result: result || null
+          }
+        }));
+      } catch (error) {}
+    }).catch(function (error) {
+      rlog("WARN", "resolvePlacementFailed", error && error.message ? error.message : String(error));
+    });
   }
 
   function renderHeader() {
     var root = getHeaderRoot();
+    var mode;
+    var homeHref;
+    var loginHref;
 
     if (!root) {
       rlog("WARN", "renderHeader", "missing header root");
       return;
     }
 
-    var mode = getHeaderMode();
-    var homeHref = getHomeHref();
-    var loginHref = getLoginHref();
+    mode = getHeaderMode();
+    homeHref = getHomeHref();
+    loginHref = getLoginHref();
+
+    currentRenderedHomeHref = homeHref;
 
     root.classList.add("skhps-header");
     root.setAttribute("data-skhps-header-ready", "true");
@@ -187,15 +445,35 @@
         '</nav>',
       '</div>'
     ].join("");
+
     rlog("OK", "renderHeader", {
       mode: mode,
       homeHref: homeHref,
-      loginHref: loginHref
+      loginHref: loginHref,
+      placement: currentResolvedPlacement || ""
     });
   }
 
   function boot() {
+    /*
+      先用 fallback render，避免 header 空白。
+      外部 App 再用 registry 的當下 displayPosition 非同步修正回首頁位置。
+    */
     renderHeader();
+    resolvePlacementFromBackend();
+
+    document.addEventListener("skhps-runtime-updated", function () {
+      if (!currentResolvedPlacement) {
+        resolvePlacementFromBackend();
+      }
+    });
+
+    document.addEventListener("skhps-current-app-registry-resolved", function () {
+      var nextHomeHref = getHomeHref();
+      if (nextHomeHref !== currentRenderedHomeHref) {
+        renderHeader();
+      }
+    });
   }
 
   if (document.readyState === "loading") {

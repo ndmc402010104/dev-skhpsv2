@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--
 檔案位置：skhpsv2/admin.html
-時間戳記：2026-06-16 13:45 UTC+8
-用途：系統後台；左側固定 skhpsv2 後台功能，右側顯示 registry 中啟用且「顯示位置」為後台的外部專案。
+時間戳記：2026-06-19 12:35 UTC+8
+用途：系統後台；固定核心工具只保留後台專案啟動器，其他後台功能由 registry 中啟用且「顯示位置」為後台的外部專案決定。
 水庫理論：
 - 本頁是 skhpsv2 水庫本體頁面。
 - Header 由 assets/js/header.js 掛載。
@@ -64,7 +64,7 @@
               系統後台
             </h1>
             <p class="skhps-page-subtitle skhps-admin-subtitle">
-              skhpsv2 後台只負責共通管理入口；業務後台由外部專案 registry 決定是否顯示。
+              skhpsv2 後台只保留水庫核心管理入口；CSS Setting 與業務後台都由外部專案 registry 決定是否顯示。
             </p>
           </div>
         </div>
@@ -81,11 +81,7 @@
             </div>
 
             <nav class="skhps-action-grid skhps-admin-actions" aria-label="固定後台功能">
-              <a class="skhps-btn skhps-btn-primary skhps-btn-lg" href="css-setting.html">
-                CSS Setting
-              </a>
-
-              <a class="skhps-btn skhps-btn-secondary skhps-btn-lg" href="backend-project-launcher.html">
+              <a class="skhps-btn skhps-btn-primary skhps-btn-lg" href="backend-project-launcher.html">
                 後台專案啟動器
               </a>
             </nav>

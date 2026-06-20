@@ -14,6 +14,40 @@
 - header/footer 可以先 mount、先 ready，但在 skhps-loading 移除前不能露出畫面。
 */
 
+
+/* =========================================================
+   SKHPS Loading First Paint + Page Background Match Guard v2
+   目的：
+   - 第一幀就使用正式頁面同系灰藍背景，避免白底 / 亮底切換
+   - loading 背景與進畫面後的 page background 對齊
+   - 不改 loading-gate.js、不改讀條演算法、不改位置、不改速度
+   ========================================================= */
+
+:root {
+  --skhps-loading-page-bg: #e6ebf0;
+  --skhps-loading-page-bg-mid: #e7edf2;
+  --skhps-loading-page-bg-end: #e5ebf0;
+  --skhps-loading-page-gradient: linear-gradient(
+    135deg,
+    var(--skhps-loading-page-bg, #e6ebf0) 0%,
+    var(--skhps-loading-page-bg-mid, #e7edf2) 48%,
+    var(--skhps-loading-page-bg-end, #e5ebf0) 100%
+  );
+  color-scheme: light;
+}
+
+html {
+  min-height: 100%;
+  background-color: var(--skhps-loading-page-bg, #e6ebf0);
+  background-image: var(--skhps-loading-page-gradient);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: transparent;
+}
+
 /*
   Theme 40｜Indigo Paper Admin 方向：
   - 靛藍灰 + 和紙米白 + 淡紙棕
@@ -23,38 +57,6 @@
   - 不要外框
   - loading 文案由 <html data-loading-title="..."> 控制
 */
-
-
-/* =========================================================
-   -1. First paint background guard
-   目的：避免瀏覽器第一幀先畫白底，之後才變成 loading 淡藍底。
-   原則：只保底 html/body 背景，不碰讀條、不碰 gate、不碰正式 CSS runtime。
-   ========================================================= */
-
-:root {
-  --skhps-loading-page-bg: #eef3f6;
-  --skhps-loading-page-bg-soft: #f1f4f6;
-  color-scheme: light;
-}
-
-html {
-  min-height: 100%;
-  background-color: var(--skhps-loading-page-bg, #eef3f6);
-  background-image: linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
-}
-
-body {
-  min-height: 100%;
-  margin: 0;
-  background: transparent;
-}
-
-html.skhps-loading body,
-html.skhps-css-loading body,
-html.skhps-shell-loading body,
-html.skhps-main-loading body {
-  background: transparent;
-}
 
 /* =========================================================
    0. Loading 畫面總開關
@@ -75,7 +77,7 @@ html.skhps-loading {
     radial-gradient(circle at 78% 24%, rgba(167, 141, 114, .13), transparent 30%),
     radial-gradient(circle at 18% 82%, rgba(91, 123, 150, .10), transparent 32%),
     radial-gradient(circle at 88% 84%, rgba(167, 141, 114, .08), transparent 28%),
-    linear-gradient(135deg, #eceff3 0%, #f4f6f8 42%, #edf3f6 100%);
+    var(--skhps-loading-page-gradient);
   background-size:
     125% 125%,
     130% 130%,
@@ -102,7 +104,7 @@ html.skhps-css-loading:not(.skhps-loading) {
   background:
     radial-gradient(circle at 24% 18%, rgba(81, 109, 135, .18), transparent 34%),
     radial-gradient(circle at 78% 24%, rgba(167, 141, 114, .13), transparent 30%),
-    linear-gradient(135deg, #eceff3 0%, #f4f6f8 42%, #edf3f6 100%);
+    var(--skhps-loading-page-gradient);
 }
 
 /* =========================================================
@@ -536,12 +538,12 @@ html.skhps-loading::after {
 html.skhps-loading {
   --skhps-loading-progress: 6;
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+    var(--skhps-loading-page-gradient);
 }
 
 html.skhps-css-loading:not(.skhps-loading) {
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+    var(--skhps-loading-page-gradient);
 }
 
 html.skhps-loading::before {
@@ -645,12 +647,12 @@ html.skhps-loading body::after {
 html.skhps-loading {
   --skhps-loading-progress: 6;
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+    var(--skhps-loading-page-gradient);
 }
 
 html.skhps-css-loading:not(.skhps-loading) {
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%);
+    var(--skhps-loading-page-gradient);
 }
 
 html.skhps-loading::before {
@@ -756,7 +758,7 @@ html.skhps-loading {
 html.skhps-loading,
 html.skhps-css-loading:not(.skhps-loading) {
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%) !important;
+    var(--skhps-loading-page-gradient) !important;
   background-size: auto !important;
   background-position: 0 0 !important;
   animation: none !important;
@@ -774,7 +776,7 @@ html.skhps-css-loading:not(.skhps-loading) {
 
 html.skhps-loading {
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%) !important;
+    var(--skhps-loading-page-gradient) !important;
   background-size: auto !important;
   background-position: 0 0 !important;
   animation: none !important;
@@ -821,7 +823,7 @@ html.skhps-loading body::after {
 html.skhps-loading,
 html.skhps-css-loading:not(.skhps-loading) {
   background:
-    linear-gradient(135deg, #eef3f6 0%, #f1f4f6 48%, #edf3f6 100%) !important;
+    var(--skhps-loading-page-gradient) !important;
   background-size: auto !important;
   background-position: 0 0 !important;
   animation: none !important;
@@ -875,5 +877,32 @@ html.skhps-loading body::after {
   filter: none !important;
   transition: none !important;
   will-change: clip-path;
+}
+
+/* =========================================================
+   SKHPS Loading Page Background Sync Final Override v2
+   最後保險：覆蓋前面歷史 patch 裡的舊 loading 背景色。
+   ========================================================= */
+
+html,
+body {
+  background-color: var(--skhps-loading-page-bg, #e6ebf0);
+}
+
+html {
+  background-image: var(--skhps-loading-page-gradient);
+}
+
+body {
+  background-image: none;
+}
+
+html.skhps-loading,
+html.skhps-css-loading:not(.skhps-loading) {
+  background: var(--skhps-loading-page-gradient) !important;
+  background-color: var(--skhps-loading-page-bg, #e6ebf0) !important;
+  background-size: auto !important;
+  background-position: 0 0 !important;
+  animation: none !important;
 }
 

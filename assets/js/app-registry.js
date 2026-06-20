@@ -5,7 +5,7 @@
 
 window.SKHPS_APP_REGISTRY = {
   sharedBaseUrl: {
-    "local-dev": "http://127.0.0.1:5500/skhpsv2/",
+    "local-dev": "/skhpsv2/",
     "dev": "https://dev-skhps.jonaminz.com/",
     "prod": "https://skhps.jonaminz.com/"
   },
@@ -14,7 +14,7 @@ window.SKHPS_APP_REGISTRY = {
     "quick-login": {
       title: "快速登入",
       baseUrl: {
-        "local-dev": "http://127.0.0.1:5500/skhps-quick-login/",
+        "local-dev": "/skhps-quick-login/",
         "dev": "https://ndmc402010104.github.io/skhps-quick-login/",
         "prod": "https://ndmc402010104.github.io/skhps-quick-login/"
       },

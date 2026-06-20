@@ -312,11 +312,11 @@
     if (shared) return normalizeBaseUrl(shared);
 
     if (host === "127.0.0.1" || host === "localhost" || host === "") {
-      return "http://127.0.0.1:5500/skhpsv2/";
+      return window.location.origin + "/skhpsv2/";
     }
 
     if (runtimeName === "local-dev" || runtimeName === "local") {
-      return "http://127.0.0.1:5500/skhpsv2/";
+      return window.location.origin + "/skhpsv2/";
     }
 
     if (runtimeName === "dev" || host === "dev-skhps.jonaminz.com") {
@@ -1562,3 +1562,4 @@
   };
   rlog("OK", "moduleReady", "css-sheet-runtime.js");
 })();
+

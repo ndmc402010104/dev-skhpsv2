@@ -1,6 +1,6 @@
-﻿/*
+/*
 檔案位置：skhpsv2/assets/js/config.js
-時間戳記：2026-06-10 UTC+8
+時間戳記：2026-06-21 UTC+8
 用途：SKHPS config loader。
 原則：
 - 不在 config.js 寫死整包設定。
@@ -104,10 +104,46 @@
     return normalizeBaseUrl(baseUrl) + String(path || "").replace(/^\/+/, "");
   }
 
+
+  function isLocalDevHost(host) {
+    host = String(host || "").toLowerCase();
+
+    return (
+      host === "" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)
+    );
+  }
+
+  function rewriteLocalDevUrl(url, env) {
+    var raw = String(url || "").trim();
+    var output;
+
+    if (!raw || String(env || "") !== "local-dev") {
+      return url || "";
+    }
+
+    try {
+      output = new URL(raw, window.location.href);
+
+      if (isLocalDevHost(output.hostname)) {
+        output.protocol = window.location.protocol || output.protocol;
+        output.hostname = window.location.hostname || output.hostname;
+        output.port = window.location.port || output.port;
+        return output.toString();
+      }
+    } catch (error) {}
+
+    return raw;
+  }
+
   function inferEnvFromLocation() {
     var host = String(window.location.hostname || "").toLowerCase();
 
-    if (host === "127.0.0.1" || host === "localhost" || host === "") {
+    if (isLocalDevHost(host)) {
       return "local-dev";
     }
 
@@ -309,10 +345,10 @@
     var env = getEnv(config);
 
     if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value[env] || value.prod || value.dev || value["local-dev"] || "";
+      return rewriteLocalDevUrl(value[env] || value.prod || value.dev || value["local-dev"] || "", env);
     }
 
-    return value || "";
+    return rewriteLocalDevUrl(value || "", env);
   }
 
   function getSiteBaseUrl(config) {
@@ -346,10 +382,11 @@
     }
 
     try {
-      output = new URL(url, window.location.href);
+      output = new URL(rewriteLocalDevUrl(url, env), window.location.href);
       output.searchParams.set("skhpsRuntime", env);
       return output.toString();
     } catch (error) {
+      url = rewriteLocalDevUrl(url, env);
       return String(url) +
         (String(url).indexOf("?") >= 0 ? "&" : "?") +
         "skhpsRuntime=" +
@@ -370,5 +407,7 @@
   window.SKHPSConfig.getSiteBaseUrl = getSiteBaseUrl;
   window.SKHPSConfig.joinUrl = joinConfigUrl;
   window.SKHPSConfig.withRuntime = withRuntimeParam;
+  window.SKHPSConfig.rewriteLocalDevUrl = rewriteLocalDevUrl;
+  window.SKHPSConfig.isLocalDevHost = isLocalDevHost;
   rlog("OK", "moduleReady", "config.js");
 })();

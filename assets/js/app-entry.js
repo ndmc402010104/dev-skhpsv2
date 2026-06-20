@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/app-entry.js
-時間戳記：2026-06-16 UTC+8
+時間戳記：2026-06-21 UTC+8
 用途：外部專案接入 skhpsv2 水庫的共用入口；正式標準只讀 app.json manifest。
 
 水庫標準：
@@ -173,6 +173,42 @@
     return "";
   }
 
+
+  function isLocalDevHost(host) {
+    host = String(host || "").toLowerCase();
+
+    return (
+      host === "" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)
+    );
+  }
+
+  function rewriteLocalDevUrl(url, env) {
+    var raw = String(url || "").trim();
+    var output;
+
+    if (!raw || String(env || "") !== "local-dev") {
+      return url || "";
+    }
+
+    try {
+      output = new URL(raw, window.location.href);
+
+      if (isLocalDevHost(output.hostname)) {
+        output.protocol = window.location.protocol || output.protocol;
+        output.hostname = window.location.hostname || output.hostname;
+        output.port = window.location.port || output.port;
+        return output.toString();
+      }
+    } catch (error) {}
+
+    return raw;
+  }
+
   function inferEnvFromPageLocation() {
     var requestedRuntime = getRuntimeParam();
     var host = String(window.location.hostname || "").toLowerCase();
@@ -181,7 +217,7 @@
       return requestedRuntime;
     }
 
-    if (host === "127.0.0.1" || host === "localhost" || host === "") {
+    if (isLocalDevHost(host)) {
       return "local-dev";
     }
 
@@ -203,10 +239,11 @@
     }
 
     try {
-      var output = new URL(url, window.location.href);
+      var output = new URL(rewriteLocalDevUrl(url, env), window.location.href);
       output.searchParams.set("skhpsRuntime", env);
       return output.toString();
     } catch (error) {
+      url = rewriteLocalDevUrl(url, env);
       return String(url) +
         (String(url).indexOf("?") >= 0 ? "&" : "?") +
         "skhpsRuntime=" +
@@ -331,7 +368,7 @@
 
   function normalizeHrefForEnv(value, env, fallback) {
     var href = pickEnvValue(value, env) || fallback || window.location.href;
-    return withRuntimeParam(href, env);
+    return withRuntimeParam(rewriteLocalDevUrl(href, env), env);
   }
 
   function getVersionGlobalName(manifest) {
@@ -516,7 +553,7 @@
       manifest.href = window.location.href;
     }
 
-    manifest.href = withRuntimeParam(manifest.href, env);
+    manifest.href = withRuntimeParam(rewriteLocalDevUrl(manifest.href, env), env);
 
     if (!manifest.group) {
       manifest.group = "";
@@ -670,11 +707,11 @@
     var rootManifest = options.rootManifest || window.SKHPS_APP_ROOT_MANIFEST || window.SKHPS_APP_MANIFEST || effectiveManifest || {};
     var appId = String(rootManifest.appId || effectiveManifest.rootAppId || effectiveManifest.appId || options.appId || window.SKHPS_APP_ID || "").trim();
     var title = String(rootManifest.title || rootManifest.name || appId || "").trim();
-    var href = String(rootManifest.href || options.href || window.location.href || "").trim();
+    var href = String(rewriteLocalDevUrl(rootManifest.href || options.href || window.location.href || "", options.env || "")).trim();
     var group = String(rootManifest.group || options.group || "").trim();
     var pageId = String(effectiveManifest.pageId || options.pageId || getCurrentPageId() || "").trim();
     var pageTitle = String(effectiveManifest.title || options.title || document.title || "").trim();
-    var pageHref = String(effectiveManifest.href || window.location.href || "").trim();
+    var pageHref = String(rewriteLocalDevUrl(effectiveManifest.href || window.location.href || "", options.env || "")).trim();
     var version = String(getLoadedAppVersion(rootManifest) || options.appVersion || "").trim();
     var registry = normalizeRegistryOptions(rootManifest, effectiveManifest);
 

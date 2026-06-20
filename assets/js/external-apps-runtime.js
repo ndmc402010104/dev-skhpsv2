@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/external-apps-runtime.js
-時間戳：2026-06-18 23:55 UTC+8
+時間戳：2026-06-21 UTC+8
 用途：首頁讀取 external app registry（Apps Script / Sheet 或 Cloudflare / Supabase 競速），只顯示目前 runtime、啟用=true、且「顯示位置」為前台的外部專案。
 
 Loading Gate：
@@ -165,12 +165,53 @@ Loading Gate：
     return container;
   }
 
+
+  function isLocalDevHost(host) {
+    host = String(host || "").toLowerCase();
+
+    return (
+      host === "" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)
+    );
+  }
+
+  function rewriteLocalDevUrl(url, env) {
+    var raw = String(url || "").trim();
+    var output;
+
+    if (!raw || String(env || "") !== "local-dev") {
+      return url || "";
+    }
+
+    if (window.SKHPSConfig && typeof window.SKHPSConfig.rewriteLocalDevUrl === "function") {
+      return window.SKHPSConfig.rewriteLocalDevUrl(raw, env);
+    }
+
+    try {
+      output = new URL(raw, window.location.href);
+
+      if (isLocalDevHost(output.hostname)) {
+        output.protocol = window.location.protocol || output.protocol;
+        output.hostname = window.location.hostname || output.hostname;
+        output.port = window.location.port || output.port;
+        return output.toString();
+      }
+    } catch (error) {}
+
+    return raw;
+  }
+
   function createAppButton(app) {
     var a = document.createElement("a");
-    var href = app.href || "#";
+    var env = app.env || getRuntime();
+    var href = rewriteLocalDevUrl(app.href || "#", env);
 
     if (href !== "#" && window.SKHPSConfig && typeof window.SKHPSConfig.withRuntime === "function") {
-      href = window.SKHPSConfig.withRuntime(href, window.SKHPS_CONFIG || {}, app.env || getRuntime());
+      href = window.SKHPSConfig.withRuntime(href, window.SKHPS_CONFIG || {}, env);
     }
 
     a.className = "skhps-btn skhps-btn-secondary skhps-btn-lg";

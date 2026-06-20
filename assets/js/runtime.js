@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/runtime.js
-時間戳記：2026-06-18 17:20 UTC+8
+時間戳記：2026-06-21 UTC+8
 用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、data source、模組狀態與最近 logs；Data 區會顯示實際放行資料來源。
 */
 
@@ -90,11 +90,25 @@
     };
   }
 
+
+  function isLocalDevHost(host) {
+    host = String(host || "").toLowerCase();
+
+    return (
+      host === "" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host)
+    );
+  }
+
   function hostEnvFromLocation() {
     var protocol = String(window.location.protocol || "").toLowerCase();
     var host = String(window.location.hostname || "").toLowerCase();
 
-    if (protocol === "file:" || host === "" || host === "localhost" || host === "127.0.0.1") {
+    if (protocol === "file:" || isLocalDevHost(host)) {
       return "LOCAL";
     }
 

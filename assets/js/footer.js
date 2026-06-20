@@ -159,8 +159,10 @@
     var protocol = String(window.location.protocol || "").toLowerCase();
 
     if (protocol === "file:" || host === "127.0.0.1" || host === "localhost" || host === "") return "LOCAL";
-    if (host === "skhps.jonaminz.com" || host === "quick-login.skhps.jonaminz.com") return "PROD";
-    if (host === "dev-skhps.jonaminz.com" || host === "dev-quick-login.skhps.jonaminz.com") return "DEV";
+    if (host === "dev-skhps.jonaminz.com" || /^dev-[^.]+\.skhps\.jonaminz\.com$/.test(host)) return "DEV";
+    if (host === "skhps.jonaminz.com" || /^[^.]+\.skhps\.jonaminz\.com$/.test(host)) return "PROD";
+    if (/\.github\.io$/.test(host) && /^\/dev(?:\/|$)/i.test(window.location.pathname || "")) return "DEV";
+    if (/\.github\.io$/.test(host)) return "PROD";
     if (window.SKHPS_APP_ENV || window.SKHPS_APP_CONFIG) return "EXTERNAL";
     return "UNKNOWN";
   }
@@ -258,33 +260,320 @@
     return String(url || "").replace(/\/+$/, "") + "/";
   }
 
-  function appHrefForEnv(env) {
+  function currentPageEnvFromLocation() {
+    var host = String(window.location.hostname || "").toLowerCase();
+    var protocol = String(window.location.protocol || "").toLowerCase();
+    var runtimeValue = "";
+
+    try {
+      runtimeValue = String(
+        new URLSearchParams(window.location.search || "").get("skhpsRuntime") ||
+        new URLSearchParams(window.location.search || "").get("runtime") ||
+        new URLSearchParams(window.location.search || "").get("skhps-runtime") ||
+        ""
+      ).trim().toLowerCase();
+    } catch (error) {
+      runtimeValue = "";
+    }
+
+    if (runtimeValue === "local-dev" || runtimeValue === "local" || runtimeValue === "localdev") return "local";
+    if (runtimeValue === "dev") return "dev";
+    if (runtimeValue === "prod" || runtimeValue === "production") return "prod";
+
+    if (protocol === "file:" || host === "127.0.0.1" || host === "localhost" || host === "") return "local";
+    if (host === "dev-skhps.jonaminz.com" || /^dev-[^.]+\.skhps\.jonaminz\.com$/.test(host)) return "dev";
+    if (host === "skhps.jonaminz.com" || /^[^.]+\.skhps\.jonaminz\.com$/.test(host)) return "prod";
+    if (/\.github\.io$/.test(host) && /^\/dev(?:\/|$)/i.test(window.location.pathname || "")) return "dev";
+    if (/\.github\.io$/.test(host)) return "prod";
+    return "unknown";
+  }
+
+  function currentLocalProjectSegment() {
+    var parts = String(window.location.pathname || "/").split("/").filter(Boolean);
+    return parts.length ? parts[0] : "";
+  }
+
+  function shouldStripLocalProjectSegment(segment) {
+    segment = String(segment || "").toLowerCase();
+    if (!segment) return false;
+    if (segment === "skhps" || segment === "skhpsv2" || segment === "devskhpsv2") return true;
+    if (segment.indexOf("skhps-") === 0) return true;
+    if (segment === "dressing-inventory" || segment === "smoke") return true;
+    return false;
+  }
+
+  function currentRelativePagePath() {
+    var pathname = String(window.location.pathname || "/");
+    var env = currentPageEnvFromLocation();
+    var parts;
+
+    if (env === "local") {
+      parts = pathname.split("/").filter(Boolean);
+      if (parts.length && shouldStripLocalProjectSegment(parts[0])) {
+        parts.shift();
+        pathname = "/" + parts.join("/");
+      }
+    }
+
+    if (!pathname || pathname === "/") return "/";
+    return pathname.charAt(0) === "/" ? pathname : "/" + pathname;
+  }
+
+  function stripRuntimeSearchParams(search) {
+    var params;
+
+    try {
+      params = new URLSearchParams(String(search || ""));
+      ["runtime", "skhpsRuntime", "skhps-runtime", "env", "skhpsEnv", "skhps-env"].forEach(function (key) {
+        params.delete(key);
+      });
+      return params.toString() ? "?" + params.toString() : "";
+    } catch (error) {
+      return String(search || "");
+    }
+  }
+
+  function mergeSearch(baseSearch, pageSearch) {
+    var params = new URLSearchParams();
+
+    try {
+      new URLSearchParams(String(baseSearch || "").replace(/^\?/, "")).forEach(function (value, key) {
+        params.set(key, value);
+      });
+      new URLSearchParams(String(pageSearch || "").replace(/^\?/, "")).forEach(function (value, key) {
+        params.set(key, value);
+      });
+    } catch (error) {}
+
+    return params.toString() ? "?" + params.toString() : "";
+  }
+
+  function isPlainObject(value) {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  }
+
+  function absoluteHttpHref(value) {
+    value = String(value || "").trim();
+    return /^https?:\/\//i.test(value) ? value : "";
+  }
+
+  function getCurrentPageIdCandidates() {
+    var html = document.documentElement || {};
     var appEnv = window.SKHPS_APP_ENV || {};
     var config = window.SKHPS_APP_CONFIG || {};
-    var hrefMap = config.hrefMap || appEnv.hrefMap || {};
-    var href = "";
+    var candidates = [
+      html.dataset ? html.dataset.skhpsPageId : "",
+      html.getAttribute ? html.getAttribute("data-skhps-page-id") : "",
+      appEnv.pageId,
+      appEnv.appId,
+      config.pageId,
+      config.appId,
+      window.SKHPS_PAGE_ID,
+      window.SKHPS_APP_ID
+    ];
+    var seen = {};
 
-    if (hrefMap && hrefMap[env]) return hrefMap[env];
-    if (env === "dev" && hrefMap["local-dev"] && hostEnvFromLocation() === "LOCAL") return hrefMap.dev || hrefMap["local-dev"];
+    return candidates.map(function (value) {
+      return String(value || "").trim();
+    }).filter(function (value) {
+      if (!value || seen[value]) return false;
+      seen[value] = true;
+      return true;
+    });
+  }
 
-    if (env === "dev") {
-      href = appEnv.devHref || config.devHref || config.hrefDev || "";
-    } else if (env === "prod") {
-      href = appEnv.prodHref || config.prodHref || config.hrefProd || "";
+  function findPageConfig(container) {
+    var ids;
+    var pages;
+    var found = null;
+
+    if (!isPlainObject(container)) return null;
+    pages = container.pages;
+    if (!pages) return null;
+    ids = getCurrentPageIdCandidates();
+
+    if (isPlainObject(pages)) {
+      ids.some(function (id) {
+        if (isPlainObject(pages[id])) {
+          found = pages[id];
+          return true;
+        }
+        return false;
+      });
+      if (found) return found;
     }
 
-    if (href) return href;
-
-    if (config.href && /^https?:\/\//i.test(String(config.href))) {
-      try {
-        var url = new URL(config.href);
-        if (env === "dev") url.hostname = url.hostname.replace(/^quick-login\./, "quick-login.").replace(/^skhps\./, "dev-skhps.");
-        if (env === "prod") url.hostname = url.hostname.replace(/^dev-skhps\./, "skhps.");
-        return url.toString();
-      } catch (error) {}
+    if (Array.isArray(pages)) {
+      pages.some(function (page) {
+        if (!isPlainObject(page)) return false;
+        if (ids.indexOf(String(page.pageId || page.appId || page.id || "").trim()) >= 0) {
+          found = page;
+          return true;
+        }
+        return false;
+      });
     }
+
+    return found;
+  }
+
+  function inferHrefEnv(value) {
+    var url;
+    var runtimeValue;
+    var host;
+
+    value = absoluteHttpHref(value);
+    if (!value) return "";
+
+    try {
+      url = new URL(value, window.location.href);
+      runtimeValue = String(
+        url.searchParams.get("skhpsRuntime") ||
+        url.searchParams.get("runtime") ||
+        url.searchParams.get("skhps-runtime") ||
+        url.searchParams.get("skhpsEnv") ||
+        url.searchParams.get("env") ||
+        ""
+      ).trim().toLowerCase();
+      if (runtimeValue === "local-dev" || runtimeValue === "local" || runtimeValue === "localdev") return "local";
+      if (runtimeValue === "dev" || runtimeValue === "prod" || runtimeValue === "production") return normalizeRuntimeQueryValue(runtimeValue);
+
+      host = String(url.hostname || "").toLowerCase();
+      if (host === "127.0.0.1" || host === "localhost" || host === "") return "local";
+      if (host === "dev-skhps.jonaminz.com" || /^dev-[^.]+\.skhps\.jonaminz\.com$/.test(host)) return "dev";
+      if (host === "skhps.jonaminz.com" || /^[^.]+\.skhps\.jonaminz\.com$/.test(host)) return "prod";
+      if (/\.github\.io$/.test(host) && /^\/dev(?:\/|$)/i.test(url.pathname || "")) return "dev";
+      if (/\.github\.io$/.test(host)) return "prod";
+    } catch (error) {}
 
     return "";
+  }
+
+  function hrefFromObjectForEnv(map, env) {
+    var href = "";
+
+    if (!isPlainObject(map)) return "";
+    href = map[env] || map[env === "prod" ? "production" : env] || "";
+    return absoluteHttpHref(href);
+  }
+
+  function hrefFromConfigForEnv(source, env) {
+    var href = "";
+
+    if (!isPlainObject(source)) return "";
+
+    href = hrefFromObjectForEnv(source.href, env) || hrefFromObjectForEnv(source.hrefMap, env);
+    if (href) return href;
+
+    if (env === "dev") {
+      href = source.devHref || source.hrefDev || "";
+    } else if (env === "prod") {
+      href = source.prodHref || source.hrefProd || source.productionHref || source.hrefProduction || "";
+    }
+
+    href = absoluteHttpHref(href);
+    if (href) return href;
+
+    /*
+     * Generic href string is dangerous: on local it often means the current local URL.
+     * Only accept it when its own runtime/host already proves it belongs to the requested env.
+     */
+    href = absoluteHttpHref(typeof source.href === "string" ? source.href : "");
+    if (href && inferHrefEnv(href) === env) return href;
+
+    return "";
+  }
+
+  function explicitHrefForEnv(env) {
+    var appEnv = window.SKHPS_APP_ENV || {};
+    var config = window.SKHPS_APP_CONFIG || {};
+    var candidates = [
+      findPageConfig(config),
+      findPageConfig(appEnv),
+      config.currentPage,
+      config.page,
+      appEnv.currentPage,
+      appEnv.page,
+      config,
+      appEnv
+    ];
+    var href = "";
+
+    env = normalizeRuntimeQueryValue(env);
+
+    candidates.some(function (candidate) {
+      href = hrefFromConfigForEnv(candidate, env);
+      return Boolean(href);
+    });
+
+    return href || "";
+  }
+
+
+  var appManifestPromise = null;
+
+  function appManifestUrl() {
+    var value = window.SKHPS_APP_MANIFEST_URL || "app.json";
+
+    try {
+      return new URL(String(value || "app.json"), window.location.href).toString();
+    } catch (error) {
+      return "app.json";
+    }
+  }
+
+  function fetchAppManifest() {
+    if (appManifestPromise) return appManifestPromise;
+
+    if (!window.fetch) {
+      appManifestPromise = Promise.resolve(null);
+      return appManifestPromise;
+    }
+
+    appManifestPromise = fetch(appManifestUrl(), {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin"
+    }).then(function (response) {
+      if (!response || !response.ok) return null;
+      return response.json();
+    }).catch(function () {
+      return null;
+    });
+
+    return appManifestPromise;
+  }
+
+  function hrefFromManifestForEnv(manifest, env) {
+    var candidates;
+    var href = "";
+
+    if (!isPlainObject(manifest)) return "";
+
+    candidates = [
+      findPageConfig(manifest),
+      manifest.currentPage,
+      manifest.page,
+      manifest
+    ];
+
+    env = normalizeRuntimeQueryValue(env);
+
+    candidates.some(function (candidate) {
+      href = hrefFromConfigForEnv(candidate, env);
+      return Boolean(href);
+    });
+
+    return href || "";
+  }
+
+  function explicitHrefForEnvAsync(env) {
+    var syncHref = explicitHrefForEnv(env);
+    if (syncHref) return Promise.resolve(syncHref);
+
+    return fetchAppManifest().then(function (manifest) {
+      return hrefFromManifestForEnv(manifest, env);
+    });
   }
 
   function siteBaseForEnv(env) {
@@ -300,22 +589,248 @@
     return "";
   }
 
-  function toggleHref(state) {
-    var label = hostEnvLabel(state);
-    var targetEnv = label.indexOf("PROD") >= 0 ? "dev" : "prod";
-    var href = "";
+  function isSkhpsCoreLocalPage() {
+    var seg;
 
-    if (label.indexOf("LOCAL") >= 0) {
-      targetEnv = "dev";
+    if (currentPageEnvFromLocation() !== "local") return false;
+
+    seg = currentLocalProjectSegment().toLowerCase();
+    if (!seg) return true;
+    return seg === "skhps" || seg === "skhpsv2" || seg === "devskhpsv2";
+  }
+
+  function isSkhpsCoreHost() {
+    var host = String(window.location.hostname || "").toLowerCase();
+    return host === "skhps.jonaminz.com" || host === "dev-skhps.jonaminz.com";
+  }
+
+  function currentHostBaseForEnv(env) {
+    var host = String(window.location.hostname || "").toLowerCase();
+    var protocol = String(window.location.protocol || "https:");
+
+    if (!host || host === "127.0.0.1" || host === "localhost") return "";
+
+    if (isSkhpsCoreHost()) return siteBaseForEnv(env);
+
+    if (/^dev-[^.]+\.skhps\.jonaminz\.com$/.test(host)) {
+      if (env === "dev") return protocol + "//" + host + "/";
+      if (env === "prod") return protocol + "//" + host.replace(/^dev-/, "") + "/";
     }
 
-    href = appHrefForEnv(targetEnv) || siteBaseForEnv(targetEnv);
-
-    if (href && window.SKHPSConfig && typeof window.SKHPSConfig.withRuntime === "function") {
-      return window.SKHPSConfig.withRuntime(href, window.SKHPS_CONFIG || {}, targetEnv);
+    if (/^[^.]+\.skhps\.jonaminz\.com$/.test(host)) {
+      if (env === "prod") return protocol + "//" + host + "/";
+      return "";
     }
 
-    return href;
+    return "";
+  }
+
+  function appHrefForEnv(env) {
+    var explicit = explicitHrefForEnv(env);
+    if (explicit) return explicit;
+
+    /*
+     * 不自行發明外部專案 dev 網域。
+     * - skhpsv2 本體：可用 dev-skhps / skhps。
+     * - 目前已經在 dev-xxx.skhps...：prod 可去掉 dev-。
+     * - 目前在 xxx.skhps...：只承認 prod；要去 dev 必須有 devHref / hrefMap.dev，
+     *   沒有就走 prod + runtime=dev。
+     */
+    if (isSkhpsCoreLocalPage()) return siteBaseForEnv(env);
+    return currentHostBaseForEnv(env);
+  }
+
+  function buildSamePageHref(baseHref) {
+    var pagePath = currentRelativePagePath();
+    var cleanPageSearch = stripRuntimeSearchParams(window.location.search || "");
+    var url;
+    var basePath;
+    var joinedPath;
+
+    if (!baseHref) return "";
+
+    try {
+      url = new URL(baseHref, window.location.href);
+      basePath = String(url.pathname || "/");
+
+      if (/\.[a-z0-9]{1,10}$/i.test(basePath.split("/").pop() || "")) {
+        url.pathname = pagePath;
+      } else {
+        basePath = basePath.replace(/\/+$/, "");
+        joinedPath = (basePath ? basePath : "") + pagePath;
+        url.pathname = joinedPath || "/";
+      }
+
+      url.search = mergeSearch(url.search, cleanPageSearch);
+      url.hash = window.location.hash || url.hash || "";
+      return url.toString();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function normalizeRuntimeQueryValue(env) {
+    env = String(env || "").trim().toLowerCase();
+    if (env === "local-dev" || env === "local" || env === "localdev") return "dev";
+    if (env === "production") return "prod";
+    if (env === "dev" || env === "prod") return env;
+    return env || "dev";
+  }
+
+  function addRuntimeToHref(href, env) {
+    var url;
+
+    if (!href) return "";
+
+    try {
+      url = new URL(href, window.location.href);
+      ["runtime", "skhpsRuntime", "skhps-runtime", "env", "skhpsEnv", "skhps-env"].forEach(function (key) {
+        url.searchParams.delete(key);
+      });
+      url.searchParams.set("skhpsRuntime", normalizeRuntimeQueryValue(env));
+      return url.toString();
+    } catch (error) {
+      return href;
+    }
+  }
+
+  function probePageExists(href) {
+    if (!href || !window.fetch || !/^https?:\/\//i.test(String(href))) {
+      return Promise.resolve(null);
+    }
+
+    return fetch(href, {
+      method: "HEAD",
+      cache: "no-store",
+      credentials: "omit"
+    }).then(function (response) {
+      if (response && response.status >= 200 && response.status < 400) return true;
+      if (response && (response.status === 404 || response.status === 410)) return false;
+      return null;
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  function targetEnvFromCurrentPage() {
+    var current = currentPageEnvFromLocation();
+    if (current === "local") return "dev";
+    if (current === "dev") return "prod";
+    if (current === "prod") return "dev";
+    return "prod";
+  }
+
+  function prodBaseForFallback() {
+    return explicitHrefForEnv("prod") || appHrefForEnv("prod") || (isSkhpsCoreLocalPage() || isSkhpsCoreHost() ? siteBaseForEnv("prod") : "");
+  }
+
+  function prodBaseForFallbackAsync() {
+    var syncBase = prodBaseForFallback();
+    if (syncBase) return Promise.resolve(syncBase);
+
+    return explicitHrefForEnvAsync("prod").then(function (href) {
+      return href || appHrefForEnv("prod") || (isSkhpsCoreLocalPage() || isSkhpsCoreHost() ? siteBaseForEnv("prod") : "");
+    });
+  }
+
+  function prodFallbackHrefForDevIntent() {
+    var prodBase = prodBaseForFallback();
+    var prodHref = buildSamePageHref(prodBase);
+    return addRuntimeToHref(prodHref, "dev");
+  }
+
+  function prodFallbackHrefForDevIntentAsync() {
+    return prodBaseForFallbackAsync().then(function (prodBase) {
+      var prodHref = buildSamePageHref(prodBase);
+      return addRuntimeToHref(prodHref, "dev");
+    });
+  }
+
+  function resolveToggleHref() {
+    var targetEnv = targetEnvFromCurrentPage();
+
+    if (targetEnv === "prod") {
+      return prodBaseForFallbackAsync().then(function (targetBase) {
+        return buildSamePageHref(targetBase);
+      });
+    }
+
+    return explicitHrefForEnvAsync("dev").then(function (explicitDevBase) {
+      var targetBase = explicitDevBase || appHrefForEnv("dev");
+      var targetHref = buildSamePageHref(targetBase);
+
+      if (!targetHref) {
+        return prodFallbackHrefForDevIntentAsync();
+      }
+
+      /*
+       * local/prod 要進 dev 時：先用 app.json / SKHPS_APP_CONFIG 明確設定的 dev href。
+       * 如果該 dev page 明確回 404/410，就回正式頁並帶 skhpsRuntime=dev。
+       * 若瀏覽器因 CORS 不能確認，但 devHref 是明確設定，先相信設定。
+       */
+      return probePageExists(targetHref).then(function (exists) {
+        if (exists === false) return prodFallbackHrefForDevIntentAsync();
+        return targetHref;
+      });
+    });
+  }
+
+  function toggleHref() {
+    var current = currentPageEnvFromLocation();
+    var targetEnv = targetEnvFromCurrentPage();
+    var targetBase = "";
+    var targetHref = "";
+
+    if (targetEnv === "prod") {
+      targetBase = explicitHrefForEnv("prod") || appHrefForEnv("prod") || (isSkhpsCoreLocalPage() || isSkhpsCoreHost() ? siteBaseForEnv("prod") : "");
+      return buildSamePageHref(targetBase);
+    }
+
+    targetBase = explicitHrefForEnv("dev") || appHrefForEnv("dev");
+    targetHref = buildSamePageHref(targetBase);
+
+    if (!targetHref || current === "local") {
+      return targetHref || prodFallbackHrefForDevIntent();
+    }
+
+    return targetHref;
+  }
+
+  function navigateEnvToggle(event) {
+    if (event && typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
+
+    resolveToggleHref().then(function (href) {
+      if (href) window.location.href = href;
+    }).catch(function () {
+      var href = toggleHref();
+      if (href) window.location.href = href;
+    });
+  }
+
+  function debugEnvToggle() {
+    var current = currentPageEnvFromLocation();
+    var targetEnv = targetEnvFromCurrentPage();
+
+    return Promise.all([
+      resolveToggleHref(),
+      explicitHrefForEnvAsync("dev"),
+      explicitHrefForEnvAsync("prod")
+    ]).then(function (values) {
+      return {
+        currentHref: window.location.href,
+        currentPageEnv: current,
+        targetEnv: targetEnv,
+        localProjectSegment: currentLocalProjectSegment(),
+        relativePagePath: currentRelativePagePath(),
+        explicitDevBase: values[1] || "",
+        explicitProdBase: values[2] || "",
+        manifestUrl: appManifestUrl(),
+        runtimeQueryKey: "skhpsRuntime",
+        resolvedHref: values[0] || ""
+      };
+    });
   }
 
   function getBusinessVersionInfo() {
@@ -954,10 +1469,7 @@
     env.type = "button";
     env.textContent = "PAGE " + envSummary.page;
     env.title = "頁面來源；點擊切換正式版 / 測試版";
-    env.addEventListener("click", function () {
-      var href = toggleHref(state);
-      if (href) window.location.href = href;
-    });
+    env.addEventListener("click", navigateEnvToggle);
 
     var runtimeLine = document.createElement("div");
     runtimeLine.className = "skhps-footer-runtime-line";
@@ -1246,6 +1758,9 @@
     error: function (key, value, detail) { setRuntimeStatus(key, "error", detail || value); },
     pending: function (key, value, detail) { setRuntimeStatus(key, "pending", detail || value); },
     info: function (key, value, detail) { logViaRuntime("info", key, value, detail); },
+    getEnvToggleHref: toggleHref,
+    resolveEnvToggleHref: resolveToggleHref,
+    debugEnvToggle: debugEnvToggle,
     setRuntimeStatus: setRuntimeStatus,
     taskPending: function (taskName, detail) {
       if (runtime() && typeof runtime().setLoadingRequired === "function") {

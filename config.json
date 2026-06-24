@@ -146,5 +146,56 @@
         }
       }
     }
+  },
+  "layout": {
+    "rwd": {
+      "breakpoints": [
+        {
+          "max": 480,
+          "mode": "phone-compact",
+          "label": "手機窄版 phone-compact",
+          "reason": "layoutWidth <= 480"
+        },
+        {
+          "max": 720,
+          "mode": "phone",
+          "label": "手機版 phone",
+          "reason": "481 <= layoutWidth <= 720"
+        },
+        {
+          "max": 960,
+          "mode": "tablet",
+          "label": "平板 / 窄版 tablet",
+          "reason": "721 <= layoutWidth <= 960"
+        },
+        {
+          "max": 1200,
+          "mode": "desktop",
+          "label": "桌機版 desktop",
+          "reason": "961 <= layoutWidth <= 1200"
+        },
+        {
+          "max": "Infinity",
+          "mode": "wide",
+          "label": "寬版 wide",
+          "reason": "layoutWidth > 1200"
+        }
+      ],
+      "groups": {
+        "small": [
+          "phone-compact",
+          "phone",
+          "tablet"
+        ],
+        "large": [
+          "desktop",
+          "wide"
+        ]
+      },
+      "groupLabels": {
+        "small": "小版 small",
+        "large": "大版 large"
+      }
+    }
   }
 }

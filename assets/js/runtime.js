@@ -731,10 +731,9 @@
       ".skhps-runtime-flow-step-body{min-width:0}",
       ".skhps-runtime-flow-step-name{color:#eef4ff;overflow-wrap:anywhere;word-break:break-word;white-space:normal;font-weight:700;font-size:14px}",
       ".skhps-runtime-flow-step-detail{color:#aebbd0;font-size:12px;overflow-wrap:anywhere;word-break:break-word;white-space:normal}",
-      ".skhps-runtime-flow-note{color:#aebbd0;font-size:12px;margin:-4px 0 8px}",
-            "html[data-skhps-rwd-mode='phone-compact'] .skhps-runtime-summary,html[data-skhps-rwd-mode='phone'] .skhps-runtime-summary{grid-template-columns:1fr}",
-      "html[data-skhps-rwd-mode='tablet'] .skhps-runtime-summary,html[data-skhps-rwd-mode='desktop'] .skhps-runtime-summary,html[data-skhps-rwd-mode='wide'] .skhps-runtime-summary{grid-template-columns:repeat(5,minmax(0,1fr))}",
-"@media (max-width:720px){.skhps-runtime-row{grid-template-columns:1fr;gap:2px}.skhps-runtime-flow-step{grid-template-columns:70px minmax(0,1fr);gap:10px}.skhps-runtime-flow-step-status{min-width:58px;padding:0 6px}.skhps-runtime-flow-step::before{left:13px}}",
+      ".skhps-runtime-flow-note{color:#aebbd0;font-size:12px;margin:-4px 0 8px}","@media (max-width:720px){.skhps-runtime-row{grid-template-columns:1fr;gap:2px}.skhps-runtime-flow-step{grid-template-columns:70px minmax(0,1fr);gap:10px}.skhps-runtime-flow-step-status{min-width:58px;padding:0 6px}.skhps-runtime-flow-step::before{left:13px}}",
+      "html[data-skhps-rwd-group='small'] .skhps-runtime-summary{grid-template-columns:1fr}",
+      "html[data-skhps-rwd-group='large'] .skhps-runtime-summary{grid-template-columns:repeat(5,minmax(0,1fr))}",
       ".skhps-runtime-call-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:8px}",
       ".skhps-runtime-call{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);border-radius:8px;padding:9px;min-width:0;max-width:100%}",
       ".skhps-runtime-call-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px}",
@@ -2444,6 +2443,8 @@
     var layoutSection = addSection(panel, "Layout / Viewport");
     addRow(layoutSection, "Orientation", layoutMetrics.orientation === "portrait" ? "直式 portrait" : "橫式 landscape", "skhps-runtime-ok");
     addRow(layoutSection, "RWD mode", layoutMetrics.rwdLabel, "skhps-runtime-ok");
+    addRow(layoutSection, "RWD group", layoutMetrics.rwdGroupLabel, "skhps-runtime-ok");
+    addRow(layoutSection, "RWD config", layoutMetrics.rwdConfigSource);
     addRow(layoutSection, "RWD breakpoint", layoutMetrics.rwdReason);
     addRow(layoutSection, "Media query", layoutMetrics.mediaMatches);
     addRow(layoutSection, "Layout viewport", layoutMetrics.layoutWidth + " × " + layoutMetrics.layoutHeight);

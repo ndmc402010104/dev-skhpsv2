@@ -75,6 +75,14 @@
       ".skhps-footer-right{min-width:0;flex-wrap:wrap}",
       ".skhps-footer-lamp,.skhps-footer-env,.skhps-footer-css-refresh,.skhps-footer-runtime-toggle{flex:0 0 auto}",
       ".skhps-footer-css-refresh{border:0;background:transparent;color:inherit;font:inherit;font-weight:750;cursor:pointer;padding:2px 4px;white-space:nowrap}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer{flex-direction:column!important;align-items:center!important;justify-content:center!important;text-align:center!important;gap:6px!important;padding-top:8px!important;padding-bottom:8px!important}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer-left,html[data-skhps-rwd-group='small'] .skhps-footer-center,html[data-skhps-rwd-group='small'] .skhps-footer-right{width:100%!important;display:flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;min-width:0}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer-left{flex-direction:column!important;gap:2px!important;overflow:visible}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer-page-line,html[data-skhps-rwd-group='small'] .skhps-footer-runtime-line{justify-content:center!important;text-align:center!important;white-space:normal!important;flex-wrap:wrap!important}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer-runtime-line{font-size:11px;width:100%}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer-center{font-size:11px;white-space:nowrap}",
+      "html[data-skhps-rwd-group='small'] .skhps-footer-right{gap:6px!important;flex-wrap:wrap!important}",
+,
       "@media (max-width:720px){.skhps-footer{align-items:center}.skhps-footer-left{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.skhps-footer-page-line,.skhps-footer-runtime-line{white-space:normal}.skhps-footer-runtime-line{font-size:11px}.skhps-footer-center{font-size:11px}.skhps-footer-right{gap:4px}}"
     ].join("\n");
     document.head.appendChild(style);
@@ -1748,6 +1756,7 @@
     document.addEventListener("skhps-css-sheet-runtime-ready", scheduleMeasureRuntimePanel);
     document.addEventListener("skhps-external-app-loader-ready", scheduleMeasureRuntimePanel);
     document.addEventListener("skhps-runtime-updated", scheduleMeasureRuntimePanel);
+    document.addEventListener("skhps-layout-metrics-updated", refreshViewportLayout);
   }
 
   function boot() {

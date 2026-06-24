@@ -1,10 +1,11 @@
 /*
 檔案位置：skhpsv2/assets/js/layout-metrics.js
 時間戳記：2026-06-24 UTC+8
-用途：SKHPS 共通尺寸量測層。只負責偵測 viewport / orientation / RWD mode / header-footer 邊界，不負責改畫面。
+用途：SKHPS 共通尺寸量測層。只負責偵測 viewport / orientation / RWD mode / RWD group / header-footer 邊界，不負責改畫面。
 
 水庫法則：
 - 本檔只量測、更新 state、廣播事件。
+- RWD mode / RWD group 可由 SKHPS_CONFIG.layout.rwd 調整。
 - 本檔不改 footer。
 - 本檔不改 loading gate。
 - 本檔不控制 runtime panel 開關。
@@ -14,14 +15,13 @@
 (function () {
   "use strict";
 
-  var MODULE = "layout-metrics";
   var UPDATE_EVENT = "skhps-layout-metrics-updated";
   var scheduled = false;
   var subscribers = [];
   var resizeObservers = [];
   var mutationObserver = null;
 
-  var BREAKPOINTS = [
+  var DEFAULT_BREAKPOINTS = [
     { max: 480, mode: "phone-compact", label: "手機窄版 phone-compact", reason: "layoutWidth <= 480" },
     { max: 720, mode: "phone", label: "手機版 phone", reason: "481 <= layoutWidth <= 720" },
     { max: 960, mode: "tablet", label: "平板 / 窄版 tablet", reason: "721 <= layoutWidth <= 960" },
@@ -29,11 +29,29 @@
     { max: Infinity, mode: "wide", label: "寬版 wide", reason: "layoutWidth > 1200" }
   ];
 
+  var DEFAULT_GROUPS = {
+    /*
+     * 2026-06-24 定案：
+     * 小版 = 下面三種：phone-compact / phone / tablet
+     * 大版 = 上面兩種：desktop / wide
+     */
+    small: ["phone-compact", "phone", "tablet"],
+    large: ["desktop", "wide"]
+  };
+
+  var DEFAULT_GROUP_LABELS = {
+    small: "小版 small",
+    large: "大版 large"
+  };
+
   var state = {
     orientation: "",
     rwdMode: "",
     rwdLabel: "",
     rwdReason: "",
+    rwdGroup: "",
+    rwdGroupLabel: "",
+    rwdConfigSource: "",
     mediaMatches: "",
     layoutWidth: 0,
     layoutHeight: 0,
@@ -99,25 +117,129 @@
       document.querySelector("footer");
   }
 
-  function rwdModeForWidth(width) {
+  function isPlainObject(value) {
+    return Boolean(value && typeof value === "object" && !Array.isArray(value));
+  }
+
+  function configRwdSource() {
+    var config = window.SKHPS_CONFIG || {};
+    var candidates = [
+      config.layout && config.layout.rwd,
+      config.layoutMetrics && config.layoutMetrics.rwd,
+      config.rwd,
+      config.ui && config.ui.rwd,
+      config.ui && config.ui.layout && config.ui.layout.rwd
+    ];
     var i;
+
+    for (i = 0; i < candidates.length; i += 1) {
+      if (isPlainObject(candidates[i])) {
+        return candidates[i];
+      }
+    }
+
+    return null;
+  }
+
+  function normalizeBreakpoints(input) {
+    var items = Array.isArray(input) ? input : DEFAULT_BREAKPOINTS;
+
+    return items.map(function (item) {
+      return {
+        max: item.max === "Infinity" ? Infinity : Number(item.max),
+        mode: String(item.mode || "").trim(),
+        label: String(item.label || item.mode || "").trim(),
+        reason: String(item.reason || "").trim()
+      };
+    }).filter(function (item) {
+      return item.mode && !isNaN(item.max);
+    }).sort(function (a, b) {
+      return a.max - b.max;
+    });
+  }
+
+  function normalizeGroups(input) {
+    var source = isPlainObject(input) ? input : DEFAULT_GROUPS;
+    var out = {};
+
+    Object.keys(source).forEach(function (key) {
+      var list = source[key];
+      if (!Array.isArray(list)) return;
+      out[key] = list.map(function (item) {
+        return String(item || "").trim();
+      }).filter(Boolean);
+    });
+
+    if (!out.small || !out.small.length) out.small = DEFAULT_GROUPS.small.slice();
+    if (!out.large || !out.large.length) out.large = DEFAULT_GROUPS.large.slice();
+
+    return out;
+  }
+
+  function normalizeGroupLabels(input) {
+    return Object.assign({}, DEFAULT_GROUP_LABELS, isPlainObject(input) ? input : {});
+  }
+
+  function currentRwdConfig() {
+    var source = configRwdSource();
+    return {
+      source: source ? "SKHPS_CONFIG.layout.rwd" : "default",
+      breakpoints: normalizeBreakpoints(source && source.breakpoints),
+      groups: normalizeGroups(source && source.groups),
+      groupLabels: normalizeGroupLabels(source && source.groupLabels)
+    };
+  }
+
+  function rwdModeForWidth(width) {
+    var config = currentRwdConfig();
+    var breakpoints = config.breakpoints;
+    var i;
+    var item;
 
     width = Math.round(Number(width || 0));
 
-    for (i = 0; i < BREAKPOINTS.length; i += 1) {
-      if (width <= BREAKPOINTS[i].max) {
+    for (i = 0; i < breakpoints.length; i += 1) {
+      if (width <= breakpoints[i].max) {
+        item = breakpoints[i];
         return {
-          mode: BREAKPOINTS[i].mode,
-          label: BREAKPOINTS[i].label,
-          reason: BREAKPOINTS[i].reason
+          mode: item.mode,
+          label: item.label || item.mode,
+          reason: item.reason || ("layoutWidth <= " + item.max),
+          configSource: config.source,
+          config: config
         };
       }
     }
 
+    item = breakpoints[breakpoints.length - 1] || DEFAULT_BREAKPOINTS[DEFAULT_BREAKPOINTS.length - 1];
     return {
-      mode: "wide",
-      label: "寬版 wide",
-      reason: "layoutWidth > 1200"
+      mode: item.mode,
+      label: item.label || item.mode,
+      reason: item.reason || "last breakpoint",
+      configSource: config.source,
+      config: config
+    };
+  }
+
+  function rwdGroupForMode(mode, config) {
+    var groups = config && config.groups || DEFAULT_GROUPS;
+    var labels = config && config.groupLabels || DEFAULT_GROUP_LABELS;
+    var found = "";
+    var keys = Object.keys(groups);
+
+    keys.some(function (key) {
+      if ((groups[key] || []).indexOf(mode) >= 0) {
+        found = key;
+        return true;
+      }
+      return false;
+    });
+
+    if (!found) found = "unknown";
+
+    return {
+      group: found,
+      label: labels[found] || found
     };
   }
 
@@ -150,6 +272,7 @@
     var footer = rectInfo(findFooter());
     var orientation = layoutHeight >= layoutWidth ? "portrait" : "landscape";
     var rwd = rwdModeForWidth(layoutWidth);
+    var group = rwdGroupForMode(rwd.mode, rwd.config);
     var usableTop = header.exists ? Math.max(0, header.bottom) : 0;
     var usableBottom = footer.exists ? Math.max(0, Math.min(layoutHeight, footer.top)) : layoutHeight;
     var usableHeight = Math.max(0, usableBottom - usableTop);
@@ -161,6 +284,9 @@
       rwdMode: rwd.mode,
       rwdLabel: rwd.label,
       rwdReason: rwd.reason,
+      rwdGroup: group.group,
+      rwdGroupLabel: group.label,
+      rwdConfigSource: rwd.configSource,
       mediaMatches: mediaQueryMatches(),
       layoutWidth: layoutWidth,
       layoutHeight: layoutHeight,
@@ -185,6 +311,7 @@
 
     html.setAttribute("data-skhps-orientation", next.orientation || "");
     html.setAttribute("data-skhps-rwd-mode", next.rwdMode || "");
+    html.setAttribute("data-skhps-rwd-group", next.rwdGroup || "");
     html.setAttribute("data-skhps-layout-width", String(next.layoutWidth || 0));
     html.setAttribute("data-skhps-layout-height", String(next.layoutHeight || 0));
   }
@@ -254,6 +381,15 @@
       window.visualViewport.addEventListener("scroll", scheduleUpdate, { passive: true });
     }
 
+    [
+      "skhps-config-ready",
+      "skhps-config-loaded",
+      "skhps-runtime-updated",
+      "skhps-entry-core-ready"
+    ].forEach(function (eventName) {
+      document.addEventListener(eventName, scheduleUpdate);
+    });
+
     if (document.body) {
       observeElementSize(document.body);
     }
@@ -274,6 +410,10 @@
         });
       } catch (error) {}
     }
+
+    [80, 250, 800, 1600].forEach(function (delay) {
+      window.setTimeout(scheduleUpdate, delay);
+    });
   }
 
   function subscribe(handler) {
@@ -323,16 +463,8 @@
   }
 
   window.SKHPSLayoutMetrics = {
-    version: "v0.1.0-20260624",
+    version: "v0.2.0-20260624",
     eventName: UPDATE_EVENT,
-    breakpoints: BREAKPOINTS.map(function (item) {
-      return {
-        max: item.max === Infinity ? "Infinity" : item.max,
-        mode: item.mode,
-        label: item.label,
-        reason: item.reason
-      };
-    }),
     getState: function () {
       return clone(state);
     },
@@ -341,7 +473,15 @@
     },
     schedule: scheduleUpdate,
     subscribe: subscribe,
-    rwdModeForWidth: rwdModeForWidth,
+    rwdModeForWidth: function (width) {
+      return clone(rwdModeForWidth(width));
+    },
+    rwdGroupForMode: function (mode) {
+      return clone(rwdGroupForMode(mode, currentRwdConfig()));
+    },
+    getConfig: function () {
+      return clone(currentRwdConfig());
+    },
     destroy: destroy
   };
 

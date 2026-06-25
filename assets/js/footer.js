@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/footer.js
-時間戳記：2026-06-16 19:05 UTC+8
-用途：Footer 三區 runtime 摘要與單一完整 runtime panel；只保留 closed/full；full 開啟時立刻展開 tail。短頁會補足 tail 前導距離；長頁原頁底開啟時允許 signed tail spacer，把 flow runtime 上緣直接對齊「footer 上緣 - summary cards 高度」。
+時間戳記：2026-06-25 UTC+8
+用途：Footer 三區 runtime 摘要與單一完整 runtime panel；只保留 closed/full；full 開啟時立刻展開 tail。短頁會補足 tail 前導距離；長頁原頁底開啟時允許 signed tail spacer，把 flow runtime 上緣直接對齊「footer 上緣 - summary cards 高度」。本版保留五張 summary cards peek，只在 runtime cards 內滑動才展開；peek 狀態只預留「footer runtime 上緣到 viewport/page 底部」所需空間，不再預留整個 runtime；runtime 內部捲回頂端時收回五卡片。
 */
 
 (function () {
@@ -20,6 +20,11 @@
   var runtimeTailStart = 0;
   var runtimeOpenScrollY = 0;
   var runtimeOpenedAtExistingBottom = false;
+  var RUNTIME_PEEK_MAX_BOTTOM_GAP = 15;
+  var runtimeDockSwitchLockUntil = 0;
+  var runtimeFlowMeasurePauseUntil = 0;
+  var runtimeFixedMode = "peek";
+  var runtimeTouchStartY = 0;
 
   function rlog(status, action, detail) {
     try {
@@ -107,6 +112,7 @@
     var metrics = visualViewportMetrics();
 
     document.documentElement.style.setProperty("--skhps-visual-viewport-height", metrics.visualHeight + "px");
+    document.documentElement.style.setProperty("--skhps-visual-viewport-offset-top", Math.max(0, metrics.offsetTop) + "px");
     document.documentElement.style.setProperty("--skhps-visual-viewport-bottom-gap", metrics.bottomGap + "px");
     document.documentElement.setAttribute("data-skhps-visual-viewport-bottom-gap", String(metrics.bottomGap));
     return metrics;
@@ -123,9 +129,11 @@
       var footerRect = footer.getBoundingClientRect();
       var viewportHeight = metrics.layoutHeight || window.innerHeight || document.documentElement.clientHeight || 0;
       var footerHeight = Math.ceil(footerRect.height || footer.offsetHeight || 0) || 48;
-      var footerDockBottom = isFixed
-        ? footerHeight + metrics.bottomGap
-        : Math.max(0, Math.ceil(viewportHeight - footerRect.top)) || footerHeight;
+      var footerViewportTop = Math.max(0, Math.ceil(
+        footerRect && Number.isFinite(Number(footerRect.top)) ? Number(footerRect.top) : viewportHeight - footerHeight - metrics.bottomGap
+      ));
+      var footerDockBottom = Math.max(0, Math.ceil(viewportHeight - footerViewportTop)) ||
+        (isFixed ? footerHeight + metrics.bottomGap : footerHeight);
 
       /*
        * docked full 是 fixed 掛畫，不應該改變 document flow。
@@ -139,6 +147,7 @@
       document.documentElement.style.setProperty("--skhps-footer-safe-bottom", height ? height + "px" : "0px");
       document.documentElement.style.setProperty("--skhps-footer-page-bottom-space", height ? height + "px" : "0px");
       document.documentElement.style.setProperty("--skhps-footer-height", footerHeight + "px");
+      document.documentElement.style.setProperty("--skhps-footer-viewport-top", footerViewportTop + "px");
       document.documentElement.style.setProperty("--skhps-footer-dock-bottom", footerDockBottom + "px");
     } catch (error) {}
   }
@@ -1118,7 +1127,112 @@
   function setRuntimeDocked(docked) {
     runtimeDocked = Boolean(docked && runtimeState === "full");
     document.documentElement.setAttribute("data-skhps-runtime-docked", runtimeDocked ? "true" : "false");
+    if (!runtimeDocked) {
+      setRuntimeFixedMode("");
+    } else if (!runtimeFixedMode) {
+      setRuntimeFixedMode("peek");
+    }
     return runtimeDocked;
+  }
+
+  function setRuntimeFixedMode(mode) {
+    mode = String(mode || "").trim().toLowerCase();
+    if (mode !== "peek" && mode !== "scroll") mode = "";
+    runtimeFixedMode = mode;
+    if (mode) {
+      document.documentElement.setAttribute("data-skhps-runtime-fixed-mode", mode);
+    } else {
+      document.documentElement.removeAttribute("data-skhps-runtime-fixed-mode");
+    }
+    return runtimeFixedMode;
+  }
+
+  function runtimePanelElement() {
+    return document.getElementById("skhps-runtime-panel");
+  }
+
+  function runtimePanelContainsTarget(target) {
+    var panel = runtimePanelElement();
+    return Boolean(panel && target && (target === panel || panel.contains(target)));
+  }
+
+  function expandRuntimeFixedPanelFromPeek(scrollDelta) {
+    var panel;
+
+    if (runtimeState !== "full" || !runtimeDocked || runtimeFixedMode !== "peek") {
+      return false;
+    }
+
+    panel = runtimePanelElement();
+    if (panel) {
+      try { panel.scrollTop = 0; } catch (error) {}
+    }
+
+    /*
+     * 從五卡片 peek 展開 full runtime 時，第一幀必須「頂端對齊頂端」。
+     * 觸發展開的那一次 wheel/touch 只負責切模式，不應該順手把 delta 灌進
+     * panel.scrollTop；否則會先看到 summary cards 被推到 viewport 上方，
+     * 接著 visualViewport / measure 再修正，形成「先歪一下再跳正」的感覺。
+     */
+    setRuntimeFixedMode("scroll");
+    updateFooterSafeArea();
+    measureRuntimePanel();
+
+    return true;
+  }
+
+  function collapseRuntimeFixedPanelToPeek() {
+    var panel;
+
+    if (runtimeState !== "full" || !runtimeDocked || runtimeFixedMode !== "scroll") {
+      return false;
+    }
+
+    panel = runtimePanelElement();
+    if (panel) {
+      try { panel.scrollTop = 0; } catch (error) {}
+    }
+
+    setRuntimeFixedMode("peek");
+    updateFooterSafeArea();
+    scheduleMeasureRuntimePanel();
+    return true;
+  }
+
+  function runtimePanelAtTop() {
+    var panel = runtimePanelElement();
+    if (!panel) return true;
+    try {
+      return Number(panel.scrollTop || 0) <= 1;
+    } catch (error) {
+      return true;
+    }
+  }
+
+  function consumeRuntimeScrollEvent(event) {
+    if (!event) return;
+
+    if (typeof event.preventDefault === "function" && event.cancelable !== false) {
+      event.preventDefault();
+    }
+
+    if (typeof event.stopPropagation === "function") {
+      event.stopPropagation();
+    }
+  }
+
+  function scrollRuntimePanelBy(delta) {
+    var panel = runtimePanelElement();
+    var amount = Number(delta) || 0;
+
+    if (!panel || !amount) return 0;
+
+    try {
+      panel.scrollTop = Math.max(0, Number(panel.scrollTop || 0) + amount);
+      return Number(panel.scrollTop || 0);
+    } catch (error) {
+      return 0;
+    }
   }
 
   function ensureRuntimeTail() {
@@ -1204,10 +1318,12 @@
 
     if (state === "full" && runtimeState !== "full") {
       runtimeOpenScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      setRuntimeFixedMode("peek");
     }
     if (state === "closed") {
       runtimeOpenScrollY = 0;
       runtimeOpenedAtExistingBottom = false;
+      setRuntimeFixedMode("");
       setRuntimeCssSignedNumber("--skhps-runtime-tail-spacer", 0);
     }
 
@@ -1256,6 +1372,7 @@
     var viewportHeight = viewportMetrics.layoutHeight || window.innerHeight || document.documentElement.clientHeight || 0;
     var visualViewportHeight = viewportMetrics.visualHeight || viewportHeight;
     var footerHeight = 48;
+    var footerViewportTop = 0;
     var footerDockBottom = 48;
     var panelTop = 0;
     var trafficTop = 0;
@@ -1266,6 +1383,7 @@
     var currentTailSpacer = 0;
     var naturalTailStart = 0;
     var dockedSummaryTop = 0;
+    var dockedReserveHeight = 0;
     var scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
     var footerRect;
     var panelRect;
@@ -1276,9 +1394,12 @@
     if (footer) {
       footerRect = footer.getBoundingClientRect();
       footerHeight = Math.ceil(footerRect.height || footer.offsetHeight || 0) || 48;
-      footerDockBottom = Math.max(0, Math.ceil(footerHeight + viewportMetrics.bottomGap)) ||
-        Math.max(0, Math.ceil(viewportHeight - footerRect.top)) ||
-        footerHeight;
+      footerViewportTop = Math.max(0, Math.ceil(
+        footerRect && Number.isFinite(Number(footerRect.top)) ? Number(footerRect.top) : viewportHeight - footerHeight - viewportMetrics.bottomGap
+      ));
+      footerDockBottom = Math.max(0, Math.ceil(viewportHeight - footerViewportTop)) || footerHeight;
+    } else {
+      footerViewportTop = Math.max(0, viewportHeight - footerHeight);
     }
 
     if (panel) {
@@ -1299,6 +1420,17 @@
 
       fullHeight = Math.ceil(panel.scrollHeight || panelRect.height || 0);
     }
+
+    /*
+     * Docked runtime 使用 viewport 座標統一計算 footer 上緣。
+     * 五卡片 peek 時，視覺上只需要預留「summary cards 高度 + 最多 15px」的頁尾跑道，
+     * 不再把整段 footerDockBottom 一起塞進 document flow。
+     *
+     * 目的：頁面內容底緣與 runtime 五卡片上緣的空白最多約 15px，
+     * 避免短頁底部出現一大片灰藍空白。
+     */
+    dockedSummaryTop = Math.max(0, Math.ceil((footerViewportTop || 0) - summaryHeight));
+    dockedReserveHeight = Math.max(0, Math.ceil(summaryHeight + Math.min(RUNTIME_PEEK_MAX_BOTTOM_GAP, footerDockBottom || 0)));
 
     if (tail) {
       tailRect = tail.getBoundingClientRect();
@@ -1325,8 +1457,7 @@
      * 「電梯在二樓、畫在一樓」。
      * 其他長頁位置：不能用負 spacer 把尾巴硬拉到目前視窗，避免提前出現 runtime。
      */
-    if (runtimeState === "full" && fullHeight > 0) {
-      dockedSummaryTop = Math.max(0, viewportHeight - (footerDockBottom || footerHeight || 48) - summaryHeight);
+    if (runtimeState === "full" && fullHeight > 0 && !runtimeDocked) {
       tailSpacer = Math.ceil((runtimeOpenScrollY || 0) + dockedSummaryTop - naturalTailStart);
       if (!runtimeOpenedAtExistingBottom) {
         tailSpacer = Math.max(0, tailSpacer);
@@ -1336,10 +1467,16 @@
     }
 
     runtimeTailStart = naturalTailStart + tailSpacer;
-    tailHeight = runtimeState === "full" ? fullHeight : 0;
+    if (runtimeState === "full" && runtimeDocked) {
+      tailHeight = dockedReserveHeight;
+    } else {
+      tailHeight = runtimeState === "full" && !runtimeDocked ? fullHeight : 0;
+    }
 
     setRuntimeCssNumber("--skhps-footer-height", footerHeight || 48);
+    setRuntimeCssNumber("--skhps-footer-viewport-top", footerViewportTop);
     setRuntimeCssNumber("--skhps-footer-dock-bottom", footerDockBottom || footerHeight || 48);
+    setRuntimeCssNumber("--skhps-runtime-docked-reserve-height", dockedReserveHeight);
     setRuntimeCssNumber("--skhps-runtime-summary-height", summaryHeight);
     setRuntimeCssNumber("--skhps-runtime-full-height", fullHeight);
     setRuntimeCssNumber("--skhps-runtime-visible-height", fullHeight);
@@ -1350,12 +1487,16 @@
     document.documentElement.setAttribute("data-skhps-runtime-tail-start", String(runtimeTailStart));
     document.documentElement.setAttribute("data-skhps-runtime-tail-spacer", String(tailSpacer));
     document.documentElement.setAttribute("data-skhps-runtime-flow-switch-y", String(Math.max(0, Math.round(runtimeTailStart - viewportHeight + (footerDockBottom || footerHeight || 48) + summaryHeight))));
+    document.documentElement.setAttribute("data-skhps-footer-viewport-top", String(footerViewportTop));
     document.documentElement.setAttribute("data-skhps-footer-dock-bottom", String(footerDockBottom || footerHeight || 48));
+    document.documentElement.setAttribute("data-skhps-runtime-docked-reserve-height", String(dockedReserveHeight));
     document.documentElement.setAttribute("data-skhps-runtime-visible-height", String(fullHeight));
 
     return {
       footerHeight: footerHeight,
+      footerViewportTop: footerViewportTop,
       footerDockBottom: footerDockBottom,
+      dockedReserveHeight: dockedReserveHeight,
       panelTop: panelTop,
       trafficTop: trafficTop,
       summaryHeight: summaryHeight,
@@ -1420,63 +1561,27 @@
   }
 
   function toggleRuntimePanel(event) {
-    var openedFromExistingBottom = false;
-
     if (event && typeof event.preventDefault === "function") {
       event.preventDefault();
     }
 
     if (runtimeState === "full") {
-      var wasDocked = runtimeDocked;
-
-      var currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-      var shouldScrollToTop = !wasDocked && currentY > runtimeOpenScrollY;
-
       setRuntimeState("closed", {
         restoreToggleFocus: true
       });
-
-      if (shouldScrollToTop) {
-        window.requestAnimationFrame(function () {
-          window.scrollTo({
-            top: 0,
-            left: 0,
-            behavior: "smooth"
-          });
-        });
-      }
       return;
     }
 
     /*
-     * 長頁已在原本頁底時按箭頭：
-     * tail 會立刻展開，所以 scrollHeight 會馬上變長。
-     * 但不要再用 scrollTo 把「電梯」拉到一樓；那會有明顯跳動。
-     * 正確做法是「把畫拉到電梯所在樓層」：
-     * 1. 先用 docked 掛畫顯示 summary cards。
-     * 2. measureRuntimePanel() 會用 runtimeOpenScrollY 計算 tail spacer，讓 flow 裡的 runtime top 對齊目前視窗。
-     * 3. 若原本就是長頁頁尾，下一個 frame 直接切成 flow，但不改 scrollY。
-     * 這樣視覺上卡片仍在原位，scrollbar 也是真的變長，runtime 已經接到頁尾 flow。
-     * 短頁雖然也可能 nearPageBottom，但沒有原本 scroll runway，不套用這個立即 flow 規則。
+     * 2026-06-25 hard fix：Runtime 展開後直接維持 fixed docked panel。
+     * runtime panel 自己 overflow-y:auto，不再等使用者第一次往下滑時
+     * 由 docked 切 flow；這個切換正是手機上「一下滑、一下不滑」的來源。
      */
-    openedFromExistingBottom = pageHasScrollableRunway() && nearPageBottom();
-    runtimeOpenedAtExistingBottom = Boolean(openedFromExistingBottom);
-
+    runtimeOpenedAtExistingBottom = false;
     setRuntimeState("full", {
       docked: true,
       restoreToggleFocus: true
     });
-
-    if (openedFromExistingBottom) {
-      window.requestAnimationFrame(function () {
-        measureRuntimePanel();
-        setRuntimeState("full", {
-          docked: false,
-          skipRender: true
-        });
-        measureRuntimePanel();
-      });
-    }
   }
 
   function render(options) {
@@ -1643,34 +1748,47 @@
     return Math.max(0, Math.round(runtimeTailStart - viewportHeight + footerDockBottom + summaryHeight));
   }
 
-  function syncRuntimeDockingWithScroll(direction) {
-    var currentY;
-    var switchY;
 
-    if (runtimeState !== "full") return;
+  function runtimeDockSwitchLocked() {
+    return Date.now() < runtimeDockSwitchLockUntil;
+  }
 
-    currentY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
-    switchY = runtimeFlowSwitchY();
+  function lockRuntimeDockSwitch(ms) {
+    runtimeDockSwitchLockUntil = Date.now() + Math.max(0, Number(ms) || 0);
+  }
 
-    if (runtimeDocked && direction === "down" && currentY >= switchY - 2) {
-      setRuntimeState("full", {
-        docked: false,
-        skipRender: true
-      });
-      scheduleMeasureRuntimePanel();
-      return;
+  function pauseRuntimeFlowMeasure(ms) {
+    runtimeFlowMeasurePauseUntil = Date.now() + Math.max(0, Number(ms) || 0);
+  }
+
+  function shouldMeasureRuntimeOnScroll() {
+    /*
+     * Runtime full 使用 panel 內部捲動，window scroll 不需要連續重算。
+     * resize / orientation / runtime content update 仍會由既有 observer 重算。
+     */
+    if (runtimeState === "full") {
+      return false;
     }
+    return true;
+  }
 
-    if (!runtimeDocked && direction === "up" && currentY < switchY - 2) {
-      setRuntimeState("full", {
-        docked: true,
-        skipRender: true
-      });
-      scheduleMeasureRuntimePanel();
+  function syncRuntimeDockingWithScroll(direction) {
+    /*
+     * 2026-06-25 hard fix：Runtime full 維持 fixed docked panel，內容由 panel 自己 scroll。
+     * 不再於第一次下滑時把 panel 從 fixed 搬到 flow，避免手機上出現
+     * 「滑一下、卡一下、再滑」的手感。
+     */
+    if (runtimeState !== "full") return;
+    if (!runtimeDocked) {
+      setRuntimeDocked(true);
+      ensureRuntimePanel(false);
     }
   }
 
   function handleRuntimeWheel(event) {
+    var targetInRuntime;
+    var deltaY;
+
     if (!event || loadingLocked()) {
       if (loadingLocked() && runtimeState !== "closed") {
         setRuntimeState("closed");
@@ -1678,20 +1796,51 @@
       return;
     }
 
-    /*
-     * 重要：runtime 只能由 footer 箭頭開啟。
-     * closed 狀態下即使使用者滑到頁面底部、繼續往下滾，也不可自動展開 runtime。
-     * 只有已經由箭頭進入 full 後，才允許依 scroll 位置在 docked/flow 之間切換。
-     */
+    deltaY = Number(event.deltaY || 0);
+    targetInRuntime = runtimePanelContainsTarget(event.target);
 
-    if (event.deltaY > 0 && runtimeState === "full" && runtimeDocked) {
+    /*
+     * Runtime full + fixed mode：
+     * - peek：只有在五張 cards / runtime panel 上往下滾，才展開成完整 runtime。
+     * - scroll：runtime panel 內的 wheel 只捲 panel 本身，不讓外層 document 先被吃一段。
+     */
+    if (runtimeState === "full" && runtimeDocked && targetInRuntime) {
+      if (runtimeFixedMode === "peek" && deltaY > 0) {
+        consumeRuntimeScrollEvent(event);
+        expandRuntimeFixedPanelFromPeek(deltaY);
+        return;
+      }
+
+      if (runtimeFixedMode === "scroll") {
+        consumeRuntimeScrollEvent(event);
+
+        if (deltaY < 0 && runtimePanelAtTop()) {
+          collapseRuntimeFixedPanelToPeek();
+          return;
+        }
+
+        scrollRuntimePanelBy(deltaY);
+        return;
+      }
+    }
+
+    if (deltaY > 0 && runtimeState === "full" && runtimeDocked) {
+      if (runtimeFixedMode === "peek") {
+        /*
+         * Peek 狀態只露出五張 summary cards。
+         * 使用者在頁面其他位置往下滑，應該只是滑原頁面，不可展開整個 runtime。
+         */
+        return;
+      }
       syncRuntimeDockingWithScroll("down");
       return;
     }
 
-    if (event.deltaY < 0 && runtimeState === "full") {
+    if (deltaY < 0 && runtimeState === "full") {
       syncRuntimeDockingWithScroll("up");
-      scheduleMeasureRuntimePanel();
+      if (shouldMeasureRuntimeOnScroll()) {
+        scheduleMeasureRuntimePanel();
+      }
     }
   }
 
@@ -1711,7 +1860,64 @@
 
     if (runtimeState === "full") {
       syncRuntimeDockingWithScroll(direction);
-      scheduleMeasureRuntimePanel();
+      if (shouldMeasureRuntimeOnScroll()) {
+        scheduleMeasureRuntimePanel();
+      }
+    }
+  }
+
+  function handleRuntimeTouchStart(event) {
+    var touch;
+
+    if (runtimeState !== "full" || !runtimeDocked) {
+      runtimeTouchStartY = 0;
+      return;
+    }
+
+    if (!event || !runtimePanelContainsTarget(event.target) || !event.touches || !event.touches.length) {
+      runtimeTouchStartY = 0;
+      return;
+    }
+
+    touch = event.touches[0];
+    runtimeTouchStartY = touch ? Number(touch.clientY || 0) : 0;
+  }
+
+  function handleRuntimeTouchMove(event) {
+    var touch;
+    var currentY;
+    var delta;
+
+    if (runtimeState !== "full" || !runtimeDocked || !runtimeTouchStartY) {
+      return;
+    }
+
+    if (!event || !runtimePanelContainsTarget(event.target) || !event.touches || !event.touches.length) {
+      return;
+    }
+
+    touch = event.touches[0];
+    currentY = touch ? Number(touch.clientY || 0) : runtimeTouchStartY;
+    delta = runtimeTouchStartY - currentY;
+
+    if (runtimeFixedMode === "peek" && delta > 6) {
+      consumeRuntimeScrollEvent(event);
+      expandRuntimeFixedPanelFromPeek(delta);
+      runtimeTouchStartY = currentY;
+      return;
+    }
+
+    if (runtimeFixedMode === "scroll") {
+      consumeRuntimeScrollEvent(event);
+
+      if (delta < -6 && runtimePanelAtTop()) {
+        collapseRuntimeFixedPanelToPeek();
+        runtimeTouchStartY = currentY;
+        return;
+      }
+
+      scrollRuntimePanelBy(delta);
+      runtimeTouchStartY = currentY;
     }
   }
 
@@ -1736,7 +1942,13 @@
     };
 
     window.addEventListener("wheel", handleRuntimeWheel, {
+      passive: false
+    });
+    document.addEventListener("touchstart", handleRuntimeTouchStart, {
       passive: true
+    });
+    document.addEventListener("touchmove", handleRuntimeTouchMove, {
+      passive: false
     });
     window.addEventListener("scroll", handleRuntimeScroll, {
       passive: true

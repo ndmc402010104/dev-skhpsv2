@@ -2399,7 +2399,18 @@
 
   function renderPanel() {
     var panel = findOrCreatePanel();
+    var previousScrollTop = 0;
+    var shouldRestorePanelScroll = false;
     if (!panel) return null;
+
+    try {
+      shouldRestorePanelScroll = document.documentElement.getAttribute("data-skhps-runtime-panel-open") === "true" &&
+        document.documentElement.getAttribute("data-skhps-runtime-fixed-mode") === "scroll";
+      previousScrollTop = shouldRestorePanelScroll ? Number(panel.scrollTop || 0) : 0;
+    } catch (error) {
+      previousScrollTop = 0;
+      shouldRestorePanelScroll = false;
+    }
 
     ensureStyle();
     panel.className = "skhps-runtime-panel" +
@@ -2622,6 +2633,12 @@
       );
     });
 
+    if (shouldRestorePanelScroll && previousScrollTop > 0) {
+      try {
+        panel.scrollTop = Math.min(previousScrollTop, Math.max(0, panel.scrollHeight - panel.clientHeight));
+      } catch (error) {}
+    }
+
     return panel;
   }
 
@@ -2777,18 +2794,23 @@
     }
 
     window.addEventListener("resize", scheduleLayoutRender, { passive: true });
-    window.addEventListener("scroll", scheduleLayoutRender, { passive: true });
     window.addEventListener("orientationchange", scheduleLayoutRender, { passive: true });
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", scheduleLayoutRender, { passive: true });
-      window.visualViewport.addEventListener("scroll", scheduleLayoutRender, { passive: true });
     }
 
     document.addEventListener("skhps-runtime-updated", scheduleLayoutRender);
-    document.addEventListener("click", function () {
-      window.setTimeout(scheduleLayoutRender, 80);
-    }, true);
+    /*
+     * 2026-06-25 修正：不要監聽整份文件 click 後重 render runtime panel。
+     * 原本這段會讓 runtime 內任何 button（Flow 卡片、Copy、Expand all）點擊後，
+     * 80ms 後 renderPanel()，panel.innerHTML 被重建，內部 scrollTop 回到 0，
+     * 看起來像「按任何按鈕都跳到最上面」。
+     * Runtime 內容更新應靠 skhps-runtime-updated / resize / viewport resize 事件，不靠全域 click。
+     * 也不要用 window scroll / visualViewport scroll 觸發 renderPanel；手機瀏覽器
+     * 工具列 settle 或外層微小 scroll 會讓 panel.innerHTML 重建，造成滑到一半
+     * 被拉回上方。
+     */
   }
 
   installRealtimeLayoutMetrics();

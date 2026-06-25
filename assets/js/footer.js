@@ -1812,14 +1812,21 @@
       }
 
       if (runtimeFixedMode === "scroll") {
-        consumeRuntimeScrollEvent(event);
-
+        /*
+         * Full runtime 進入 scroll mode 後，交回瀏覽器原生 overflow scrolling。
+         * 舊版在 wheel 事件中 preventDefault + 手動 panel.scrollTop += deltaY，
+         * 會讓手機/觸控板失去慣性與加速度，手感像被限速。
+         *
+         * 這裡只在「已經在頂端還往上滑」時攔截並收回 peek；
+         * 其餘往下/內部捲動全部讓 .skhps-runtime-panel 原生 scroll 接手，
+         * 外層頁面靠 overscroll-behavior: contain 阻斷 scroll chaining。
+         */
         if (deltaY < 0 && runtimePanelAtTop()) {
+          consumeRuntimeScrollEvent(event);
           collapseRuntimeFixedPanelToPeek();
           return;
         }
 
-        scrollRuntimePanelBy(deltaY);
         return;
       }
     }
@@ -1908,15 +1915,17 @@
     }
 
     if (runtimeFixedMode === "scroll") {
-      consumeRuntimeScrollEvent(event);
-
+      /*
+       * Full runtime 內部捲動交給瀏覽器原生 touch scrolling，保留慣性。
+       * 只在頂端繼續往上拉時攔截，收回五張 cards。
+       */
       if (delta < -6 && runtimePanelAtTop()) {
+        consumeRuntimeScrollEvent(event);
         collapseRuntimeFixedPanelToPeek();
         runtimeTouchStartY = currentY;
         return;
       }
 
-      scrollRuntimePanelBy(delta);
       runtimeTouchStartY = currentY;
     }
   }

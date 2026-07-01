@@ -1,13 +1,12 @@
 /*
 檔案位置：skhpsv2/assets/js/css-sheet-runtime.js
-時間戳記：2026-06-22 09:40 UTC+8
-用途：統一 CSS runtime；先套用 skhpsv2/uni-CSS.CSS 快取，失敗才退回 localStorage / Sheet / DEFAULT CSS，並由 CSS-fetch.js 背景刷新 Sheet cache。
+時間戳記：2026-07-01 23:59 UTC+8
+用途：統一 CSS runtime；正式資料來源固定為後端 worker 讀取 Supabase CssRegistryRuntimeRow，失敗時回報錯誤不套假樣式。
 */
 
 (function () {
   "use strict";
 
-  var currentScript = document.currentScript;
   var STYLE_ID = "skhps-css-runtime-style";
   var LEGACY_STYLE_ID = "skhps-css-sheet-runtime";
   var STATUS_ATTR = "data-css-sheet-runtime-status";
@@ -18,37 +17,22 @@
     保存 CSS 文字，讓同一次瀏覽流程切到 admin/css-setting/其他頁時可以立即套用。
 
     sessionStorage：
-    只記錄「這次開網域後是否已經抓過一次 Sheet」。
-    關閉分頁/瀏覽器後，下次第一次進網域會重新抓 Sheet。
+    只記錄「這次開網域後是否已經抓過一次 Supabase CSS Registry」。
+    關閉分頁/瀏覽器後，下次第一次進網域會重新抓 registry。
   */
-  var CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v2";
-  var LEGACY_CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v1";
-  var SESSION_READY_KEY = "skhpsv2.cssSheetRuntimeSessionReady.v1";
-  var CSS_CACHE_PATH = "uni-CSS.CSS";
-  var CSS_FETCH_PATH = "assets/js/CSS-fetch.js";
-  var DEFAULT_CSS_TEXT = [
-    "/* skhps css runtime default fallback */",
-    ":root {",
-    "  --skhps-primary: #0f766e;",
-    "  --skhps-surface: #ffffff;",
-    "  --skhps-bg: #f4f7fb;",
-    "  --skhps-text: #162231;",
-    "}",
-    "body {",
-    "  background: var(--skhps-bg);",
-    "  color: var(--skhps-text);",
-    "}"
-  ].join("\n");
+  var CACHE_KEY = "skhpsv2.cssRegistryRuntimeCache.v1";
+  var LEGACY_CACHE_KEYS = [
+    "skhpsv2.cssSheetRuntimeCache.v1",
+    "skhpsv2.cssSheetRuntimeCache.v2"
+  ];
+  var SESSION_READY_KEY = "skhpsv2.cssRegistryRuntimeSessionReady.v1";
+  var LEGACY_SESSION_READY_KEYS = [
+    "skhpsv2.cssSheetRuntimeSessionReady.v1"
+  ];
   var cssRuntimeStartedAt = 0;
   var cssRuntimeInitialDurationMs = null;
   var cssRuntimeGateDone = false;
   var lastAppliedHash = "";
-  var cssFileFetchState = {
-    url: "",
-    status: "",
-    ok: null,
-    error: ""
-  };
 
   function runtime() {
     return window.SKHPSRuntime || null;
@@ -246,15 +230,18 @@
     try {
       sessionStorage.setItem(SESSION_READY_KEY, "1");
     } catch (error) {
-      console.warn("CSS Sheet runtime session flag write failed:", error);
+      console.warn("CSS Registry runtime session flag write failed:", error);
     }
   }
 
   function clearSessionReady() {
     try {
       sessionStorage.removeItem(SESSION_READY_KEY);
+      LEGACY_SESSION_READY_KEYS.forEach(function (key) {
+        sessionStorage.removeItem(key);
+      });
     } catch (error) {
-      console.warn("CSS Sheet runtime session flag clear failed:", error);
+      console.warn("CSS Registry runtime session flag clear failed:", error);
     }
   }
 
@@ -271,99 +258,6 @@
       if (!res.ok) throw new Error("config.json HTTP " + res.status);
       return res.json();
     });
-  }
-
-  function stripQueryAndHash(url) {
-    return String(url || "").split("#")[0].split("?")[0];
-  }
-
-  function inferSharedBaseUrl() {
-    var src = currentScript && currentScript.src ? currentScript.src : "";
-
-    if (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.sharedBaseUrl) {
-      return window.SKHPS_APP_ENV.sharedBaseUrl;
-    }
-
-    if (window.SKHPS_ENTRY_BASE_URL) {
-      return window.SKHPS_ENTRY_BASE_URL;
-    }
-
-    if (window.SKHPS_CONFIG_BASE_URL) {
-      return window.SKHPS_CONFIG_BASE_URL;
-    }
-
-    if (src) {
-      return stripQueryAndHash(src).replace(/\/assets\/js\/css-sheet-runtime\.js$/i, "/");
-    }
-
-    return "";
-  }
-
-  function inferCoreBaseUrl() {
-    var htmlRuntime = document.documentElement.getAttribute("data-skhps-runtime") || "";
-    var host = String(window.location.hostname || "").toLowerCase();
-    var runtimeName = String(
-      htmlRuntime ||
-      (window.SKHPS_APP_ENV && window.SKHPS_APP_ENV.env) ||
-      ""
-    ).trim().toLowerCase();
-
-    var shared = inferSharedBaseUrl();
-    if (shared) return normalizeBaseUrl(shared);
-
-    if (host === "127.0.0.1" || host === "localhost" || host === "") {
-      return window.location.origin + "/skhpsv2/";
-    }
-
-    if (runtimeName === "local-dev" || runtimeName === "local") {
-      return window.location.origin + "/skhpsv2/";
-    }
-
-    if (runtimeName === "dev" || host === "dev-skhps.jonaminz.com") {
-      return "https://dev-skhps.jonaminz.com/";
-    }
-
-    return "https://skhps.jonaminz.com/";
-  }
-
-  function normalizeBaseUrl(baseUrl) {
-    return String(baseUrl || "").replace(/\/+$/, "") + "/";
-  }
-
-  function joinUrl(baseUrl, path) {
-    if (/^https?:\/\//i.test(String(path || ""))) return path;
-    if (!baseUrl) return path;
-    return normalizeBaseUrl(baseUrl) + String(path || "").replace(/^\/+/, "");
-  }
-
-  function getRuntimeVersion() {
-    if (window.SKHPS_ENTRY_VERSION) {
-      return String(window.SKHPS_ENTRY_VERSION || "").trim();
-    }
-
-    if (currentScript && currentScript.src && currentScript.src.indexOf("?") >= 0) {
-      try {
-        return new URL(currentScript.src).searchParams.get("v") || "";
-      } catch (error) {
-        return "";
-      }
-    }
-
-    return "";
-  }
-
-  function withVersion(url) {
-    var version = getRuntimeVersion();
-    if (!version) return url;
-    return url + (url.indexOf("?") >= 0 ? "&" : "?") + "v=" + encodeURIComponent(version);
-  }
-
-  function cssCacheUrl() {
-    return joinUrl(inferCoreBaseUrl(), CSS_CACHE_PATH);
-  }
-
-  function cssFetchUrl() {
-    return withVersion(joinUrl(inferSharedBaseUrl(), CSS_FETCH_PATH));
   }
 
   function nowTaipeiText() {
@@ -459,16 +353,15 @@
       : null;
 
     /*
-      2026-06-11 固定版：
-      CSS Sheet 先收斂成單一 gid 0 / CSS總表。
-      如果 config.json 還沒補 cssSheets，也不要讓 runtime 直接失敗。
+      Supabase registry 仍保留 sheetKey 欄位做舊資料相容。
+      如果 config.json 已移除 sheets.cssSheets，也預設讀 cssMain。
     */
     if (!cssSheets || !Object.keys(cssSheets).length) {
       return {
         cssMain: {
           key: "cssMain",
-          title: "CSS總表",
-          tabName: "CSS總表",
+          title: "CssRegistry",
+          tabName: "CssRegistry",
           tabGid: "0",
           enabled: true
         }
@@ -478,8 +371,8 @@
     if (!cssSheets.cssMain && cssSheets.baseStyle) {
       cssSheets.cssMain = {
         key: "cssMain",
-        title: "CSS總表",
-        tabName: "CSS總表",
+        title: "CssRegistry",
+        tabName: "CssRegistry",
         tabGid: "0",
         enabled: true
       };
@@ -489,6 +382,31 @@
   }
 
   function getEnabledSheetKeys(config) {
+    var cssRuntime = config && config.cssRuntime ? config.cssRuntime : {};
+    var registryKeys = Array.isArray(cssRuntime.registryKeys)
+      ? cssRuntime.registryKeys
+      : Array.isArray(cssRuntime.cssRegistryKeys)
+        ? cssRuntime.cssRegistryKeys
+        : [];
+    var primaryRegistryKey = String(
+      cssRuntime.primaryRegistryKey ||
+      cssRuntime.primaryKey ||
+      cssRuntime.registryKey ||
+      ""
+    ).trim();
+
+    registryKeys = registryKeys.map(function (key) {
+      return String(key || "").trim();
+    }).filter(Boolean);
+
+    if (primaryRegistryKey && registryKeys.indexOf(primaryRegistryKey) < 0) {
+      registryKeys.unshift(primaryRegistryKey);
+    }
+
+    if (registryKeys.length) {
+      return registryKeys;
+    }
+
     var cssSheets = getCssSheets(config);
 
     var keys = Object.keys(cssSheets).filter(function (key) {
@@ -502,128 +420,6 @@
     }
 
     return keys;
-  }
-
-  function csvUrl(config, sheetKey) {
-    var spreadsheetId = config && config.sheets && config.sheets.mainSpreadsheetId;
-    var sheet = getCssSheets(config)[sheetKey];
-
-    if (!spreadsheetId) throw new Error("config.json missing sheets.mainSpreadsheetId");
-
-    if (!sheet || sheet.tabGid === undefined || sheet.tabGid === null || sheet.tabGid === "") {
-      throw new Error("config.json missing sheets.cssSheets." + sheetKey + ".tabGid");
-    }
-
-    return "https://docs.google.com/spreadsheets/d/" +
-      encodeURIComponent(spreadsheetId) +
-      "/export?format=csv&gid=" +
-      encodeURIComponent(sheet.tabGid) +
-      "&ts=" +
-      Date.now();
-  }
-
-  function parseCsv(text) {
-    var rows = [];
-    var row = [];
-    var cell = "";
-    var quote = false;
-
-    for (var i = 0; i < text.length; i += 1) {
-      var c = text[i];
-      var n = text[i + 1];
-
-      if (quote) {
-        if (c === '"' && n === '"') {
-          cell += '"';
-          i += 1;
-        } else if (c === '"') {
-          quote = false;
-        } else {
-          cell += c;
-        }
-      } else {
-        if (c === '"') {
-          quote = true;
-        } else if (c === ",") {
-          row.push(cell);
-          cell = "";
-        } else if (c === "\n") {
-          row.push(cell);
-          rows.push(row);
-          row = [];
-          cell = "";
-        } else if (c !== "\r") {
-          cell += c;
-        }
-      }
-    }
-
-    if (cell.length || row.length) {
-      row.push(cell);
-      rows.push(row);
-    }
-
-    return rows.filter(function (r) {
-      return r.some(function (x) {
-        return String(x || "").trim() !== "";
-      });
-    });
-  }
-
-  function rowsFromCsv(sheetKey, csvRows) {
-    var header = csvRows[0] || [];
-    var idx = {};
-
-    header.forEach(function (h, i) {
-      idx[String(h || "").trim()] = i;
-    });
-
-    return csvRows.slice(1).map(function (row, order) {
-      return {
-        sheetKey: sheetKey,
-        component: String(row[idx.component] || "").trim(),
-        className: String(row[idx.className] || "").trim(),
-        property: String(row[idx.property] || "").trim(),
-        value: String(row[idx.value] || "").trim(),
-        description: String(row[idx.description] || "").trim(),
-        updatedAt: String(row[idx.updatedAt] || "").trim(),
-        __order: order
-      };
-    }).filter(function (row) {
-      return row.className && row.property && row.value;
-    });
-  }
-
-  function loadRowsFromCsv(config, sheetKeys) {
-    var startedAt = Date.now();
-    rlog("RUN", "loadCsv", {
-      sheetKeys: sheetKeys
-    });
-    return Promise.all(sheetKeys.map(function (sheetKey) {
-      return fetch(csvUrl(config, sheetKey), { cache: "no-store" })
-        .then(function (res) {
-          return res.text().then(function (text) {
-            if (!res.ok) throw new Error(sheetKey + " CSV HTTP " + res.status);
-            return rowsFromCsv(sheetKey, parseCsv(text));
-          });
-        });
-    })).then(function (groups) {
-      return groups.reduce(function (acc, rows) {
-        return acc.concat(rows);
-      }, []);
-    }).then(function (rows) {
-      rlog("OK", "loadCsv", {
-        sheetKeys: sheetKeys,
-        rowsCount: rows.length
-      }, Date.now() - startedAt);
-      return rows;
-    }).catch(function (error) {
-      rlog("FAIL", "loadCsv", {
-        sheetKeys: sheetKeys,
-        error: error && error.message ? error.message : String(error)
-      }, Date.now() - startedAt);
-      throw error;
-    });
   }
 
   function normalizeBackendRows(response, sheetKeys) {
@@ -659,21 +455,21 @@
       return Promise.reject(new Error("SKHPSBackend.call not available"));
     }
 
-    rlog("RUN", "loadSheetBackend", {
+    rlog("RUN", "loadCssRegistryBackend", {
       sheetKeys: sheetKeys
     });
 
-    return window.SKHPSBackend.call("getCssSheetRuntime", {
-      sheetKeys: sheetKeys,
-      sheets: sheetKeys
+    return window.SKHPSBackend.call("getCssRegistryRuntime", {
+      registryKeys: sheetKeys,
+      sheetKeys: sheetKeys
     }).then(function (res) {
       if (!res || res.ok === false) {
-        throw new Error(res && (res.message || res.error) ? (res.message || res.error) : "getCssSheetRuntime failed");
+        throw new Error(res && (res.message || res.error) ? (res.message || res.error) : "getCssRegistryRuntime failed");
       }
 
       var rows = normalizeBackendRows(res, sheetKeys);
-      if (!rows.length) throw new Error("getCssSheetRuntime returned no rows");
-      rlog("OK", "loadSheetBackend", {
+      if (!rows.length) throw new Error("getCssRegistryRuntime returned no rows");
+      rlog("OK", "loadCssRegistryBackend", {
         sheetKeys: sheetKeys,
         rowsCount: rows.length
       });
@@ -682,30 +478,19 @@
   }
 
   function shouldUseBackend(config) {
-    /*
-      現階段預設 false，避免 Apps Script 尚未支援 getCssSheetRuntime 時，
-      每次載入都噴 JSONP failed。
-      之後後端補好後，在 config.json 加：
-      "cssRuntime": { "source": "backend" }
-      就能切回後端。
-    */
-    return config && config.cssRuntime && config.cssRuntime.source === "backend";
+    return true;
   }
 
   function loadRows(config, sheetKeys) {
-    if (shouldUseBackend(config)) {
-      return loadRowsFromBackend(sheetKeys).catch(function (error) {
-        console.warn("CSS Sheet backend failed, fallback to CSV:", error);
-        rlog("WARN", "loadSheetBackend", {
-          sheetKeys: sheetKeys,
-          error: error && error.message ? error.message : String(error),
-          fallback: "csv"
-        });
-        return loadRowsFromCsv(config, sheetKeys);
+    return loadRowsFromBackend(sheetKeys).catch(function (error) {
+      console.warn("CSS Registry backend failed:", error);
+      rlog("WARN", "loadCssRegistryBackend", {
+        sheetKeys: sheetKeys,
+        error: error && error.message ? error.message : String(error),
+        fallback: "none"
       });
-    }
-
-    return loadRowsFromCsv(config, sheetKeys);
+      throw error;
+    });
   }
 
   function normalizeSelector(className, component) {
@@ -831,7 +616,7 @@
       grouped[selector].push(row);
     });
 
-    var css = ["/* skhps css sheet runtime generated */"];
+    var css = ["/* skhps css registry runtime generated */"];
 
     Object.keys(grouped).forEach(function (selector) {
       css.push("");
@@ -1022,7 +807,7 @@
     var model = normalizeCssModel(Object.assign({
       schemaVersion: 1,
       generatedAt: nowTaipeiText(),
-      source: source || "sheet",
+      source: source || "supabase-css-registry",
       sheetKeys: sheetKeys || [],
       rows: rows || [],
       latestRows: built.latestRows,
@@ -1060,7 +845,7 @@
 
   function readCache() {
     try {
-      var raw = localStorage.getItem(CACHE_KEY) || localStorage.getItem(LEGACY_CACHE_KEY);
+      var raw = localStorage.getItem(CACHE_KEY);
       if (!raw) return null;
 
       var cache = JSON.parse(raw);
@@ -1068,14 +853,14 @@
 
       return normalizeCssModel(cache, "localStorage-cache");
     } catch (error) {
-      console.warn("CSS Sheet runtime cache read failed:", error);
+      console.warn("CSS Registry runtime cache read failed:", error);
       return null;
     }
   }
 
   function writeCache(data) {
     try {
-      var model = normalizeCssModel(data, data && data.source || "sheet-refresh");
+      var model = normalizeCssModel(data, data && data.source || "supabase-css-registry");
 
       localStorage.setItem(CACHE_KEY, JSON.stringify({
         schemaVersion: 1,
@@ -1092,19 +877,30 @@
         cssText: model.cssText
       }));
     } catch (error) {
-      console.warn("CSS Sheet runtime cache write failed:", error);
+      console.warn("CSS Registry runtime cache write failed:", error);
     }
   }
 
   function clearCache() {
     try {
       localStorage.removeItem(CACHE_KEY);
-      localStorage.removeItem(LEGACY_CACHE_KEY);
+      LEGACY_CACHE_KEYS.forEach(function (key) {
+        localStorage.removeItem(key);
+      });
     } catch (error) {
-      console.warn("CSS Sheet runtime cache clear failed:", error);
+      console.warn("CSS Registry runtime cache clear failed:", error);
     }
 
     clearSessionReady();
+  }
+
+  function cssRuntimeSourceLabel(model) {
+    var source = String(model && model.source || "").trim();
+
+    if (source === "localStorage-cache" || source === "early-localStorage-cache") return "localStorage / Supabase Registry cache";
+    if (source.indexOf("supabase-css-registry") >= 0) return "Supabase CSS Registry";
+    if (source === "backend") return "Supabase CSS Registry";
+    return source || "Supabase CSS Registry";
   }
 
   function setRuntimeObject(model, options) {
@@ -1115,6 +911,7 @@
 
     window.SKHPSCssSheetRuntime = {
       source: model.source || "",
+      sourceLabel: model.sourceLabel || cssRuntimeSourceLabel(model),
       upstreamSource: model.upstreamSource || "",
       sheetKeys: model.sheetKeys || [],
       rows: model.rows || [],
@@ -1128,24 +925,22 @@
       lastRefreshAt: options.lastRefreshAt || "",
       refreshStatus: options.refreshStatus || "",
       refreshError: options.refreshError || "",
-      cssFileUrl: cssFileFetchState.url || "",
-      cssFileFetchStatus: cssFileFetchState.status || "",
-      cssFileFetchOk: cssFileFetchState.ok,
-      cssFileFetchError: cssFileFetchState.error || "",
       appliedRefresh: Boolean(options.appliedRefresh),
       initialDurationMs: initialDurationMs,
       refreshDurationMs: options.refreshDurationMs !== undefined ? options.refreshDurationMs : "",
       reload: load,
-      refresh: refreshFromSheet,
+      refresh: refreshFromRegistry,
       clearCache: clearCache,
       clearSession: clearSessionReady,
       writeCache: writeCache
     };
+    window.SKHPSCssRegistryRuntime = window.SKHPSCssSheetRuntime;
 
     if (runtime() && typeof runtime().setCssRuntime === "function") {
       runtime().setCssRuntime({
         loaded: true,
         source: window.SKHPSCssSheetRuntime.source,
+        sourceLabel: window.SKHPSCssSheetRuntime.sourceLabel,
         upstreamSource: window.SKHPSCssSheetRuntime.upstreamSource,
         durationMs: initialDurationMs,
         initialDurationMs: initialDurationMs,
@@ -1156,10 +951,6 @@
         hash: window.SKHPSCssSheetRuntime.hash,
         refreshStatus: window.SKHPSCssSheetRuntime.refreshStatus,
         refreshError: window.SKHPSCssSheetRuntime.refreshError,
-        cssFileUrl: window.SKHPSCssSheetRuntime.cssFileUrl,
-        cssFileFetchStatus: window.SKHPSCssSheetRuntime.cssFileFetchStatus,
-        cssFileFetchOk: window.SKHPSCssSheetRuntime.cssFileFetchOk,
-        cssFileFetchError: window.SKHPSCssSheetRuntime.cssFileFetchError,
         lastRefreshAt: window.SKHPSCssSheetRuntime.lastRefreshAt,
         appliedRefresh: window.SKHPSCssSheetRuntime.appliedRefresh,
         rowsCount: model.rowsCount || (model.rows ? model.rows.length : 0),
@@ -1280,16 +1071,16 @@
       var sheetKeys = getEnabledSheetKeys(config);
 
       if (!sheetKeys.length) {
-        throw new Error("config.json sheets.cssSheets is empty");
+        throw new Error("CSS Registry keys are empty");
       }
 
       if (!options.silent) {
-        setStatus("CSS Sheet：重新讀取 Sheet（" + sheetKeys.length + " 張）", false);
+        setStatus("CSS Registry：重新讀取 Supabase（" + sheetKeys.length + " 組）", false);
       }
 
       return loadRows(config, sheetKeys).then(function (rows) {
         return {
-          source: shouldUseBackend(config) ? "backend" : "csv",
+          source: "supabase-css-registry",
           config: config,
           sheetKeys: sheetKeys,
           rows: rows
@@ -1313,14 +1104,14 @@
       rlog("OK", "done", "css-runtime", cssRuntimeStartedAt ? Date.now() - cssRuntimeStartedAt : null);
 
       writeCache(Object.assign({}, model, {
-        source: "sheet-refresh"
+        source: "supabase-css-registry"
       }));
       setSessionReady();
 
       setStatus(
-        "CSS Sheet：已重新讀取 " +
+        "CSS Registry：已重新讀取 " +
         result.sheetKeys.length +
-        " 張 / " +
+        " 組 / " +
         model.latestRows.length +
         " 組樣式（" +
         result.source +
@@ -1330,19 +1121,19 @@
 
       return window.SKHPSCssSheetRuntime;
     }).catch(function (error) {
-      console.error("CSS Sheet runtime failed:", error);
+      console.error("CSS Registry runtime failed:", error);
 
       /*
-        第一次進網域重新抓 Sheet 失敗時，如果 localStorage 有舊 cache，
+        第一次進網域重新抓 Supabase CSS Registry 失敗時，如果 localStorage 有舊 cache，
         才退回舊 cache，避免畫面壞掉。
       */
       if (applyCacheIfAvailable()) {
-        setStatus("CSS Sheet：重新讀取失敗，暫用舊快取：" + (error.message || String(error)), false);
+        setStatus("CSS Registry：重新讀取失敗，暫用舊快取：" + (error.message || String(error)), false);
         return window.SKHPSCssSheetRuntime;
       }
 
       markCssRuntimeFailed(error);
-      setStatus("CSS Sheet：載入失敗：" + (error.message || String(error)), false);
+      setStatus("CSS Registry：載入失敗：" + (error.message || String(error)), false);
       traceFunction("load", "error", {
         error: error && error.message ? error.message : String(error)
       });
@@ -1353,122 +1144,6 @@
     });
   }
 
-  function loadCssFileCache() {
-    var url = cssCacheUrl();
-
-    cssFileFetchState = {
-      url: url,
-      status: "pending",
-      ok: null,
-      error: ""
-    };
-
-    traceFunction("loadCssFileCache", "start", {
-      url: url
-    });
-    rlog("RUN", "loadCssFileCache", url);
-
-    return fetch(url, {
-      cache: "no-store"
-    }).then(function (res) {
-      cssFileFetchState.status = String(res.status) + " " + (res.statusText || "");
-      cssFileFetchState.ok = Boolean(res.ok);
-      return res.text().then(function (text) {
-        if (!res.ok) throw new Error("uni-CSS.CSS HTTP " + res.status);
-        return text;
-      });
-    }).then(function (cssText) {
-      var model = normalizeCssModel({
-        schemaVersion: 1,
-        generatedAt: "",
-        source: "css-file",
-        cssText: cssText
-      }, "css-file");
-      model.source = "css-file";
-      model.upstreamSource = "sheet-snapshot";
-      rlog("OK", "loadCssFileCache", {
-        url: url,
-        status: cssFileFetchState.status,
-        hash: model.hash
-      });
-      return model;
-    }).catch(function (error) {
-      cssFileFetchState.ok = false;
-      cssFileFetchState.error = error && error.message ? error.message : String(error);
-      if (cssFileFetchState.status === "pending") {
-        cssFileFetchState.status = "failed";
-      }
-      rlog("WARN", "loadCssFileCache", {
-        url: url,
-        status: cssFileFetchState.status,
-        error: cssFileFetchState.error
-      });
-      throw error;
-    });
-  }
-
-  function applyDefaultFallback(error) {
-    var model = normalizeCssModel({
-      schemaVersion: 1,
-      generatedAt: nowTaipeiText(),
-      source: "default-fallback",
-      cssText: DEFAULT_CSS_TEXT
-    }, "default-fallback");
-
-    applyCssModel(model, {
-      source: "default-fallback",
-      refreshStatus: "failed",
-      refreshError: error && error.message ? error.message : String(error || "")
-    });
-
-    setStatus("CSS：已套用 DEFAULT fallback；" + (error && error.message ? error.message : String(error || "no cache")), false);
-    rlog("WARN", "defaultFallback", {
-      error: error && error.message ? error.message : String(error || "")
-    });
-    return window.SKHPSCssSheetRuntime;
-  }
-
-  function loadScriptOnce(src, globalName) {
-    if (globalName && window[globalName]) {
-      return Promise.resolve(window[globalName]);
-    }
-
-    return new Promise(function (resolve, reject) {
-      var existing = document.querySelector('script[data-skhps-runtime-src="' + src + '"]');
-      var script;
-
-      if (existing) {
-        existing.addEventListener("load", function () {
-          resolve(globalName ? window[globalName] : true);
-        });
-        existing.addEventListener("error", function () {
-          reject(new Error("script load failed: " + src));
-        });
-        return;
-      }
-
-      script = document.createElement("script");
-      script.src = src;
-      script.async = true;
-      script.setAttribute("data-skhps-runtime-src", src);
-      script.onload = function () {
-        resolve(globalName ? window[globalName] : true);
-      };
-      script.onerror = function () {
-        reject(new Error("script load failed: " + src));
-      };
-      document.head.appendChild(script);
-    });
-  }
-
-  function ensureCssFetch() {
-    if (window.SKHPSCssFetch && typeof window.SKHPSCssFetch.refresh === "function") {
-      return Promise.resolve(window.SKHPSCssFetch);
-    }
-
-    return loadScriptOnce(cssFetchUrl(), "SKHPSCssFetch");
-  }
-
   function fetchSheetModel(options) {
     options = options || {};
 
@@ -1476,25 +1151,25 @@
       applyLoadingTitle(config);
 
       var sheetKeys = getEnabledSheetKeys(config);
-      if (!sheetKeys.length) throw new Error("config.json sheets.cssSheets is empty");
+      if (!sheetKeys.length) throw new Error("CSS Registry keys are empty");
 
       return loadRows(config, sheetKeys).then(function (rows) {
-        return modelFromRows(rows, options.source || "sheet-refresh", sheetKeys, {
-          upstreamSource: shouldUseBackend(config) ? "backend" : "csv"
+        return modelFromRows(rows, options.source || "supabase-css-registry-refresh", sheetKeys, {
+          upstreamSource: "supabase"
         });
       });
     });
   }
 
-  function refreshFromSheet(options) {
+  function refreshFromRegistry(options) {
     options = options || {};
     var startedAt = Date.now();
 
     return fetchSheetModel({
-      source: "sheet-refresh"
+      source: "supabase-css-registry-refresh"
     }).then(function (model) {
       var result = applyCssModel(model, {
-        source: "sheet-refresh",
+        source: "supabase-css-registry-refresh",
         skipIfSame: true,
         refreshStatus: "success",
         refreshDurationMs: Date.now() - startedAt,
@@ -1503,18 +1178,18 @@
       });
 
       writeCache(Object.assign({}, model, {
-        source: "sheet-refresh"
+        source: "supabase-css-registry-refresh"
       }));
       setSessionReady();
 
       setStatus(
         result.applied
-          ? "CSS Sheet：背景刷新完成並已套用新版 CSS（hash " + model.hash + "）"
-          : "CSS Sheet：背景刷新完成，CSS 無變更（hash " + model.hash + "）",
+          ? "CSS Registry：Supabase 刷新完成並已套用新版 CSS（hash " + model.hash + "）"
+          : "CSS Registry：Supabase 刷新完成，CSS 無變更（hash " + model.hash + "）",
         true
       );
 
-      rlog("OK", "sheetRefresh", {
+      rlog("OK", "cssRegistryRefresh", {
         hash: model.hash,
         applied: result.applied,
         source: model.upstreamSource || model.source
@@ -1532,8 +1207,8 @@
           lastRefreshAt: nowTaipeiText()
         }));
       }
-      setStatus("CSS Sheet：背景刷新失敗，保留目前 CSS：" + (error.message || String(error)), false);
-      rlog("WARN", "sheetRefresh", {
+      setStatus("CSS Registry：Supabase 刷新失敗，保留目前 CSS：" + (error.message || String(error)), false);
+      rlog("WARN", "cssRegistryRefresh", {
         error: error && error.message ? error.message : String(error)
       });
       return {
@@ -1543,12 +1218,16 @@
     });
   }
 
+  function refreshFromSheet(options) {
+    return refreshFromRegistry(options);
+  }
+
   function startBackgroundRefresh() {
-    refreshFromSheet({
+    refreshFromRegistry({
       reason: "runtime-background",
       apply: false
     }).catch(function (error) {
-      console.warn("CSS Sheet background refresh failed:", error);
+      console.warn("CSS Registry background refresh failed:", error);
     });
   }
 
@@ -1565,30 +1244,32 @@
       新順序：
       1. 先吃 localStorage cache
       2. cache 命中就立刻放行
-      3. 背景刷新 Sheet
-      4. cache 沒命中才讀 Sheet
-      5. Sheet 失敗才 default fallback
+      3. 背景刷新 Supabase CSS Registry
+      4. cache 沒命中才讀 Supabase CSS Registry
+      5. registry 失敗就回報失敗，不套假樣式
     */
     if (applyCacheIfAvailable()) {
-      setStatus("CSS：已套用 localStorage cache，背景刷新 Sheet。", true);
+      setStatus("CSS：已套用 localStorage cache，背景刷新 Supabase CSS Registry。", true);
       startBackgroundRefresh();
       return;
     }
 
     load({
       silent: false
-    }).catch(function (sheetError) {
-      applyDefaultFallback(sheetError);
+    }).catch(function (registryError) {
+      rlog("FAIL", "initialLoad", {
+        error: registryError && registryError.message ? registryError.message : String(registryError || "")
+      });
     });
   }
 
   ready(function () {
     /*
       核心規則：
-      - 每次進頁面都先讀 skhpsv2/uni-CSS.CSS。
-      - uni-CSS.CSS 失敗才讀 localStorage cache。
-      - uni-CSS.CSS/localStorage 都失敗才讀 Sheet；Sheet 也失敗才套 DEFAULT CSS。
-      - Sheet refresh 由 CSS-fetch.js 背景執行，不阻塞已套用快取的主畫面。
+      - 每次進頁面先套 localStorage cache。
+      - 背景刷新 Supabase CSS Registry。
+      - localStorage/Supabase 都失敗就讓 loading gate 收到失敗狀態。
+      - 保留舊 global 名稱與事件名稱，避免既有頁面入口斷裂。
     */
     initialLoad();
   });
@@ -1596,16 +1277,18 @@
   window.SKHPSCssSheetRuntimeLoader = {
     load: load,
     initialLoad: initialLoad,
-    loadCssFileCache: loadCssFileCache,
     applyCssModel: applyCssModel,
     normalizeCssModel: normalizeCssModel,
     fetchSheetModel: fetchSheetModel,
+    fetchRegistryModel: fetchSheetModel,
+    refreshFromRegistry: refreshFromRegistry,
     refreshFromSheet: refreshFromSheet,
     writeCache: writeCache,
     clearCache: clearCache,
     clearSession: clearSessionReady,
     cacheKey: CACHE_KEY,
-    legacyCacheKey: LEGACY_CACHE_KEY,
+    legacyCacheKey: LEGACY_CACHE_KEYS[0],
+    legacyCacheKeys: LEGACY_CACHE_KEYS,
     sessionReadyKey: SESSION_READY_KEY
   };
   rlog("OK", "moduleReady", "css-sheet-runtime.js");

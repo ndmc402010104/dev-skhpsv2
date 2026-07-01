@@ -1,13 +1,14 @@
 ﻿window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.8.7-202606301607",
+  version: "v2.9.0-202607020011",
   major: 2,
-  minor: 8,
-  patch: 7,
-  buildTime: "202606301607",
-  updatedAt: "2026-06-30T16:07:54+08:00",
+  minor: 9,
+  patch: 0,
+  buildTime: "202607020011",
+  updatedAt: "2026-07-02T00:11:53+08:00",
   source: "version.js"
 };
+
 
 
 

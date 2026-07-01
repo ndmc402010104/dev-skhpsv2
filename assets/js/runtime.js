@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/runtime.js
-時間戳記：2026-06-21 UTC+8
-用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、data source、模組狀態與最近 logs；Data 區會顯示實際放行資料來源。
+時間戳記：2026-07-01 23:59 UTC+8
+用途：SKHPS runtime diagnostics state；集中記錄環境、config/backend/css/loading gate、data source、模組狀態與最近 logs；CSS 區顯示 Supabase Registry 實際狀態。
 */
 
 (function () {
@@ -211,6 +211,7 @@
     cssRuntime: {
       loaded: false,
       source: "",
+      sourceLabel: "",
       durationMs: null
     },
     externalApps: {
@@ -1490,9 +1491,9 @@
 
   function summarizeCssRuntime() {
     if (state.cssRuntime && state.cssRuntime.loaded) {
-      var sourceLabel = cssSourceDisplay(state.cssRuntime.source);
+      var sourceLabel = cssSourceDisplay(state.cssRuntime.source, state.cssRuntime.sourceLabel);
       var reason = [
-        sourceLabel || "css runtime loaded",
+        state.cssRuntime.sourceLabel || sourceLabel || "css runtime loaded",
         state.cssRuntime.refreshStatus ? "refresh=" + state.cssRuntime.refreshStatus : "",
         state.cssRuntime.appliedRefresh ? "applied refresh" : "",
         state.cssRuntime.hash ? "hash=" + state.cssRuntime.hash : ""
@@ -1741,13 +1742,20 @@
   }
 
   function cssSourceDisplay(source) {
+    var fallback = arguments.length > 1 ? arguments[1] : "";
+    var fallbackLabel = String(fallback || "").trim();
+
+    if (/supabase/i.test(fallbackLabel)) return "Supabase";
+    if (/default/i.test(fallbackLabel)) return "Default CSS";
+    if (/localStorage/i.test(fallbackLabel)) return "localStorage";
+
     var map = {
-      "css-file": "uni-CSS.CSS",
       "localStorage-cache": "localStorage",
-      "sheet-refresh": "Sheet",
-      "csv": "Sheet",
-      "backend": "Backend",
-      "default-fallback": "Default CSS"
+      "early-localStorage-cache": "localStorage",
+      "supabase-css-registry": "Supabase",
+      "supabase-css-registry-refresh": "Supabase",
+      "skhps-backend-supabase": "Supabase",
+      "backend": "Supabase"
     };
 
     return map[source] || source || "";
@@ -2509,18 +2517,13 @@
 
     var cssSection = addSection(panel, "CSS");
     addRow(cssSection, "Status", cssSummary.reason || cssSummary.label, cssSummary.className);
-    addRow(cssSection, "Source", state.cssRuntime.loaded ? cssSourceDisplay(state.cssRuntime.source) : "not loaded", statusClass(String(state.cssRuntime.loaded)));
+    addRow(cssSection, "Source", state.cssRuntime.loaded ? cssSourceDisplay(state.cssRuntime.source, state.cssRuntime.sourceLabel) : "not loaded", statusClass(String(state.cssRuntime.loaded)));
+    addRow(cssSection, "Source Label", state.cssRuntime.sourceLabel || "-");
     addRow(cssSection, "Source Key", state.cssRuntime.source || "-");
-    addRow(cssSection, "CSS File URL", state.cssRuntime.cssFileUrl || "-");
-    addRow(cssSection, "CSS File Fetch", [
-      state.cssRuntime.cssFileFetchStatus || "",
-      state.cssRuntime.cssFileFetchOk === true ? "OK" : state.cssRuntime.cssFileFetchOk === false ? "FAILED" : ""
-    ].filter(Boolean).join(" / ") || "-", statusClass(state.cssRuntime.cssFileFetchOk === false ? "fail" : state.cssRuntime.cssFileFetchOk === true ? "ok" : ""));
-    addRow(cssSection, "CSS File Error", state.cssRuntime.cssFileFetchError || "-");
     addRow(cssSection, "Updated At", state.cssRuntime.updatedAt || state.cssRuntime.generatedAt || "-");
     addRow(cssSection, "Version", state.cssRuntime.version || "-");
     addRow(cssSection, "Hash", state.cssRuntime.hash || "-");
-    addRow(cssSection, "Sheet Refresh", state.cssRuntime.refreshStatus || "-", statusClass(state.cssRuntime.refreshStatus === "failed" ? "fail" : state.cssRuntime.refreshStatus === "success" ? "ok" : ""));
+    addRow(cssSection, "Registry Refresh", state.cssRuntime.refreshStatus || "-", statusClass(state.cssRuntime.refreshStatus === "failed" ? "fail" : state.cssRuntime.refreshStatus === "success" ? "ok" : ""));
     addRow(cssSection, "Last Refresh", state.cssRuntime.lastRefreshAt || "-");
     addRow(cssSection, "Applied New CSS", state.cssRuntime.appliedRefresh === undefined ? "-" : String(state.cssRuntime.appliedRefresh), statusClass(String(state.cssRuntime.appliedRefresh)));
     addRow(cssSection, "Refresh Error", state.cssRuntime.refreshError || "-");

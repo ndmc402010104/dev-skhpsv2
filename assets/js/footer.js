@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/footer.js
-時間戳記：2026-06-25 UTC+8
+時間戳記：2026-07-01 23:59 UTC+8
 用途：Footer 三區 runtime 摘要與單一完整 runtime panel；只保留 closed/full；full 開啟時立刻展開 tail。短頁會補足 tail 前導距離；長頁原頁底開啟時允許 signed tail spacer，把 flow runtime 上緣直接對齊「footer 上緣 - summary cards 高度」。本版保留五張 summary cards peek，只在 runtime cards 內滑動才展開；peek 狀態只預留「footer runtime 上緣到 viewport/page 底部」所需空間，不再預留整個 runtime；runtime 內部捲回頂端時收回五卡片。
 */
 
@@ -1015,9 +1015,7 @@
     ].filter(Boolean).join(" | ");
 
     if (module && module.status === "fail") return traffic("red", label, module.error || "css failed");
-    if (css.loaded && css.source === "default-fallback") return traffic("yellow", label, title || "default-fallback");
     if (css.loaded && css.refreshStatus === "failed") return traffic("yellow", label, title || "refresh failed");
-    if (css.loaded && css.source === "css-file") return traffic("green", label, title || "uni-CSS.CSS");
     if (css.loaded && css.source === "localStorage-cache") return traffic("yellow", label, title || "localStorage cache");
     if (css.loaded) return traffic("green", label, title || css.source || "live");
     if (module && module.status === "waiting") return traffic("yellow", "CSS", "loading");
@@ -1077,7 +1075,7 @@
     return span;
   }
 
-  function forceReloadCssSheet(event) {
+  function forceReloadCssRegistry(event) {
     if (event && typeof event.preventDefault === "function") {
       event.preventDefault();
     }
@@ -1089,12 +1087,14 @@
       ) {
         window.SKHPSCssSheetRuntimeLoader.clearCache();
       } else {
+        localStorage.removeItem("skhpsv2.cssRegistryRuntimeCache.v1");
         localStorage.removeItem("skhpsv2.cssSheetRuntimeCache.v1");
         localStorage.removeItem("skhpsv2.cssSheetRuntimeCache.v2");
+        sessionStorage.removeItem("skhpsv2.cssRegistryRuntimeSessionReady.v1");
         sessionStorage.removeItem("skhpsv2.cssSheetRuntimeSessionReady.v1");
       }
     } catch (error) {
-      console.warn("CSS Sheet force reload cache clear failed:", error);
+      console.warn("CSS Registry force reload cache clear failed:", error);
     }
 
     try {
@@ -1102,7 +1102,7 @@
         runtime().log({
           level: "info",
           module: "footer",
-          message: "force-css-sheet-reload",
+          message: "force-css-registry-reload",
           data: {
             source: "footer CSS button"
           }
@@ -1117,9 +1117,9 @@
     var button = document.createElement("button");
     button.className = "skhps-footer-css-refresh skhps-footer-lamp skhps-footer-lamp-" + item.status;
     button.type = "button";
-    button.title = item.title || "清除 CSS cache 並重新從 CSS總表讀取";
+    button.title = item.title || "清除 CSS cache 並重新從 Supabase CSS Registry 讀取";
     button.textContent = item.icon + " " + item.label;
-    button.addEventListener("click", forceReloadCssSheet);
+    button.addEventListener("click", forceReloadCssRegistry);
     return button;
   }
 

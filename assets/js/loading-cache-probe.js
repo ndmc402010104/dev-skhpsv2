@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/loading-cache-probe.js
-時間戳記：2026-06-16 UTC+8
-用途：極早期 CSS cache probe；在 css-sheet-runtime.js 載入前，先從 localStorage 套用 CSS cache，避免首屏閃爍。
+時間戳記：2026-07-01 23:59 UTC+8
+用途：極早期 CSS registry cache probe；在 css-sheet-runtime.js 載入前，先從 Supabase Registry cache 套用 CSS，避免首屏閃爍。
 */
 
 (function () {
@@ -9,8 +9,7 @@
 
   var html = document.documentElement;
   var STYLE_ID = "skhps-css-runtime-style";
-  var CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v2";
-  var LEGACY_CACHE_KEY = "skhpsv2.cssSheetRuntimeCache.v1";
+  var CACHE_KEY = "skhpsv2.cssRegistryRuntimeCache.v1";
 
   function hashText(text) {
     var hash = 2166136261;
@@ -26,7 +25,7 @@
 
   function readCache() {
     try {
-      var raw = localStorage.getItem(CACHE_KEY) || localStorage.getItem(LEGACY_CACHE_KEY);
+      var raw = localStorage.getItem(CACHE_KEY);
       var cache;
 
       if (!raw) return null;

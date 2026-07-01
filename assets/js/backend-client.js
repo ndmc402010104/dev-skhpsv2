@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/backend-client.js
-時間戳記：2026-06-19 00:45 UTC+8
-用途：全站唯一後端呼叫入口；registry 讀取支援 Apps Script / Cloudflare Worker 競速，registry 寫入支援 Sheet / Supabase 雙寫，uploadFile 走 Cloudflare Worker 背景上傳。
+時間戳記：2026-07-01 23:59 UTC+8
+用途：全站唯一後端呼叫入口；external registry 可競速讀取，CSS Registry runtime 與 uploadFile 固定走 Cloudflare Worker。
 */
 
 (function () {
@@ -21,6 +21,11 @@
     updateExternalProjectActivation: true,
     updateExternalAppSettings: true,
     setExternalAppActive: true
+  };
+
+  var WORKER_JSON_ACTIONS = {
+    getCssRegistryRuntime: true,
+    getCssSheetRuntime: true
   };
 
   function runtime() {
@@ -489,6 +494,25 @@
     }
 
     return true;
+  }
+
+  function shouldUseWorkerJsonAction(config, action) {
+    var worker = getBackendWorkerConfig(config);
+    var actionConfig = getWorkerActionConfig(config, action);
+
+    if (!WORKER_JSON_ACTIONS[String(action || "")]) {
+      return false;
+    }
+
+    if (!worker || worker.enabled === false) {
+      return false;
+    }
+
+    if (actionConfig && actionConfig.enabled === false) {
+      return false;
+    }
+
+    return Boolean(getWorkerBaseUrl(config, getCurrentEnv(config)) || getWorkerBaseUrl(config, config && config.env));
   }
 
   function isBlobLike(value) {
@@ -1095,6 +1119,10 @@
 
       if (WORKER_DUAL_WRITE_ACTIONS[action]) {
         return callRegistryDualWrite(config, env, endpoint, action, payload || {}, options);
+      }
+
+      if (shouldUseWorkerJsonAction(config, action)) {
+        return callWorkerJsonAction(config, env, action, payload || {}, options);
       }
 
       if (shouldUseWorkerAction(config, action)) {

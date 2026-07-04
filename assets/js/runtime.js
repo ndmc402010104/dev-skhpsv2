@@ -2642,7 +2642,31 @@
       } catch (error) {}
     }
 
+    updateBottomSheetObstruction(panel);
+
     return panel;
+  }
+
+  /*
+   * swipe-table.js 的 bottom sheet 底部留白公式本來就會讀
+   * --sk-swipe-bottom-sheet-visible-obstruction，但沒有任何地方寫入這個變數——
+   * 這支 runtime 除錯面板只在 local-dev 顯示，疊在頁尾上面多佔一塊高度，卻從沒把
+   * 自己的高度回報出去，導致 local-dev 開著這個面板時，bottom sheet 的完成按鈕會
+   * 被面板蓋住/擠在一起（正式站沒有這個面板，不受影響）。這裡量面板實際佔用的高度
+   * 直接回寫，不去動 --skhps-runtime-summary-height 等一整組本來就沒接上的變數。
+   */
+  function updateBottomSheetObstruction(panel) {
+    var height = 0;
+    try {
+      var target = panel || document.getElementById(PANEL_ID);
+      if (target && target.getBoundingClientRect) {
+        height = Math.max(0, Math.round(target.getBoundingClientRect().height || 0));
+      }
+    } catch (error) {}
+
+    try {
+      document.documentElement.style.setProperty("--sk-swipe-bottom-sheet-visible-obstruction", height + "px");
+    } catch (error) {}
   }
 
   var renderTimer = null;
@@ -2798,6 +2822,7 @@
 
     window.addEventListener("resize", scheduleLayoutRender, { passive: true });
     window.addEventListener("orientationchange", scheduleLayoutRender, { passive: true });
+    window.addEventListener("resize", function () { updateBottomSheetObstruction(); }, { passive: true });
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", scheduleLayoutRender, { passive: true });

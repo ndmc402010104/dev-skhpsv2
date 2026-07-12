@@ -39,8 +39,8 @@
       "id": "css-setting",
       "title": "CSS Setting",
       "href": {
-        "local-dev": "css-setting.html",
-        "dev": "css-setting.html",
+        "local-dev": "https://ndmc402010104.github.io/dev-css-setting/",
+        "dev": "https://ndmc402010104.github.io/dev-css-setting/",
         "prod": "css-setting.html"
       }
     }

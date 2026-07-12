@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/css-sheet-runtime.js
-時間戳記：2026-07-12 12:14 UTC+8
+時間戳記：2026-07-12 16:09 UTC+8
 用途：統一 CSS runtime；簡單 token/rule 讀 Supabase CssRegistryRuntimeRow，複雜元件可追加 dev-only CssRegistryPackage；失敗時保留舊 rows/cache，不套假樣式。
 */
 
@@ -926,7 +926,10 @@
         rowsCount: model.rowsCount || 0,
         latestRowsCount: model.latestRowsCount || 0,
         styles: model.styles || [],
-        cssText: model.cssText
+        cssText: model.cssText,
+        packages: model.packages || [],
+        packageCount: model.packageCount || 0,
+        packageStatus: model.packageStatus || "unknown"
       }));
     } catch (error) {
       console.warn("CSS Registry runtime cache write failed:", error);

@@ -9,6 +9,13 @@
   var html = document.documentElement;
   var scope = String(html.getAttribute("data-skhps-entry-scope") || "").trim();
   var runtime = String(html.getAttribute("data-skhps-runtime") || "").trim().toLowerCase();
+  var contractPath = "/jonaminz.contract.json";
+
+  try {
+    if (window.SKHPS_ENTRY_BASE_URL) {
+      contractPath = new URL("jonaminz.contract.json", window.SKHPS_ENTRY_BASE_URL).pathname;
+    }
+  } catch (error) {}
 
   function rlog(status, action, detail) {
     try {
@@ -74,7 +81,7 @@
   var script = document.createElement("script");
   script.async = true;
   script.src = "https://jonaminz.com/sdk/jonaminz-entry.js";
-  script.setAttribute("data-contract", "/jonaminz.contract.json");
+  script.setAttribute("data-contract", contractPath);
   script.onerror = function () {
     if (window.Jonaminz && window.Jonaminz.__bootstrap) {
       window.Jonaminz.__bootstrap.settle("degraded", "SDK_LOAD_FAILED");
@@ -95,5 +102,5 @@
     rlog("FAIL", "ready", error && error.message ? error.message : String(error));
   });
 
-  rlog("RUN", "init", { runtime: runtime, contract: "/jonaminz.contract.json" });
+  rlog("RUN", "init", { runtime: runtime, contract: contractPath });
 })();

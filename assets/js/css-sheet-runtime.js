@@ -1,7 +1,7 @@
 /*
 檔案位置：skhpsv2/assets/js/css-sheet-runtime.js
-時間戳記：2026-07-01 23:59 UTC+8
-用途：統一 CSS runtime；正式資料來源固定為後端 worker 讀取 Supabase CssRegistryRuntimeRow，失敗時回報錯誤不套假樣式。
+時間戳記：2026-07-12 12:14 UTC+8
+用途：統一 CSS runtime；簡單 token/rule 讀 Supabase CssRegistryRuntimeRow，複雜元件可追加 dev-only CssRegistryPackage；失敗時保留舊 rows/cache，不套假樣式。
 */
 
 (function () {
@@ -450,6 +450,36 @@
     return out;
   }
 
+  function normalizeBackendPackages(response) {
+    var packages;
+    if (!response || typeof response !== "object") return [];
+    packages = Array.isArray(response.packages)
+      ? response.packages
+      : response.data && Array.isArray(response.data.packages)
+        ? response.data.packages
+        : [];
+
+    return packages.map(function (item, index) {
+      item = item || {};
+      return {
+        env: String(item.env || "").trim(),
+        packageKey: String(item.packageKey || item.package_key || "").trim(),
+        displayName: String(item.displayName || item.display_name || "").trim(),
+        version: String(item.version || "").trim(),
+        manifest: item.manifest && typeof item.manifest === "object" ? item.manifest : {},
+        cssText: String(item.cssText || item.css_text || ""),
+        enabled: item.enabled !== false,
+        sortOrder: Number(item.sortOrder === undefined ? item.sort_order || index : item.sortOrder),
+        source: String(item.source || "").trim(),
+        updatedAt: String(item.updatedAt || item.updated_at || "").trim()
+      };
+    }).filter(function (item) {
+      return item.enabled && item.packageKey && item.cssText.trim();
+    }).sort(function (a, b) {
+      return a.sortOrder - b.sortOrder || a.packageKey.localeCompare(b.packageKey);
+    });
+  }
+
   function loadRowsFromBackend(sheetKeys) {
     if (!window.SKHPSBackend || typeof window.SKHPSBackend.call !== "function") {
       return Promise.reject(new Error("SKHPSBackend.call not available"));
@@ -468,12 +498,19 @@
       }
 
       var rows = normalizeBackendRows(res, sheetKeys);
-      if (!rows.length) throw new Error("getCssRegistryRuntime returned no rows");
+      var packages = normalizeBackendPackages(res);
+      if (!rows.length && !packages.length) throw new Error("getCssRegistryRuntime returned no CSS");
       rlog("OK", "loadCssRegistryBackend", {
         sheetKeys: sheetKeys,
-        rowsCount: rows.length
+        rowsCount: rows.length,
+        packageCount: packages.length,
+        packageStatus: res.packageStatus || "unknown"
       });
-      return rows;
+      return {
+        rows: rows,
+        packages: packages,
+        packageStatus: res.packageStatus || "unknown"
+      };
     });
   }
 
@@ -671,6 +708,19 @@
     };
   }
 
+  function buildPackageCss(packages) {
+    var css = [];
+    (Array.isArray(packages) ? packages : []).forEach(function (item) {
+      var key = String(item && item.packageKey || "").trim();
+      var text = String(item && item.cssText || "").trim();
+      if (!key || !text || item.enabled === false) return;
+      css.push("");
+      css.push("/* skhps css package: " + key.replace(/[^a-z0-9._-]/gi, "-") + " @ " + String(item.version || "dev") + " */");
+      css.push(text);
+    });
+    return css.join("\n");
+  }
+
   function sharedSwipeTableScaleCss() {
     return [
       "",
@@ -752,6 +802,8 @@
     var built;
     var cssText = String(payload.cssText || "");
     var styles = Array.isArray(payload.styles) ? payload.styles : [];
+    var packages = Array.isArray(payload.packages) ? payload.packages : [];
+    var packageCss = "";
 
     if (Array.isArray(payload.rows)) {
       rows = payload.rows;
@@ -777,6 +829,11 @@
       latestRows: []
     };
 
+    packageCss = buildPackageCss(packages);
+    if (packageCss) {
+      built.cssText = String(built.cssText || cssText) + packageCss;
+    }
+
     return {
       schemaVersion: Number(payload.schemaVersion || 1),
       generatedAt: payload.generatedAt || payload.savedAtText || "",
@@ -789,6 +846,9 @@
       latestRows: built.latestRows || [],
       styles: styles.length ? styles : rowsToStyles(built.latestRows || rows),
       cssText: built.cssText || cssText,
+      packages: packages,
+      packageCount: packages.length,
+      packageStatus: payload.packageStatus || "unknown",
       rowsCount: rows.length,
       latestRowsCount: built.latestRows ? built.latestRows.length : 0
     };
@@ -1070,16 +1130,21 @@
         setStatus("CSS Registry：重新讀取 Supabase（" + sheetKeys.length + " 組）", false);
       }
 
-      return loadRows(config, sheetKeys).then(function (rows) {
+      return loadRows(config, sheetKeys).then(function (loaded) {
         return {
           source: "supabase-css-registry",
           config: config,
           sheetKeys: sheetKeys,
-          rows: rows
+          rows: loaded.rows,
+          packages: loaded.packages,
+          packageStatus: loaded.packageStatus
         };
       });
     }).then(function (result) {
-      var model = modelFromRows(result.rows, result.source, result.sheetKeys);
+      var model = modelFromRows(result.rows, result.source, result.sheetKeys, {
+        packages: result.packages,
+        packageStatus: result.packageStatus
+      });
       rlog("OK", "applyRows", {
         source: result.source,
         sheetKeys: result.sheetKeys,
@@ -1145,9 +1210,11 @@
       var sheetKeys = getEnabledSheetKeys(config);
       if (!sheetKeys.length) throw new Error("CSS Registry keys are empty");
 
-      return loadRows(config, sheetKeys).then(function (rows) {
-        return modelFromRows(rows, options.source || "supabase-css-registry-refresh", sheetKeys, {
-          upstreamSource: "supabase"
+      return loadRows(config, sheetKeys).then(function (loaded) {
+        return modelFromRows(loaded.rows, options.source || "supabase-css-registry-refresh", sheetKeys, {
+          upstreamSource: "supabase",
+          packages: loaded.packages,
+          packageStatus: loaded.packageStatus
         });
       });
     });

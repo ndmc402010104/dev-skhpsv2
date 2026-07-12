@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/entry-core.js
-時間戳記：2026-06-16 UTC+8
+時間戳記：2026-07-12 12:24 UTC+8
 用途：SKHPS 共用 entry core；統一載入共通 JS、掛載 shell、回報 skhps-shell，再載入頁面/外部專案自己的 JS。
 
 責任切分：
@@ -41,6 +41,7 @@
     "assets/js/config.js",
     "assets/js/route.js",
     "assets/js/backend-client.js",
+    { path: "assets/js/jonaminz-bridge.js", optional: true },
     "assets/js/css-sheet-runtime.js"
   ];
 

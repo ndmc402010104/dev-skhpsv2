@@ -96,9 +96,9 @@
     "worker": {
       "enabled": true,
       "baseUrlByEnv": {
-        "local-dev": "https://skhps-backend.ndmc402010104.workers.dev",
-        "local": "https://skhps-backend.ndmc402010104.workers.dev",
-        "dev": "https://skhps-backend.ndmc402010104.workers.dev",
+        "local-dev": "https://skhps-backend-dev.ndmc402010104.workers.dev",
+        "local": "https://skhps-backend-dev.ndmc402010104.workers.dev",
+        "dev": "https://skhps-backend-dev.ndmc402010104.workers.dev",
         "prod": "https://skhps-backend.ndmc402010104.workers.dev"
       },
       "actions": {
@@ -148,6 +148,18 @@
           "timeoutMs": 8000
         },
         "getCssRegistryRuntime": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 12000
+        },
+        "getCssRegistryPackages": {
+          "enabled": true,
+          "route": "/api/action",
+          "method": "POST",
+          "timeoutMs": 12000
+        },
+        "saveCssRegistryPackage": {
           "enabled": true,
           "route": "/api/action",
           "method": "POST",

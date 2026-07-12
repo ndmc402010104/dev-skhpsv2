@@ -1,0 +1,32 @@
+{
+  "contractVersion": 1,
+  "app": {
+    "projectId": "skhpsv2",
+    "title": "SKHPS",
+    "description": "新光整形外科工作平台；保留自己的 Header、Footer、runtime 與外部 App 水庫。"
+  },
+  "shell": false,
+  "css": "tokens",
+  "entries": [
+    {
+      "entryId": "home",
+      "title": "SKHPS 首頁",
+      "description": "SKHPS 外部 App 前台入口。",
+      "url": "/",
+      "deprecated": false
+    },
+    {
+      "entryId": "admin",
+      "title": "SKHPS 後台",
+      "description": "SKHPS registry 與管理入口。",
+      "url": "/admin.html",
+      "deprecated": false
+    }
+  ],
+  "objects": [],
+  "capabilities": {
+    "supports": [],
+    "requests": [],
+    "requires": []
+  }
+}

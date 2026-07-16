@@ -13,15 +13,18 @@ bookmarklet；水庫合規（零 inline CSS，只用既有 skhps class）。
 加「跳台工具」入口（不需登入）。
 2026-07-17：userscript 加 @updateURL/@downloadURL（v2.0.2，改版自動更新免重裝）；
 工具頁加「下載 Via 瀏覽器」按鈕（Play 商店 mark.via.gp）。
+2026-07-17：手機版按鈕簡化——移除失敗的 Via intent，改一顆「開啟醫院系統快速
+登入」一般連結（Android/iOS 共用，在當前瀏覽器開）；前台「跳台工具」拿掉 emoji
+與其他入口一致。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.6-202607170157",
+  version: "v2.12.7-202607170209",
   major: 2,
   minor: 12,
-  patch: 6,
-  buildTime: "202607170157",
-  updatedAt: "2026-07-17T01:57:00+08:00",
+  patch: 7,
+  buildTime: "202607170209",
+  updatedAt: "2026-07-17T02:09:00+08:00",
   source: "version.js"
 };
 

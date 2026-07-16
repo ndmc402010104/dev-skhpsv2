@@ -110,9 +110,23 @@ element.style、不注入 CSS）；視覺一律交給既有 skhps-* class 與瀏
     });
   }
 
+  // userscript 安裝連結設成絕對網址（管理器偵測 .user.js 較穩定）。
+  // 刻意不加 ?v= cache-bust——query 會干擾部分管理器的 .user.js 偵測，
+  // 而且安裝是一次性動作，不需要 cache-bust。
+  function wireUserscriptLink() {
+    var link = $("[data-skhps-platform-timer-userscript]");
+    if (!link) return;
+    var origin = "";
+    try { origin = window.location.origin || ""; } catch (e) { origin = ""; }
+    if (origin) {
+      link.setAttribute("href", origin + "/assets/js/tools/platform-timer.user.js");
+    }
+  }
+
   function init() {
     var textarea = $("[data-skhps-platform-timer-source]");
 
+    wireUserscriptLink();
     setStatus("載入程式碼中...");
 
     fetch(withVersion(SOURCE_URL), { cache: "no-store" })

@@ -11,15 +11,17 @@ bookmarklet；水庫合規（零 inline CSS，只用既有 skhps class）。
 2026-07-17：真機回饋調整——面板/啟動鈕移到左上/右上＋寬度自適應手機；工具頁
 加「快速登入」與「用 Via 開啟(intent)」按鈕；Android 步驟改推 Via；前台首頁
 加「跳台工具」入口（不需登入）。
+2026-07-17：userscript 加 @updateURL/@downloadURL（v2.0.2，改版自動更新免重裝）；
+工具頁加「下載 Via 瀏覽器」按鈕（Play 商店 mark.via.gp）。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.5-202607170146",
+  version: "v2.12.6-202607170157",
   major: 2,
   minor: 12,
-  patch: 5,
-  buildTime: "202607170146",
-  updatedAt: "2026-07-17T01:46:00+08:00",
+  patch: 6,
+  buildTime: "202607170157",
+  updatedAt: "2026-07-17T01:57:00+08:00",
   source: "version.js"
 };
 

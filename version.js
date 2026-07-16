@@ -8,15 +8,18 @@
 bookmarklet；水庫合規（零 inline CSS，只用既有 skhps class）。
 2026-07-17：工具包加手機版 userscript（platform-timer.user.js，由 bookmarklet
 產生器包出，@grant none＋偵測 ko 浮出啟動鈕），含 Android/iOS 安裝步驟。
+2026-07-17：真機回饋調整——面板/啟動鈕移到左上/右上＋寬度自適應手機；工具頁
+加「快速登入」與「用 Via 開啟(intent)」按鈕；Android 步驟改推 Via；前台首頁
+加「跳台工具」入口（不需登入）。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.4-202607170126",
+  version: "v2.12.5-202607170146",
   major: 2,
   minor: 12,
-  patch: 4,
-  buildTime: "202607170126",
-  updatedAt: "2026-07-17T01:26:00+08:00",
+  patch: 5,
+  buildTime: "202607170146",
+  updatedAt: "2026-07-17T01:46:00+08:00",
   source: "version.js"
 };
 

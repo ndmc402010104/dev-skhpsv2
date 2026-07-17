@@ -358,3 +358,103 @@ Supabase table，切換＝把對接的 table 換掉」。設計裁決：**方向
   DB 指標正確寫入 →（完全不同網域的）skhpsv2 首頁 `--skhps-primary`
   真的變回 `#516d87`（舊藍色）、entry-cards-base 共用層正確運作
   （入口卡片保留完整布局，只是換冷色，沒有裸奔）→ 切回暖砂復原成功。
+
+---
+
+## §8 CSS Setting 驗收台改版：水庫儀表化（設計定稿 2026-07-17）
+
+### 8.0 目標與分期
+
+CSS Setting 從「陽春 pill 清單」變成**水庫儀表板**：頁面本身好看（暖砂
+語彙）、而且每個展示區直接標出它背後的 registry component 與規則數——
+展品若只靠本頁內嵌樣式撐著（＝水庫沒接到），畫面上直接亮警示。這就是
+「反著看 css-setting 就知道誰沒改到」的落地：2026-07-17 的三分頁冷色
+bug（Loading／Timer／Kanban 展品其實不吃水庫）如果有這個功能，會自己
+浮出來，不用等人眼發現。
+
+分三期。第一期只動 shell（版面／導覽／區段框架），不動展品樣式來源。
+
+### 8.1 全站 CSS 來源盤點結論（2026-07-17，§8 的前提事實）
+
+水庫本體：CssRegistryRule 39 個 component 約 4,400 條（env=global，
+prod/dev 共用）＋ 8 個暖砂 package（dev-only）。產品頁大體乾淨，
+例外分兩類：
+
+**設計內例外（不處理）**：skhps-loading.css（開場第一幀，已 token 化
+支援雙主題）；loading-gate／footer 用 JS 寫 CSS 變數（狀態值，視覺仍由
+水庫規則消費）；PDF 匯出器（列印產物）；platform-timer 工具（目標是院內
+EIP 頁）；QR 碼黑白（功能必需）；quick-login 的 EIP 頁面鏡像（外部網站
+快照）。
+
+**待歸隊（第二期清單，按大小排）**：
+1. `css-setting/index.html` 內嵌 `<style>` ~2,450 行——最大違規，含
+   展品樣式；部分 class（sk-empty／sk-timer-meta／sk-media-item／
+   sk-lane…）只存在這裡，registry 完全沒有（14/TIMER 只有 1 條、
+   18/KANBAN 只有 3 條）＝鏡子說謊的根源。內部尚餘 ~150 條冷色寫死
+   宣告（tables／expand 區段的 hover、border 級細節）。
+2. `skhpsv2/backend-project-launcher.html` 內嵌 ~666 行（56 條帶色）——
+   跟 registry「50 / BACKEND PROJECT LAUNCHER」331 條**雙源並存**，
+   檔頭註明「暫時保留」。
+3. `skhpsv2/assets/js/runtime.js` ensureStyle() 注入的儀表板深色樣式
+   （#101820 等寫死）——dev 被 wave1 package 蓋掉、prod 用的就是它。
+4. `skhps-qr-signin/qr-signin-backend.html` 內嵌 156 行（.sk-option
+   pill，一處寫死 rgba）。
+5. 零碎：`css-setting/assets/css/swipe-more-card.css`（153 行）、
+   fragments 內 18 個示範用 style= 屬性、signpage.html 29 行純版面
+   grid、元件 JS 的 embedded fallback 副本（斷線保護，但會過期）。
+
+**功能性防護層（可留、建議長期歸隊）**：footer.js 注入的 footer guard
+（純結構無色彩）、quick-login manual form grid（同）。
+
+### 8.2 第一期：Shell 改版（Sonnet 實作範圍）
+
+1. **導覽分組**：18 顆 pill 分組呈現，組標籤用 `.skhps-eyebrow` 樣式；
+   fragment 載入機制（`data-css-setting-fragment`）完全不動。分組：
+   - 基礎：總覽、Tokens、Rules
+   - 版面：Typography / Buttons / Cards、Header、Footer
+   - 表單：Forms
+   - 資料表：Tables Summary、Swipe Action Table、Expand Detail Table、
+     Simple Table
+   - 互動：Loading、Timer / QR / Media、Drag & Drop、Modal Settings、
+     Feedback
+   - 系統：Style Packages、Sheet CSS 更新
+2. **Hero 儀表列**：hero 下方一排 meta chips：作用中主題（runtime 回應
+   的 `theme` 欄位）、env、啟用 package 數、rows 總數。資料來源：
+   css-sheet-runtime 需新增 `loader.lastPayload()`（回傳最近一次組好的
+   payload，含 rows／packages／theme——skhpsv2 側小改，一個 getter）。
+3. **Specimen frame ＋ registry 狀態 chip**：每個 fragment 掛載時外包
+   框架：sk-num 眉標＋標題＋「這一區吃哪些 component」chip 列——
+   `component 名 ×規則數`；若對照表宣告的 component 在 rows 裡低於
+   門檻（如 <10 條）顯示 `⚠ inline-only` 警示 chip（terra 色）。
+   fragment→component 對照表（靜態 map 放 app.js）：
+   - 01-tokens → 00 / TOKENS、01 / TOKENS
+   - typography/buttons/cards → 03 / LAYOUT + CARDS + TYPOGRAPHY、
+     02+07 / BUTTON(S)、04 / CARDS、08 / BADGES
+   - forms → 08 / FORMS、09 / FORMS、form
+   - tables-summary／simple-table →（表格 rows 分散，標 swipe-table、
+     expand-table）
+   - swipe → swipe-table；expand → expand-table、date-time
+   - feedback → 06 / FEEDBACK；modal → modal
+   - loading → （registry 無：預期亮 ⚠）
+   - timer-media → 14 / TIMER（1 條：預期亮 ⚠）
+   - kanban → 18 / KANBAN + MOBILE DRAG（3 條：預期亮 ⚠）
+   - header → 04 / HEADER、19、20；footer → 05 / FOOTER + RUNTIME
+4. **樣式載體**：新 package `css-setting-shell`（common 層、無
+   themeName、全部用 token 取色、sort 60，env=dev）。index.html 內嵌塊
+   暫留作 prod fallback；dev 上 package 後載必贏。**不再往內嵌塊補任何
+   新樣式**。
+5. 版號 bump；Playwright 驗證：桌機 1280 與 720px 各截一張、三個 ⚠
+   chip 真的亮、theme40 預覽下 shell 不裸奔（entry-cards-base 前例）。
+
+### 8.3 第二期：展品樣式回水庫
+
+8.1 待歸隊清單逐項搬。css-setting 內嵌塊按區段拆進 CssRegistryRule
+（component 對齊現有命名；**注意 sort_order 缺口地雷**，見
+[[project_css_registry_sort_order_gap]]：新列 sort_order=0 會輸給舊列），
+搬完刪該內嵌區段，⚠ chip 逐區熄滅＝驗收標準。runtime.js 儀表板深色
+樣式搬進 registry（prod 才能吃到主題化的儀表板）。
+
+### 8.4 第三期：prod 推廣連動
+
+跟 §6 item 8（package 機制上 prod）同一波：css-setting-shell 隨之在
+prod 生效，內嵌 fallback 刪除；backend-project-launcher 的雙源同時收斂。

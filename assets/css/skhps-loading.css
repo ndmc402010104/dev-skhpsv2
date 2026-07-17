@@ -24,21 +24,24 @@
    ========================================================= */
 
 :root {
-  --skhps-loading-page-bg: #e6ebf0;
-  --skhps-loading-page-bg-mid: #e7edf2;
-  --skhps-loading-page-bg-end: #e5ebf0;
+  /* 2026-07-17：暖砂主題色碼替換（只換色，不動結構/specificity/!important
+     層次——這份檔案是開場第一幀關鍵路徑，歷史 patch 疊層的整併是獨立、
+     風險更高的任務，留給以後專門處理）。 */
+  --skhps-loading-page-bg: #FBF7EE;
+  --skhps-loading-page-bg-mid: #FAF5EC;
+  --skhps-loading-page-bg-end: #F6EFE0;
   --skhps-loading-page-gradient: linear-gradient(
     135deg,
-    var(--skhps-loading-page-bg, #e6ebf0) 0%,
-    var(--skhps-loading-page-bg-mid, #e7edf2) 48%,
-    var(--skhps-loading-page-bg-end, #e5ebf0) 100%
+    var(--skhps-loading-page-bg, #FBF7EE) 0%,
+    var(--skhps-loading-page-bg-mid, #FAF5EC) 48%,
+    var(--skhps-loading-page-bg-end, #F6EFE0) 100%
   );
   color-scheme: light;
 }
 
 html {
   min-height: 100%;
-  background-color: var(--skhps-loading-page-bg, #e6ebf0);
+  background-color: var(--skhps-loading-page-bg, #FBF7EE);
   background-image: var(--skhps-loading-page-gradient);
 }
 
@@ -73,10 +76,10 @@ html.skhps-loading {
   overflow: hidden;
   scrollbar-width: none;
   background:
-    radial-gradient(circle at 24% 18%, rgba(81, 109, 135, .18), transparent 34%),
-    radial-gradient(circle at 78% 24%, rgba(167, 141, 114, .13), transparent 30%),
-    radial-gradient(circle at 18% 82%, rgba(91, 123, 150, .10), transparent 32%),
-    radial-gradient(circle at 88% 84%, rgba(167, 141, 114, .08), transparent 28%),
+    radial-gradient(circle at 24% 18%, rgba(88, 127, 92, .18), transparent 34%),
+    radial-gradient(circle at 78% 24%, rgba(192, 113, 79, .13), transparent 30%),
+    radial-gradient(circle at 18% 82%, rgba(88, 127, 92, .10), transparent 32%),
+    radial-gradient(circle at 88% 84%, rgba(192, 113, 79, .08), transparent 28%),
     var(--skhps-loading-page-gradient);
   background-size:
     125% 125%,
@@ -102,8 +105,8 @@ html.skhps-css-loading:not(.skhps-loading) {
   overflow: hidden;
   scrollbar-width: none;
   background:
-    radial-gradient(circle at 24% 18%, rgba(81, 109, 135, .18), transparent 34%),
-    radial-gradient(circle at 78% 24%, rgba(167, 141, 114, .13), transparent 30%),
+    radial-gradient(circle at 24% 18%, rgba(88, 127, 92, .18), transparent 34%),
+    radial-gradient(circle at 78% 24%, rgba(192, 113, 79, .13), transparent 30%),
     var(--skhps-loading-page-gradient);
 }
 
@@ -314,9 +317,9 @@ html:not(.skhps-loading):not(.skhps-css-loading):not(.skhps-main-loading)[data-s
   padding: 6px 12px;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
   font-size: 12px;
-  background: rgba(245, 248, 252, .94);
-  border-top: 1px solid rgba(81, 109, 135, .22);
-  color: #12233a;
+  background: rgba(255, 253, 248, .94);
+  border-top: 1px solid rgba(88, 127, 92, .22);
+  color: #38332B;
 }
 
 .skhps-footer-left,
@@ -398,7 +401,7 @@ html.skhps-loading::before {
   transform: translate(-50%, -50%);
   display: block;
   max-width: calc(100vw - 48px);
-  color: #061833;
+  color: #38332B;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Noto Sans JP", sans-serif;
   font-size: 23px;
   font-weight: 850;
@@ -407,8 +410,8 @@ html.skhps-loading::before {
   white-space: nowrap;
   text-align: center;
   text-shadow:
-    0 1px 0 rgba(255, 255, 255, .82),
-    0 12px 32px rgba(31, 45, 55, .10);
+    0 1px 0 rgba(255, 253, 248, .82),
+    0 12px 32px rgba(56, 51, 43, .10);
   animation: skhps-loading-text 1.65s ease-in-out infinite;
 }
 
@@ -436,20 +439,20 @@ html.skhps-loading::after {
   background:
     repeating-linear-gradient(
       90deg,
-      rgba(81, 109, 135, .18) 0%,
-      rgba(81, 109, 135, .18) 36%,
-      rgba(167, 141, 114, .20) 48%,
-      #516d87 58%,
-      #a78d72 66%,
-      #5b7b96 76%,
-      rgba(81, 109, 135, .16) 88%,
-      rgba(81, 109, 135, .18) 100%
+      rgba(88, 127, 92, .18) 0%,
+      rgba(88, 127, 92, .18) 36%,
+      rgba(192, 113, 79, .20) 48%,
+      #587F5C 58%,
+      #C0714F 66%,
+      #4A6F50 76%,
+      rgba(88, 127, 92, .16) 88%,
+      rgba(88, 127, 92, .18) 100%
     );
   background-size: 185% 100%;
   background-position: 165% 0;
   box-shadow:
-    0 1px 8px rgba(81, 109, 135, .18),
-    0 0 1px rgba(167, 141, 114, .28);
+    0 1px 8px rgba(88, 127, 92, .18),
+    0 0 1px rgba(192, 113, 79, .28);
   animation: skhps-loading-bar 1.9s linear infinite;
 }
 
@@ -548,7 +551,7 @@ html.skhps-css-loading:not(.skhps-loading) {
 
 html.skhps-loading::before {
   top: 42%;
-  color: #12233a;
+  color: #38332B;
   font-size: 23px;
   animation: skhps-loading-progress-title 2.4s ease-in-out infinite;
 }
@@ -570,13 +573,13 @@ html.skhps-loading::after {
   background:
     linear-gradient(
       90deg,
-      rgba(91, 118, 142, 0.035) 0%,
-      rgba(91, 118, 142, 0.060) 50%,
-      rgba(91, 118, 142, 0.035) 100%
+      rgba(88, 127, 92, 0.035) 0%,
+      rgba(88, 127, 92, 0.060) 50%,
+      rgba(88, 127, 92, 0.035) 100%
     );
   box-shadow:
-    inset 0 0 0 1px rgba(81, 109, 135, 0.035),
-    0 1px 10px rgba(81, 109, 135, 0.035);
+    inset 0 0 0 1px rgba(88, 127, 92, 0.035),
+    0 1px 10px rgba(88, 127, 92, 0.035);
 }
 
 /* progress fill */
@@ -598,13 +601,13 @@ html.skhps-loading body::after {
   background:
     linear-gradient(
       90deg,
-      rgba(91, 118, 142, 0.52) 0%,
-      #5b768e 42%,
-      #41586d 74%,
-      #516d87 100%
+      rgba(88, 127, 92, 0.52) 0%,
+      #4F7654 42%,
+      #3A5B3E 74%,
+      #587F5C 100%
     );
   box-shadow:
-    0 0 8px rgba(81, 109, 135, 0.060);
+    0 0 8px rgba(88, 127, 92, 0.060);
   will-change: transform;
   transition: transform 220ms cubic-bezier(.18, .72, .16, 1);
 }
@@ -657,7 +660,7 @@ html.skhps-css-loading:not(.skhps-loading) {
 
 html.skhps-loading::before {
   top: 42%;
-  color: #12233a;
+  color: #38332B;
   font-size: 23px;
   animation: skhps-loading-progress-title 2.4s ease-in-out infinite;
 }
@@ -678,13 +681,13 @@ html.skhps-loading::after {
   background:
     linear-gradient(
       90deg,
-      rgba(91, 118, 142, 0.035) 0%,
-      rgba(91, 118, 142, 0.060) 50%,
-      rgba(91, 118, 142, 0.035) 100%
+      rgba(88, 127, 92, 0.035) 0%,
+      rgba(88, 127, 92, 0.060) 50%,
+      rgba(88, 127, 92, 0.035) 100%
     );
   box-shadow:
-    inset 0 0 0 1px rgba(81, 109, 135, 0.035),
-    0 1px 10px rgba(81, 109, 135, 0.035);
+    inset 0 0 0 1px rgba(88, 127, 92, 0.035),
+    0 1px 10px rgba(88, 127, 92, 0.035);
 }
 
 html.skhps-loading body::after {
@@ -705,13 +708,13 @@ html.skhps-loading body::after {
   background:
     linear-gradient(
       90deg,
-      rgba(91, 118, 142, 0.52) 0%,
-      #5b768e 42%,
-      #41586d 74%,
-      #516d87 100%
+      rgba(88, 127, 92, 0.52) 0%,
+      #4F7654 42%,
+      #3A5B3E 74%,
+      #587F5C 100%
     );
   box-shadow:
-    0 0 8px rgba(81, 109, 135, 0.060);
+    0 0 8px rgba(88, 127, 92, 0.060);
   will-change: transform;
   transition: none;
 }
@@ -803,10 +806,10 @@ html.skhps-loading body::after {
   background:
     linear-gradient(
       90deg,
-      rgba(91, 118, 142, 0.58) 0%,
-      #5b768e 42%,
-      #41586d 74%,
-      #516d87 100%
+      rgba(88, 127, 92, 0.58) 0%,
+      #4F7654 42%,
+      #3A5B3E 74%,
+      #587F5C 100%
     ) !important;
 }
 
@@ -836,13 +839,13 @@ html.skhps-loading::before {
 }
 
 html.skhps-loading::after {
-  background: rgba(81, 109, 135, 0.105) !important;
+  background: rgba(88, 127, 92, 0.105) !important;
   box-shadow: none !important;
   filter: none !important;
 }
 
 html.skhps-loading body::after {
-  background: #516d87 !important;
+  background: #587F5C !important;
   box-shadow: none !important;
   filter: none !important;
   transition: none !important;
@@ -872,7 +875,7 @@ html.skhps-loading body::after {
     round 999px
   ) !important;
   border-radius: 999px !important;
-  background: #516d87 !important;
+  background: #587F5C !important;
   box-shadow: none !important;
   filter: none !important;
   transition: none !important;
@@ -886,7 +889,7 @@ html.skhps-loading body::after {
 
 html,
 body {
-  background-color: var(--skhps-loading-page-bg, #e6ebf0);
+  background-color: var(--skhps-loading-page-bg, #FBF7EE);
 }
 
 html {
@@ -900,7 +903,7 @@ body {
 html.skhps-loading,
 html.skhps-css-loading:not(.skhps-loading) {
   background: var(--skhps-loading-page-gradient) !important;
-  background-color: var(--skhps-loading-page-bg, #e6ebf0) !important;
+  background-color: var(--skhps-loading-page-bg, #FBF7EE) !important;
   background-size: auto !important;
   background-position: 0 0 !important;
   animation: none !important;

@@ -168,6 +168,33 @@
    - 外部 App（qr-signin ×3 頁、quick-login、dressing-inventory、smoke）
      逐一驗收，各 App 自帶的補丁 CSS 可能要跟著調
 
+## 4.5 主題切換地基（2026-07-17 補，讓「以後批次換主題」變成一個 UPDATE）
+
+實作時發現現場其實有**兩套並行 token 系統**：`--skhps-*`（54 個，00/TOKENS）
+與 `--sk-*`（45 個，01/TOKENS），數值常不一致（例如 shadow/radius）。今天不
+重構統一成一套（風險/工作量都太大），改用「兩套都改寫成同一份暖砂值」讓不管
+元件引用哪一套都換膚——但**建立以下慣例，讓未來要嘛統一成一套、要嘛整批換
+主題，都只需要動 tokens package，不用碰 component package**：
+
+- **Component package 只准引用 `var(--skhps-*)` / `var(--sk-*)`，不准寫死
+  色碼／陰影／圓角**（review 時 grep 沒加 var() 包住的 `#`/`rgba(`）。
+- **同一時間、同一 env，只有一個 `theme-tokens-*` package 是
+  `enabled=true`**。換主題＝停用舊的、啟用（或新增）新的 tokens package
+  ——一個 `saveCssRegistryPackage`（或直接 UPDATE enabled）就整站換膚，
+  不用碰任何 component package。
+- **命名慣例**：tokens package 一律 `packageKey: theme-tokens-<name>`
+  （本主題＝`theme-tokens-warm-sand`），`sortOrder` 給低值（10）確保排在
+  component package 之前（雖然理論上不影響——component 用 var() 不寫死值，
+  順序只在極少數需要精確覆蓋時才重要）。`manifest.kind` 標
+  `"theme-tokens"`、`manifest.themeName` 標主題名——沿用 Codex 在
+  `skhps-v3-shell` package 已經用的 `manifest.kind:"component-package"`／
+  `dependencies` 慣例，不是我方新發明。
+- component package 的 `manifest.dependencies` 寫 `["theme-tokens"]`
+  （邏輯依賴、非鎖定特定主題名），`manifest.kind:"component-package"`。
+- 兩套既有 token 系統要不要收斂成一套，是**獨立、之後**的重構決定（牽動
+  4000+ 列 component 規則的 var() 引用名，风险/工作量遠大於今天的換膚），
+  這裡先不做，只確保現在的架構「撐得住」未來做這件事。
+
 ## 5. 實作順序建議（給實作 session 的 checklist）
 
 1. 盤點現況：讀 `css-sheet-runtime.js` 全文＋worker `getCssRegistryRuntime`／

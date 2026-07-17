@@ -205,20 +205,69 @@ Loading Gate：
     return raw;
   }
 
+  // 2026-07-17（暖砂第一波）：入口卡片圖示，依 appId 關鍵字挑一個貼切的
+  // inline SVG（stroke currentColor，跟著卡片 icon 底色走）；沒對到的
+  // app 用通用箭頭方塊，不會缺圖示。
+  var APP_ICONS = [
+    { test: /qr/i, svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.2"></rect><rect x="14" y="3" width="7" height="7" rx="1.2"></rect><rect x="3" y="14" width="7" height="7" rx="1.2"></rect><path d="M14 14h3v3h-3zM20 14h1M14 20h1M20 20h1"></path></svg>' },
+    { test: /login|quick/i, svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="13" r="3.4"></circle><path d="M11 11.5 20 5M16 8l2.2 2.2M13.2 10l1.8 1.8"></path></svg>' },
+    { test: /dressing|inventory/i, svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.2 12 3.5l8.5 4.7v7.6L12 20.5l-8.5-4.7z"></path><path d="M3.5 8.2 12 12.9l8.5-4.7M12 12.9v7.6"></path></svg>' },
+    { test: /css-setting|theme|setting/i, svg: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"></circle><path d="M12 3.5v2.4M12 18.1v2.4M4.6 12H7M17 12h2.4M6.3 6.3l1.7 1.7M16 16l1.7 1.7M17.7 6.3 16 8M8 16l-1.7 1.7"></path></svg>' }
+  ];
+  var DEFAULT_APP_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M9 12h6M12 9v6"></path></svg>';
+
+  function pickAppIconSvg(app) {
+    var key = String((app && (app.appId || app.title)) || "");
+    for (var i = 0; i < APP_ICONS.length; i += 1) {
+      if (APP_ICONS[i].test.test(key)) return APP_ICONS[i].svg;
+    }
+    return DEFAULT_APP_ICON;
+  }
+
   function createAppButton(app) {
     var a = document.createElement("a");
     var env = app.env || getRuntime();
     var href = rewriteLocalDevUrl(app.href || "#", env);
+    var title = app.title || app.appId || "未命名外部專案";
+    var description = String(app.description || "").trim();
 
     if (href !== "#" && window.SKHPSConfig && typeof window.SKHPSConfig.withRuntime === "function") {
       href = window.SKHPSConfig.withRuntime(href, window.SKHPS_CONFIG || {}, env);
     }
 
-    a.className = "skhps-btn skhps-btn-secondary skhps-btn-lg";
+    a.className = "skhps-entry-card";
     a.href = href;
-    a.textContent = app.title || app.appId || "未命名外部專案";
     a.setAttribute("data-skhps-external-app-id", app.appId || "");
     a.setAttribute("data-skhps-external-app-env", app.env || "");
+
+    var icon = document.createElement("span");
+    icon.className = "skhps-entry-card-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = pickAppIconSvg(app);
+
+    var body = document.createElement("span");
+    body.className = "skhps-entry-card-body";
+
+    var titleEl = document.createElement("strong");
+    titleEl.className = "skhps-entry-card-title";
+    titleEl.textContent = title;
+    body.appendChild(titleEl);
+
+    if (description) {
+      var descEl = document.createElement("span");
+      descEl.className = "skhps-entry-card-desc";
+      descEl.textContent = description;
+      body.appendChild(descEl);
+    }
+
+    var arrow = document.createElement("span");
+    arrow.className = "skhps-entry-card-arrow";
+    arrow.setAttribute("aria-hidden", "true");
+    arrow.textContent = "→";
+
+    a.appendChild(icon);
+    a.appendChild(body);
+    a.appendChild(arrow);
 
     return a;
   }

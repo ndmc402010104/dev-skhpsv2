@@ -207,3 +207,53 @@
 7. 全綠後才討論上 prod（沿用 gated/分批策略）
 
 > 實作使用 Sonnet（設計 Fable／實作 Sonnet 分工）。
+
+## 6. 實作波次清單（2026-07-17 Fable 盤點 dev 現況後定的優先序）
+
+**已完成（dev）**：tokens package（兩套命名空間同步換暖）、寫死色碼補丁
+package、loading.css 換暖、v3 干擾 package 停用、156 列死列清除。
+dev 站整體已是暖砂底＋鼠尾草綠，但以下是「還看得出工程感」的殘留。
+
+### 第一波「門面完工」（高視覺報酬、低風險，一個 session 可完）
+
+1. **入口卡片化**（工程感最大殘留）：首頁/後台的入口現在是整條大藥丸
+   按鈕，改成深化版樣品的入口卡——tint 底 icon 方塊＋標題＋一行描述＋
+   「進入 →」，`repeat(auto-fit, minmax(205px, 1fr))` grid。動
+   external-apps-runtime 的渲染模板＋新 component package
+   （`warm-sand-entry-cards`）。icon 用 inline SVG stroke currentColor
+   （QR 方塊/鑰匙/箱子/計時器，樣品裡有現成的）。
+2. **Runtime 診斷面板暖石墨化**：實測 `.skhps-runtime-panel` 仍是冷藍黑
+   （#101820、文字 #f5f7fb、strong #b8d7ff），與暖砂頁面衝突。改用
+   tokens package 已備好的 `--skhps-instrument-*`（暖石墨 #201C16 家族）
+   ＋狀態燈發光（`box-shadow: 0 0 9px 0 <燈色>`）＋數值 mono
+   `tabular-nums`。深化版樣品「考題六」的正式落地——使用者最愛的
+   專業感所在，優先做好。
+3. **按鈕語言統一**：大按鈕從全圓藥丸 → 深化版定稿的 15px 圓角矩形
+   （厚 padding）；藥丸形狀保留給 chips/篩選/狀態標籤。
+4. **eyebrow 換赤陶**：ADMIN／CORE TOOLS／常用功能集中入口這些 eyebrow
+   目前是鼠尾草綠，按規格應為赤陶 `--skhps-w-terra` letterspaced——
+   「赤陶只當點綴」的第一個正式落點，小成本大記憶點。
+
+### 第二波「後台密度」
+
+5. **表格配方落地**：QR 後台/敷料庫存表格套深化版表格語彙（th 砂色帶
+   `--skhps-w-th-band`、hairline、數字 mono 右對齊、選中列 sage 左指示條
+   `inset 3px 0 0`、hover `--skhps-w-row-hover`）。對象 component：
+   40/QR SIGNIN、40/QR SIGNIN BACKEND、swipe-table、60/DRESSING。
+   量大，一個 component 一個 package 逐一收、逐一截圖驗收。
+6. **表單狀態統一**：focus ring（`--skhps-w-focus-ring`）、錯誤態
+   （err 框＋help 文字轉 err）、disabled 透明度，三態全站一致。
+7. **Toast 標準元件**：深墨底暖白字（`--skhps-w-toast-*`），補上系統
+   目前缺的輕量成功回饋（現在只有 alert 橫幅）。
+
+### 第三波「上線路徑與收尾」（機制）
+
+8. **Prod promotion 路徑**：目前整個暖砂活在 dev-only package——
+   `CssRegistryPackage` 表 CHECK constraint 只允許 local-dev/dev，
+   prod worker（skhps-backend）也還沒部署 package 讀取程式碼。上 prod 需：
+   (a) migration 放寬 env constraint（加 prod）＋(b) worker 加
+   promote action（dev→prod 複製、留 revision、AskUserQuestion 確認）＋
+   (c) prod worker deploy。原則不變：一般使用者無感、全綠才切。
+9. **舊列第二批清理**：等一二波 package 穩定且視覺驗收過，再刪被取代的
+   舊 rows（這批目前仍在 prod 渲染，不像 156 列死列是零風險）。
+10. **兩套 token 系統收斂**（§4.5）：最後做。

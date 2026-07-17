@@ -20,11 +20,32 @@
     只記錄「這次開網域後是否已經抓過一次 Supabase CSS Registry」。
     關閉分頁/瀏覽器後，下次第一次進網域會重新抓 registry。
   */
-  var CACHE_KEY = "skhpsv2.cssRegistryRuntimeCache.v1";
+  var CACHE_KEY_BASE = "skhpsv2.cssRegistryRuntimeCache.v1";
   var LEGACY_CACHE_KEYS = [
     "skhpsv2.cssSheetRuntimeCache.v1",
     "skhpsv2.cssSheetRuntimeCache.v2"
   ];
+
+  /*
+    2026-07-17（§7 主題切換）：per-browser 主題預覽 flag。有值就跟著請求
+    送給 worker（payload.theme，白名單制，worker 端會擋掉不合法值），
+    快取 key 也帶上這個值——不然切主題後重載，可能直接吃到另一個主題的
+    舊快取，畫面看起來像沒切成功。
+  */
+  var THEME_PREVIEW_KEY = "skhpsv2.themePreview.v1";
+
+  function getThemePreview() {
+    try {
+      return String(localStorage.getItem(THEME_PREVIEW_KEY) || "").trim();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function CACHE_KEY() {
+    var theme = getThemePreview();
+    return theme ? CACHE_KEY_BASE + ".theme=" + theme : CACHE_KEY_BASE;
+  }
   var SESSION_READY_KEY = "skhpsv2.cssRegistryRuntimeSessionReady.v1";
   var LEGACY_SESSION_READY_KEYS = [
     "skhpsv2.cssSheetRuntimeSessionReady.v1"
@@ -485,14 +506,22 @@
       return Promise.reject(new Error("SKHPSBackend.call not available"));
     }
 
+    var themePreview = getThemePreview();
+
     rlog("RUN", "loadCssRegistryBackend", {
-      sheetKeys: sheetKeys
+      sheetKeys: sheetKeys,
+      themePreview: themePreview || "(indicator)"
     });
 
-    return window.SKHPSBackend.call("getCssRegistryRuntime", {
+    var payload = {
       registryKeys: sheetKeys,
       sheetKeys: sheetKeys
-    }).then(function (res) {
+    };
+    // 有 per-browser 預覽值才帶 theme；沒有就讓 worker 自己讀全站指標，
+    // 不要送空字串（送了反而會被當成「明確要求空主題」處理）。
+    if (themePreview) payload.theme = themePreview;
+
+    return window.SKHPSBackend.call("getCssRegistryRuntime", payload).then(function (res) {
       if (!res || res.ok === false) {
         throw new Error(res && (res.message || res.error) ? (res.message || res.error) : "getCssRegistryRuntime failed");
       }
@@ -897,7 +926,7 @@
 
   function readCache() {
     try {
-      var raw = localStorage.getItem(CACHE_KEY);
+      var raw = localStorage.getItem(CACHE_KEY());
       if (!raw) return null;
 
       var cache = JSON.parse(raw);
@@ -914,7 +943,7 @@
     try {
       var model = normalizeCssModel(data, data && data.source || "supabase-css-registry");
 
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
+      localStorage.setItem(CACHE_KEY(), JSON.stringify({
         schemaVersion: 1,
         savedAt: Date.now(),
         savedAtText: nowTaipeiText(),
@@ -938,7 +967,7 @@
 
   function clearCache() {
     try {
-      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(CACHE_KEY());
       LEGACY_CACHE_KEYS.forEach(function (key) {
         localStorage.removeItem(key);
       });
@@ -1325,6 +1354,34 @@
     });
   }
 
+  /*
+    2026-07-17（§7 主題切換）：per-browser 預覽 API，供 CSS Setting 頁的
+    切換鈕呼叫。v1 用整頁重載達成——換主題牽動的不只是這支腳本的 cache，
+    還有其他頁面邏輯可能讀過的 window.SKHPSCssSheetRuntime 快照，重載
+    最穩，不用另外處理「live 換皮」的一堆邊界情況。
+  */
+  window.SKHPSThemePreview = {
+    set: function (name) {
+      try {
+        localStorage.setItem(THEME_PREVIEW_KEY, String(name || "").trim());
+      } catch (error) {
+        console.warn("SKHPSThemePreview.set failed:", error);
+      }
+      window.location.reload();
+    },
+    clear: function () {
+      try {
+        localStorage.removeItem(THEME_PREVIEW_KEY);
+      } catch (error) {
+        console.warn("SKHPSThemePreview.clear failed:", error);
+      }
+      window.location.reload();
+    },
+    current: function () {
+      return getThemePreview();
+    }
+  };
+
   ready(function () {
     /*
       核心規則：
@@ -1348,7 +1405,7 @@
     writeCache: writeCache,
     clearCache: clearCache,
     clearSession: clearSessionReady,
-    cacheKey: CACHE_KEY,
+    cacheKey: CACHE_KEY(),
     legacyCacheKey: LEGACY_CACHE_KEYS[0],
     legacyCacheKeys: LEGACY_CACHE_KEYS,
     sessionReadyKey: SESSION_READY_KEY

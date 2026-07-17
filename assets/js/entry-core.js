@@ -42,7 +42,8 @@
     "assets/js/route.js",
     "assets/js/backend-client.js",
     { path: "assets/js/jonaminz-bridge.js", optional: true },
-    "assets/js/css-sheet-runtime.js"
+    "assets/js/css-sheet-runtime.js",
+    { path: "assets/js/toast.js", optional: true }
   ];
 
   var DEFAULT_SHELL_SCRIPTS = [

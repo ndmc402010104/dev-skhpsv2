@@ -34,7 +34,12 @@
     getCssSheetRuntime: true,
     getCssRegistryPackages: true,
     saveCssRegistryPackage: true,
-    saveCssSheetRows: true
+    saveCssSheetRows: true,
+    // 2026-07-17（§7 主題切換）：CSS Setting 的全站切換卡片要讀寫
+    // Default 表的 activeCssTheme 指標，worker 端動作已存在
+    // （getAppDefaults/saveAppDefaults），只是漏掛進這個白名單。
+    getAppDefaults: true,
+    saveAppDefaults: true
   };
 
   function runtime() {

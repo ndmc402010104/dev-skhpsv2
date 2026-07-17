@@ -230,6 +230,13 @@
       return "dev";
     }
 
+    // 2026-07-17：外部 App 若因 CNAME 網域衝突退回 username.github.io/dev-xxx/
+    // 這種路徑型態網址（目前是 dev-css-setting），host 本身認不出是 dev。這裡
+    // 跟外部 App 自己 bootstrap script 裡的判斷保持一致，改認路徑第一段。
+    if (/^\/dev-/.test(String(window.location.pathname || ""))) {
+      return "dev";
+    }
+
     return "prod";
   }
 

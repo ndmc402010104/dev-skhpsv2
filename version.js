@@ -19,12 +19,12 @@ bookmarklet；水庫合規（零 inline CSS，只用既有 skhps class）。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.7-202607170209",
+  version: "v2.12.8-202607171820",
   major: 2,
   minor: 12,
-  patch: 7,
-  buildTime: "202607170209",
-  updatedAt: "2026-07-17T02:09:00+08:00",
+  patch: 8,
+  buildTime: "202607171820",
+  updatedAt: "2026-07-17T18:20:00+08:00",
   source: "version.js"
 };
 

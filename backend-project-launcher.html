@@ -47,6 +47,14 @@
 
       var version = isDev ? String(Date.now()) : "prod";
 
+      // 2026-07-17：暖砂/Theme40 切換第一幀背景閃色修正，見 index.html 同段註解。
+      try {
+        var previewTheme = String(localStorage.getItem("skhpsv2.themePreview.v1") || "").trim();
+        if (previewTheme && previewTheme !== "warm-sand") {
+          document.documentElement.setAttribute("data-skhps-loading-theme", previewTheme);
+        }
+      } catch (loadingThemeError) { /* localStorage 讀不到就維持預設暖砂 loading */ }
+
       document.write(
         '<link rel="stylesheet" href="assets/css/skhps-loading.css?v=' +
         encodeURIComponent(version) +

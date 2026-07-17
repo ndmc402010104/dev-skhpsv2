@@ -30,6 +30,7 @@
   --skhps-loading-page-bg: #FBF7EE;
   --skhps-loading-page-bg-mid: #FAF5EC;
   --skhps-loading-page-bg-end: #F6EFE0;
+  --skhps-loading-accent: #587F5C;
   --skhps-loading-page-gradient: linear-gradient(
     135deg,
     var(--skhps-loading-page-bg, #FBF7EE) 0%,
@@ -37,6 +38,18 @@
     var(--skhps-loading-page-bg-end, #F6EFE0) 100%
   );
   color-scheme: light;
+}
+
+/* 2026-07-17：Theme40 預覽時的第一幀背景。
+   entry-core 那段 bootstrap script 會同步讀 localStorage 主題預覽值，
+   非暖砂時才會在 <html> 補上這個屬性；下面全部背景宣告都是透過
+   --skhps-loading-page-* 這三個 token 間接取值，所以這裡只要覆蓋
+   token 本身，底下十幾層 !important patch 不用逐一碰。 */
+html[data-skhps-loading-theme="theme40"] {
+  --skhps-loading-page-bg: #FBFBF8;
+  --skhps-loading-page-bg-mid: #EDF3F6;
+  --skhps-loading-page-bg-end: #E3EBF0;
+  --skhps-loading-accent: #516D87;
 }
 
 html {
@@ -839,13 +852,13 @@ html.skhps-loading::before {
 }
 
 html.skhps-loading::after {
-  background: rgba(88, 127, 92, 0.105) !important;
+  background: color-mix(in srgb, var(--skhps-loading-accent) 10.5%, transparent) !important;
   box-shadow: none !important;
   filter: none !important;
 }
 
 html.skhps-loading body::after {
-  background: #587F5C !important;
+  background: var(--skhps-loading-accent) !important;
   box-shadow: none !important;
   filter: none !important;
   transition: none !important;
@@ -875,7 +888,7 @@ html.skhps-loading body::after {
     round 999px
   ) !important;
   border-radius: 999px !important;
-  background: #587F5C !important;
+  background: var(--skhps-loading-accent) !important;
   box-shadow: none !important;
   filter: none !important;
   transition: none !important;

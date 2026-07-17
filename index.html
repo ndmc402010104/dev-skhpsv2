@@ -54,6 +54,19 @@ Loading Gate：
 
       var version = isDev ? String(Date.now()) : "prod";
 
+      // 2026-07-17：暖砂/Theme40 切換第一幀背景閃色修正。
+      // loading CSS 早於 CSS Registry 完成前就先畫出來，本來只有暖砂一種
+      // 硬編色，切到 theme40 預覽時第一幀還是先閃暖色。這裡在 loading CSS
+      // 掛上去之前，同步（不等網路）讀 localStorage 的主題預覽值，先把
+      // data-skhps-loading-theme 標記寫到 <html>，loading CSS 再用這個
+      // 屬性覆蓋三個背景 token，只影響非預設主題，暖砂本身流程不變。
+      try {
+        var previewTheme = String(localStorage.getItem("skhpsv2.themePreview.v1") || "").trim();
+        if (previewTheme && previewTheme !== "warm-sand") {
+          document.documentElement.setAttribute("data-skhps-loading-theme", previewTheme);
+        }
+      } catch (loadingThemeError) { /* localStorage 讀不到就維持預設暖砂 loading */ }
+
       document.write(
         '<link rel="stylesheet" href="assets/css/skhps-loading.css?v=' +
         encodeURIComponent(version) +

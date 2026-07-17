@@ -39,7 +39,10 @@
     // Default 表的 activeCssTheme 指標，worker 端動作已存在
     // （getAppDefaults/saveAppDefaults），只是漏掛進這個白名單。
     getAppDefaults: true,
-    saveAppDefaults: true
+    saveAppDefaults: true,
+    // 2026-07-17（§8 css-setting 儀表化）：hero 儀表列/specimen chip 要讀
+    // 跨 component 規則統計，worker 端動作已存在，一樣是漏掛白名單。
+    getCssRegistryComponentStats: true
   };
 
   function runtime() {

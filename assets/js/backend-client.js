@@ -35,6 +35,14 @@
     getCssRegistryPackages: true,
     saveCssRegistryPackage: true,
     saveCssSheetRows: true,
+    // 2026-07-17：quick-login-backend.html（StaffMaster 人員主檔後台，
+    // quick-login/QR 簽到共用資料來源）靠這 4 個 action 運作，宣告在
+    // assets/data/staffmaster-expand-table.json 裡（字串搜尋不到，用
+    // JSON 設定驅動 Expand Table），之前改這份白名單時被誤刪，補回來。
+    listStaffMaster: true,
+    upsertStaffMaster: true,
+    updateStaffMasterStatus: true,
+    reorderStaffMaster: true,
     // 2026-07-17（§7 主題切換）：CSS Setting 的全站切換卡片要讀寫
     // Default 表的 activeCssTheme 指標，worker 端動作已存在
     // （getAppDefaults/saveAppDefaults），只是漏掛進這個白名單。

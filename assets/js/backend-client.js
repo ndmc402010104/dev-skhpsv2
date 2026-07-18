@@ -35,6 +35,11 @@
     getCssRegistryPackages: true,
     saveCssRegistryPackage: true,
     saveCssSheetRows: true,
+    // 2026-07-18：Page Builder（頁面版面建構器）三個 action，讀/存/列
+    // CssPageLayout 表；render 器與建構器接後端都靠這幾個。
+    getPageLayout: true,
+    listPageLayouts: true,
+    savePageLayout: true,
     // 2026-07-17：quick-login-backend.html（StaffMaster 人員主檔後台，
     // quick-login/QR 簽到共用資料來源）靠這 4 個 action 運作，宣告在
     // assets/data/staffmaster-expand-table.json 裡（字串搜尋不到，用

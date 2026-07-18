@@ -16,15 +16,18 @@ bookmarklet；水庫合規（零 inline CSS，只用既有 skhps class）。
 2026-07-17：手機版按鈕簡化——移除失敗的 Via intent，改一顆「開啟醫院系統快速
 登入」一般連結（Android/iOS 共用，在當前瀏覽器開）；前台「跳台工具」拿掉 emoji
 與其他入口一致。
+2026-07-18：拆除 CSS 存檔的 Sheet 殭屍路徑——backend-client.js call() 在退回 JSONP 前
+加白名單守衛，saveCssSheetRows 等固定走 Worker 的 action 若因 worker 設定失效落到
+fallback，一律 reject，不再無聲寫回已 retire 的 Google Sheet（原本 UI 還會誤報「已寫入」）。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.8-202607171820",
+  version: "v2.12.9-202607181124",
   major: 2,
   minor: 12,
-  patch: 8,
-  buildTime: "202607171820",
-  updatedAt: "2026-07-17T18:20:00+08:00",
+  patch: 9,
+  buildTime: "202607181124",
+  updatedAt: "2026-07-18T11:24:00+08:00",
   source: "version.js"
 };
 

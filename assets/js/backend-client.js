@@ -25,9 +25,10 @@
 
   /*
     注意（2026-07-03）：saveCssSheetRows 必須走 Worker → Supabase CssRegistryRule。
-    若 worker 設定失效，call() 會落到最後的 callJsonp fallback → GAS → Google Sheet（殭屍路徑），
-    而且 css-setting 的狀態文字仍會顯示「已寫入 Supabase」，等於無聲寫錯地方。
-    TODO(拆除 Sheet 殭屍路徑)：改成 saveCssSheetRows 在 worker 不可用時直接 reject，不得退回 JSONP。
+    若 worker 設定失效，call() 原本會落到最後的 callJsonp fallback → GAS → Google Sheet
+    （殭屍路徑），而且 css-setting 的狀態文字仍會顯示「已寫入 Supabase」，等於無聲寫錯地方。
+    已拆除（2026-07-18）：call() 在退回 JSONP 前加了守衛——凡 WORKER_JSON_ACTIONS 白名單裡
+    「固定走 Worker」的 action（含 saveCssSheetRows）落到 fallback，一律 reject，不再退回 JSONP。
   */
   var WORKER_JSON_ACTIONS = {
     getCssRegistryRuntime: true,
@@ -1160,9 +1161,21 @@
       }
 
       /*
-        TODO(拆除 Sheet 殭屍路徑，2026-07-03)：其他 action 走 JSONP→GAS 是正常路徑，
-        但 saveCssSheetRows 落到這裡代表 worker 設定壞掉，會寫回已 retire 的 Google Sheet——應直接 reject。
+        Sheet 殭屍路徑守衛（2026-07-18 拆除 TODO）：WORKER_JSON_ACTIONS 白名單裡的 action
+        固定走 Worker → Supabase；若落到這裡代表 config 的 worker 設定失效。尤其 saveCssSheetRows
+        退回 JSONP→GAS 會無聲寫回已 retire 的 Google Sheet，因此白名單 action 一律 reject，
+        不得退回 JSONP。其他非白名單 action 走 JSONP→GAS 仍是正常路徑，不受影響。
       */
+      if (WORKER_JSON_ACTIONS[String(action || "")]) {
+        console.error(
+          "SKHPSBackend 阻擋殭屍路徑：" + action +
+          " 落到 JSONP fallback，代表 worker 設定失效；拒絕退回 GAS／Google Sheet。"
+        );
+        return Promise.reject(new Error(
+          "Worker 後端設定失效，" + action +
+          " 拒絕退回 GAS／Google Sheet 殭屍路徑；請檢查 config.json 的 backend.worker 設定。"
+        ));
+      }
       return callJsonp(endpoint, action, payload, options);
     }).then(function (response) {
       if (response && response.ok === false && response.error) {

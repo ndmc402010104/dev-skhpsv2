@@ -1,6 +1,6 @@
 /*
 檔案位置：skhpsv2/assets/js/entry-core.js
-時間戳記：2026-07-12 12:24 UTC+8
+時間戳記：2026-07-21 18:30 UTC+8
 用途：SKHPS 共用 entry core；統一載入共通 JS、掛載 shell、回報 skhps-shell，再載入頁面/外部專案自己的 JS。
 
 責任切分：
@@ -410,6 +410,94 @@
     }
   }
 
+  // 2026-07-21（Compatibility Renderer B 可調關）：script barrier。
+  // loadSequential 保證的是「上一支 script **執行完**才載下一支」，對同步腳本
+  // 剛好等於「上一支的效果已經落地」；但只要有一支要 await（例如頁面內容改成
+  // 從後端非同步載入再 render），它的 onload 早在資料回來之前就觸發了，後面
+  // 依賴那份 DOM 的 runtime（external-apps-runtime 等）就會撲空。
+  //
+  // 這裡補上通用能力：script 在自己執行期間呼叫 SKHPSEntryCore.defer(promise)，
+  // 載入器就會在載下一支之前先等它。**沒有人呼叫＝完全不進這條路徑**
+  // （deferred 陣列空的時候連一個 .then 都不多加），現有所有頁面行為 byte 級不變。
+  //
+  // 逾時（預設 15 秒）是刻意的：barrier 卡住只該延後後面的 script，絕不能變成
+  // 「整頁永遠停在 loading」——逾時就記 WARN 繼續往下走，讓依賴方走自己的降級
+  // 分支（跟 loading gate 的 timeout-fallback 同一個哲學）。
+  var DEFAULT_DEFER_TIMEOUT_MS = 15000;
+  var deferredBarriers = [];
+
+  function defer(thenable, options) {
+    options = options || {};
+
+    var label = String(options.label || options.name || "").trim() || "anonymous";
+    var timeoutMs = isFinite(Number(options.timeoutMs)) && Number(options.timeoutMs) > 0
+      ? Number(options.timeoutMs)
+      : DEFAULT_DEFER_TIMEOUT_MS;
+
+    if (!thenable || typeof thenable.then !== "function") {
+      earlyRuntimeLog("WARN", "defer:ignored", { label: label, reason: "not-a-promise" });
+      return false;
+    }
+
+    deferredBarriers.push({ label: label, timeoutMs: timeoutMs, promise: thenable });
+    earlyRuntimeLog("RUN", "defer:registered", { label: label, timeoutMs: timeoutMs });
+    return true;
+  }
+
+  function awaitBarrier(barrier) {
+    var startedAt = Date.now();
+
+    return new Promise(function (resolve) {
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        earlyRuntimeLog("WARN", "defer:timeout", { label: barrier.label, timeoutMs: barrier.timeoutMs }, Date.now() - startedAt);
+        resolve();
+      }, barrier.timeoutMs);
+
+      barrier.promise.then(function () {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timer);
+        earlyRuntimeLog("OK", "defer:resolved", { label: barrier.label }, Date.now() - startedAt);
+        resolve();
+      }, function (error) {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearTimeout(timer);
+        // barrier 失敗＝那支 script 自己的事（它該自己回報 loading fail），
+        // 載入器只負責「不要再等下去」，不把整條 entry chain 拖下水。
+        earlyRuntimeLog("WARN", "defer:rejected", {
+          label: barrier.label,
+          error: error && error.message ? error.message : String(error)
+        }, Date.now() - startedAt);
+        resolve();
+      });
+    });
+  }
+
+  // 回傳 null＝這一輪沒有 barrier（呼叫端就不要多包一層 then，維持零回歸）。
+  function drainBarriers() {
+    if (!deferredBarriers.length) {
+      return null;
+    }
+
+    var batch = deferredBarriers;
+    deferredBarriers = [];
+
+    return Promise.all(batch.map(awaitBarrier));
+  }
+
   function loadSequential(entries, eventBaseName) {
     var chain = Promise.resolve();
 
@@ -419,7 +507,20 @@
 
         return loadScript(entry.url).then(function (src) {
           earlyRuntimeLog("OK", eventBaseName + ":loaded", entry.path || src || "");
-          return src;
+
+          // 這支 script 執行時若登記了 barrier，先等完再載下一支。
+          var barriers = drainBarriers();
+
+          if (!barriers) {
+            return src;
+          }
+
+          earlyRuntimeLog("RUN", eventBaseName + ":await-deferred", entry.path || src || "");
+
+          return barriers.then(function () {
+            earlyRuntimeLog("OK", eventBaseName + ":deferred-ready", entry.path || src || "");
+            return src;
+          });
         }).catch(function (error) {
           if (entry.optional) {
             console.warn("[SKHPSEntryCore] optional script load failed:", entry.url, error);
@@ -705,6 +806,7 @@
     normalizeOptions: normalizeOptions,
     loadScript: loadScript,
     loadSequential: loadSequential,
+    defer: defer,
     onDomReady: onDomReady,
     requireShellTask: requireShellTask,
     doneShellTask: doneShellTask,

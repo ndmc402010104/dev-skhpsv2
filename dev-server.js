@@ -1,7 +1,9 @@
 /*
 檔案位置：skhpsv2/dev-server.js
-時間戳：2026-07-13 09:48 UTC+8
-用途：local-dev 多根目錄靜態伺服器；預設把 skhpsv2 與 QR 外部 App 都映射到各自的 v3 dev worktree。
+時間戳：2026-07-21 10:58 UTC+8
+用途：local-dev 多根目錄靜態伺服器。coreRoot（skhpsv2 本體）預設＝啟動 dev-server 的 checkout
+（scriptRoot），只有明確設 SKHPS_CORE_ROOT 才覆寫，避免「改 A checkout、畫面卻來自 B worktree」；
+QR 等外部 App 仍映射各自的 v3 dev worktree。
 
 這只是本機開發工具，不參與 GitHub Pages / PROD runtime：
 - / 與 /skhpsv2/ 供應 skhpsv2 共通地基。
@@ -25,8 +27,13 @@ function existingDirectory(preferred, fallback) {
   return fallback;
 }
 
+// 2026-07-21：唯一開發來源鎖定為「啟動 dev-server 的那個 checkout」（scriptRoot）。
+// 先前預設優先供應 _dev-worktrees/skhpsv2-v3，會造成「改 A checkout、畫面卻來自 B
+// worktree」的分岔（HEAD/檔案內容不同）。現在預設一律供應本體 scriptRoot，只有明確
+// 設 SKHPS_CORE_ROOT 才覆寫；v3 worktree 保留在磁碟，但不再被默默優先供應。
+const coreRootSource = process.env.SKHPS_CORE_ROOT ? "env:SKHPS_CORE_ROOT" : "default:scriptRoot";
 const coreRoot = existingDirectory(
-  process.env.SKHPS_CORE_ROOT || path.join(workspaceRoot, "_dev-worktrees", "skhpsv2-v3"),
+  process.env.SKHPS_CORE_ROOT || scriptRoot,
   scriptRoot
 );
 const qrRoot = existingDirectory(
@@ -165,7 +172,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, "127.0.0.1", () => {
   console.log("SKHPS local-dev server -> http://localhost:" + port + "/");
-  console.log("Core source            -> " + coreRoot);
+  console.log("Core source            -> " + coreRoot + "  (" + coreRootSource + ")");
   console.log("QR source              -> " + qrRoot);
   console.log("Quick-login source     -> " + quickLoginRoot);
   console.log("Dressing source        -> " + dressingRoot);

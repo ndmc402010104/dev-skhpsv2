@@ -1,6 +1,6 @@
 ﻿/*
 檔案位置：skhpsv2/version.js
-時間戳：2026-07-17 01:26 UTC+8
+時間戳：2026-07-21 10:58 UTC+8
 用途：SKHPSv2 dev 版本；加入 Jonaminz bridge 與 CSS package runtime 相容層。
 2026-07-17：entry-core 加 script preload（平行預抓），開場 JS 序列瀑布
 收斂，本地 A/B 測 gate 4923ms→2323ms（-53%）。
@@ -19,15 +19,19 @@ bookmarklet；水庫合規（零 inline CSS，只用既有 skhps class）。
 2026-07-18：拆除 CSS 存檔的 Sheet 殭屍路徑——backend-client.js call() 在退回 JSONP 前
 加白名單守衛，saveCssSheetRows 等固定走 Worker 的 action 若因 worker 設定失效落到
 fallback，一律 reject，不再無聲寫回已 retire 的 Google Sheet（原本 UI 還會誤報「已寫入」）。
+2026-07-21：dev-server（local-dev 靜態伺服器）預設 coreRoot 改為「啟動它的 checkout」
+（scriptRoot），不再默默優先供應 _dev-worktrees/skhpsv2-v3，避免「改 A checkout、畫面
+卻來自 B worktree」；只有明確設 SKHPS_CORE_ROOT 才覆寫，啟動 log 標示實際來源。純本機
+開發工具改動，不影響 GitHub Pages/PROD 部署行為（Compatibility Renderer 步驟1 checkpoint）。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.9-202607181124",
+  version: "v2.12.10-202607211058",
   major: 2,
   minor: 12,
-  patch: 9,
-  buildTime: "202607181124",
-  updatedAt: "2026-07-18T11:24:00+08:00",
+  patch: 10,
+  buildTime: "202607211058",
+  updatedAt: "2026-07-21T10:58:00+08:00",
   source: "version.js"
 };
 

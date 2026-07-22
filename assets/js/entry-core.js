@@ -47,6 +47,9 @@
     // 讀失敗不擋 boot、無母片設定＝維持寫死預設（prod 零風險）。外部專案共用這份 boot
     // scripts，自動吃到同一份母片，不用改任何 config/JS（水庫理論）。
     { path: "assets/js/shell-config.js", optional: true },
+    // 2026-07-22（全站通用 UI 行為）：下拉選單點外面/Esc 關閉等，一次設定、全站（含外部
+    // 專案）統一控制。optional＝載失敗不擋 boot。使用者原則：通用互動收進元件、統一管理。
+    { path: "assets/js/ui-behaviors.js", optional: true },
     { path: "assets/js/jonaminz-bridge.js", optional: true },
     "assets/js/css-sheet-runtime.js",
     { path: "assets/js/toast.js", optional: true }

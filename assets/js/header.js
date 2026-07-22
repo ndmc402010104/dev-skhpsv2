@@ -60,6 +60,31 @@
       .replace(/'/g, "&#039;");
   }
 
+  /* 登入後使用者選單樣式（2026-07-22）：header 沒有既有的下拉選單樣式，這裡注入一次
+     （跟 footer 的 guard style 同模式）。用 registry token 變數（--surface/--ink/--line…）
+     讓它跟著換膚走；沒有變數時有 fallback 值。只在登入後狀態才會用到這些 class。 */
+  function ensureHeaderUserMenuStyle() {
+    var STYLE_ID = "skhps-header-user-menu-style";
+    if (typeof document === "undefined" || document.getElementById(STYLE_ID) || !document.head) return;
+    var style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = [
+      ".skhps-header-user{position:relative}",
+      ".skhps-header-user>summary{list-style:none;display:inline-flex;align-items:center;gap:9px;height:44px;padding:0 6px 0 14px;border-radius:999px;cursor:pointer;font-weight:750;color:var(--ink,#2f2b26);white-space:nowrap;transition:.12s}",
+      ".skhps-header-user>summary::-webkit-details-marker{display:none}",
+      ".skhps-header-user>summary:hover{background:color-mix(in srgb,var(--sage,#6b8f71) 12%,transparent)}",
+      ".skhps-header-user-name{font-size:14.5px}",
+      ".skhps-header-user-avatar{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:color-mix(in srgb,var(--sage,#6b8f71) 16%,var(--surface,#fff));color:var(--sage,#6b8f71)}",
+      ".skhps-header-user[open]>summary{background:color-mix(in srgb,var(--sage,#6b8f71) 14%,transparent)}",
+      ".skhps-header-user-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:200px;background:var(--surface,#fff);border:1px solid var(--line,#e7e0d5);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.16);padding:7px;z-index:2147483001;display:flex;flex-direction:column}",
+      ".skhps-header-user-menu-item{display:block;padding:9px 13px;border-radius:9px;font-size:14px;font-weight:700;color:var(--ink,#2f2b26);text-decoration:none;white-space:nowrap}",
+      ".skhps-header-user-menu-item:hover{background:color-mix(in srgb,var(--sage,#6b8f71) 12%,transparent)}",
+      ".skhps-header-user-menu-item-danger{color:var(--danger,#c0392b)}",
+      ".skhps-header-user-menu-item-danger:hover{background:color-mix(in srgb,var(--danger,#c0392b) 10%,transparent)}"
+    ].join("\n");
+    document.head.appendChild(style);
+  }
+
   function normalizeText(value) {
     return String(value == null ? "" : value).trim();
   }
@@ -481,16 +506,29 @@
     if (previewState === "loggedOut") {
       rightHtml = '<a class="skhps-btn skhps-btn-primary skhps-header-login-btn" href="' + escapeHtml(loginHref) + '" data-skhps-login-link>' + escapeHtml(loginText) + "</a>";
     } else {
+      /* 登入後統一長相（2026-07-22，使用者定，參考業界慣例）：「名字 你好 ＋ 人臉 icon」，
+         點 icon 展開下拉選單（設定/登出/角色專屬項都收進去）。這樣不管什麼角色，header 右側
+         結構都一樣（一個使用者選單）、不會因角色不同而忽多忽少——解決了「按鈕數量不同 header
+         會變」的問題。角色差異只反映在**選單項目**（menu），header 骨架不變。
+         用原生 <details>：點 summary 展開/收合，不用額外 JS 管開關。 */
+      ensureHeaderUserMenuStyle();
       var stateDef = (sh.states && sh.states[previewState]) || {};
-      var stateBtns = Array.isArray(stateDef.buttons) ? stateDef.buttons : [];
-      if (stateBtns.length) {
-        rightHtml = stateBtns.map(function (b, i) {
-          /* 統一用 skhps-header-login-btn 的尺寸（跟登入前登入鈕一致），header 右側按鈕高度才
-             一致、切換狀態時 header 不會忽高忽矮（使用者實測：登入鈕 44px、登入後只有 38px，
-             header 就縮 4px）。primary/secondary 只決定配色，尺寸統一。 */
-          var cls = "skhps-btn skhps-header-login-btn " + (i === stateBtns.length - 1 ? "skhps-btn-primary" : "skhps-btn-secondary");
-          return '<a class="' + cls + '" href="' + escapeHtml(b && b.href || "#") + '" data-skhps-state-btn="' + i + '">' + escapeHtml(b && b.text || "") + "</a>";
+      var userLabel = normalizeText(stateDef.userLabel);
+      var menuItems = Array.isArray(stateDef.menu) ? stateDef.menu : [];
+      if (userLabel || menuItems.length) {
+        var menuHtml = menuItems.map(function (mi) {
+          var danger = mi && mi.danger ? " skhps-header-user-menu-item-danger" : "";
+          return '<a class="skhps-header-user-menu-item' + danger + '" href="' + escapeHtml(mi && mi.href || "#") + '" data-skhps-user-menu-item>' + escapeHtml(mi && mi.text || "") + "</a>";
         }).join("");
+        rightHtml = '<details class="skhps-header-user" data-skhps-user-menu>' +
+          '<summary class="skhps-header-user-trigger">' +
+            '<span class="skhps-header-user-name">' + escapeHtml(userLabel || "你好") + "</span>" +
+            '<span class="skhps-header-user-avatar" aria-hidden="true">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"></path></svg>' +
+            "</span>" +
+          "</summary>" +
+          '<div class="skhps-header-user-menu">' + menuHtml + "</div>" +
+        "</details>";
       } else {
         rightHtml = '<span class="skhps-header-state-placeholder" data-skhps-state-empty="' + escapeHtml(previewState) + '">（這個狀態的 header 還沒設計）</span>';
       }
@@ -575,6 +613,8 @@
      （母片回歸測試注入 window.SKHPS_SHELL 後重繪檢查、未來母片即時預覽也用得到）。 */
   window.SKHPSHeader = window.SKHPSHeader || {};
   window.SKHPSHeader.render = renderHeader;
+  /* 使用者選單「點外面／Esc 關閉」由**全站通用** ui-behaviors.js 統一處理（使用者定的原則：
+     這種行為一次設定、統一控制，不在 header 各做一次）。這裡不再自己掛。 */
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

@@ -88,7 +88,14 @@
       "html[data-skhps-rwd-group='small'] .skhps-footer-center{font-size:11px;white-space:nowrap}",
       "html[data-skhps-rwd-group='small'] .skhps-footer-right{gap:6px!important;flex-wrap:wrap!important}",
 ,
-      "@media (max-width:720px){.skhps-footer{align-items:center}.skhps-footer-left{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.skhps-footer-page-line,.skhps-footer-runtime-line{white-space:normal}.skhps-footer-runtime-line{font-size:11px}.skhps-footer-center{font-size:11px}.skhps-footer-right{gap:4px}}"
+      "@media (max-width:720px){.skhps-footer{align-items:center}.skhps-footer-left{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.skhps-footer-page-line,.skhps-footer-runtime-line{white-space:normal}.skhps-footer-runtime-line{font-size:11px}.skhps-footer-center{font-size:11px}.skhps-footer-right{gap:4px}}",
+      /* 母片安靜模式（2026-07-22，階段 C）：母片設 footer.showDiagnostics=false 時，footer 加
+         .skhps-footer-quiet——把三欄開發診斷（狀態燈/版本/切換）display:none，只留置中版權列。
+         DOM 仍完整建構（measure/互動監聽不會 null），observeFooterSize 量到的是版權列高度，
+         版面計算自動相容。runtime panel 因 toggle 被隱藏、使用者點不開，維持收合不顯示。 */
+      ".skhps-footer-copyright{display:none;width:100%;text-align:center;padding:10px 12px;font-size:13px;font-weight:600;opacity:.85}",
+      ".skhps-footer-quiet>.skhps-footer-left,.skhps-footer-quiet>.skhps-footer-center,.skhps-footer-quiet>.skhps-footer-right{display:none!important}",
+      ".skhps-footer-quiet .skhps-footer-copyright{display:block}"
     ].join("\n");
     document.head.appendChild(style);
   }
@@ -1607,6 +1614,13 @@
     loadVersionJsIfNeeded();
     footer.classList.add("skhps-footer");
     footer.innerHTML = "";
+
+    /* 母片安靜模式（2026-07-22，階段 C）：diagnostics 診斷面板照建（DOM 完整），
+       只是 quiet class 用 CSS 隱藏三欄、顯示版權列。母片沒設或設 true＝顯示診斷（現況）。 */
+    var shellFooter = (window.SKHPS_SHELL && window.SKHPS_SHELL.footer) || {};
+    var footerQuiet = shellFooter.showDiagnostics === false;
+    footer.classList.toggle("skhps-footer-quiet", footerQuiet);
+
     var envSummary = footerEnvSummary(state);
 
     var left = document.createElement("div");
@@ -1684,6 +1698,14 @@
     footer.appendChild(left);
     footer.appendChild(center);
     footer.appendChild(right);
+
+    /* 版權列（quiet 模式才顯示，CSS 控制）：母片沒設 copyright 就留空——footer 變成一條很矮的
+       空列，仍是有效狀態（使用者填了才有字）。三欄照建在上面，被 CSS 隱藏、不佔高。 */
+    var copyrightRow = document.createElement("div");
+    copyrightRow.className = "skhps-footer-copyright";
+    copyrightRow.textContent = (shellFooter.copyright != null ? String(shellFooter.copyright) : "");
+    footer.appendChild(copyrightRow);
+
     ensureRuntimePanel(true);
     updateFooterSafeArea();
     observeFooterSize();

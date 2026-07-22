@@ -507,6 +507,21 @@
       '</div>'
     ].join("");
 
+    /* header 內容寬度（2026-07-22，母片可控、獨立於頁面寬度）：header 是全站共用的殼，它的
+       寬度該全站一致（母片），不跟每頁的頁面寬度走——否則窄頁/寬頁的 header 會不一樣寬。
+       用**跟頁面完全相同的四段定義**（css-setting page.html PAGE_WIDTHS），詞彙一致；想跟頁面
+       一樣就兩邊設一樣（使用者的想法）。inline important 覆蓋 registry，沒設定＝清掉＝用
+       registry 現值（prod 零風險）。 */
+    var innerEl = root.querySelector(".skhps-header-inner");
+    if (innerEl) {
+      var HEADER_WIDTHS = { narrow: "max(55%, 640px)", standard: "max(70%, 680px)", wide: "max(88%, 720px)", full: "none" };
+      if (sh.width && HEADER_WIDTHS[sh.width]) {
+        innerEl.style.setProperty("max-width", HEADER_WIDTHS[sh.width], "important");
+      } else {
+        innerEl.style.removeProperty("max-width");
+      }
+    }
+
     rlog("OK", "renderHeader", {
       mode: mode,
       homeHref: homeHref,

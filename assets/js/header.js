@@ -485,7 +485,10 @@
       var stateBtns = Array.isArray(stateDef.buttons) ? stateDef.buttons : [];
       if (stateBtns.length) {
         rightHtml = stateBtns.map(function (b, i) {
-          var cls = "skhps-btn " + (i === stateBtns.length - 1 ? "skhps-btn-primary" : "skhps-btn-secondary");
+          /* 統一用 skhps-header-login-btn 的尺寸（跟登入前登入鈕一致），header 右側按鈕高度才
+             一致、切換狀態時 header 不會忽高忽矮（使用者實測：登入鈕 44px、登入後只有 38px，
+             header 就縮 4px）。primary/secondary 只決定配色，尺寸統一。 */
+          var cls = "skhps-btn skhps-header-login-btn " + (i === stateBtns.length - 1 ? "skhps-btn-primary" : "skhps-btn-secondary");
           return '<a class="' + cls + '" href="' + escapeHtml(b && b.href || "#") + '" data-skhps-state-btn="' + i + '">' + escapeHtml(b && b.text || "") + "</a>";
         }).join("");
       } else {

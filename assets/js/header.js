@@ -571,11 +571,34 @@
        registry 現值（prod 零風險）。 */
     var innerEl = root.querySelector(".skhps-header-inner");
     if (innerEl) {
-      var HEADER_WIDTHS = { narrow: "max(55%, 640px)", standard: "max(70%, 680px)", wide: "max(88%, 720px)", full: "none" };
+      /* 為什麼用 width 而不是 max-width：膠囊(.skhps-header-inner)是 flex+space-between，內容自然寬
+         約 1180px，max-width 只有在比 1180 小時才夾得到 → 「寬」(1267)和「滿版」(none)都 ≥1180、
+         render 出來一模一樣，四級距等於只有三級。改用 width 強制撐開膠囊，space-between 才會把品牌/登入
+         推到膠囊兩端 → 真正做出四段可見寬度。min(100%, …) 包住避免窄視窗/手機溢出(回到滿寬)。 */
+      var HEADER_WIDTHS = {
+        narrow:   "min(100%, max(55%, 640px))",
+        standard: "min(100%, max(70%, 680px))",
+        wide:     "min(100%, max(88%, 720px))",
+        full:     "100%"
+      };
       if (sh.width && HEADER_WIDTHS[sh.width]) {
-        innerEl.style.setProperty("max-width", HEADER_WIDTHS[sh.width], "important");
+        innerEl.style.setProperty("width", HEADER_WIDTHS[sh.width], "important");
+        innerEl.style.setProperty("max-width", "none", "important");
+        /* 滿版＝真的推到貼邊：width:100% 是「root 內容區」的 100%，會被 root(.skhps-header) 左右內距
+           (~130px)卡住、跟「寬」差不多。所以 full 時一併把 root 內距縮小，膠囊才推到螢幕兩邊；
+           其他級距用回原本 root 內距(清掉覆蓋)、膠囊靠 margin:0 auto 置中。 */
+        if (sh.width === "full") {
+          root.style.setProperty("padding-left", "clamp(14px, 2.5vw, 40px)", "important");
+          root.style.setProperty("padding-right", "clamp(14px, 2.5vw, 40px)", "important");
+        } else {
+          root.style.removeProperty("padding-left");
+          root.style.removeProperty("padding-right");
+        }
       } else {
+        innerEl.style.removeProperty("width");
         innerEl.style.removeProperty("max-width");
+        root.style.removeProperty("padding-left");
+        root.style.removeProperty("padding-right");
       }
     }
 

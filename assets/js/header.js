@@ -471,6 +471,28 @@
     var brandSub = (sh.brandSub != null && String(sh.brandSub) !== "") ? String(sh.brandSub) : BRAND_SUB;
     var loginText = normalizeText(sh.loginText) || "登入";
 
+    /* 多狀態 header（2026-07-22，設計層）：header 右側按「當前狀態」顯示不同內容。
+       真站永遠是 loggedOut（沒身分系統，__SHELL_PREVIEW_STATE 不存在）＝現有登入鈕＝prod 零風險；
+       母片編輯畫面設 window.__SHELL_PREVIEW_STATE 切換預覽各狀態（登入後/角色），對應設計存在
+       sh.states[state]。未設計的狀態顯示占位提示。這是「設計/預覽層」——真站要真的按登入身分
+       顯示，還需要身分系統（另案）。 */
+    var previewState = String(window.__SHELL_PREVIEW_STATE || "loggedOut");
+    var rightHtml;
+    if (previewState === "loggedOut") {
+      rightHtml = '<a class="skhps-btn skhps-btn-primary skhps-header-login-btn" href="' + escapeHtml(loginHref) + '" data-skhps-login-link>' + escapeHtml(loginText) + "</a>";
+    } else {
+      var stateDef = (sh.states && sh.states[previewState]) || {};
+      var stateBtns = Array.isArray(stateDef.buttons) ? stateDef.buttons : [];
+      if (stateBtns.length) {
+        rightHtml = stateBtns.map(function (b, i) {
+          var cls = "skhps-btn " + (i === stateBtns.length - 1 ? "skhps-btn-primary" : "skhps-btn-secondary");
+          return '<a class="' + cls + '" href="' + escapeHtml(b && b.href || "#") + '" data-skhps-state-btn="' + i + '">' + escapeHtml(b && b.text || "") + "</a>";
+        }).join("");
+      } else {
+        rightHtml = '<span class="skhps-header-state-placeholder" data-skhps-state-empty="' + escapeHtml(previewState) + '">（這個狀態的 header 還沒設計）</span>';
+      }
+    }
+
     root.classList.add("skhps-header");
     root.setAttribute("data-skhps-header-ready", "true");
     root.setAttribute("data-skhps-header-mode", mode);
@@ -496,13 +518,7 @@
         '</a>',
 
         '<nav class="skhps-header-actions" aria-label="主要導覽">',
-          '<a',
-            ' class="skhps-btn skhps-btn-primary skhps-header-login-btn"',
-            ' href="' + escapeHtml(loginHref) + '"',
-            ' data-skhps-login-link',
-          '>',
-            escapeHtml(loginText),
-          '</a>',
+          rightHtml,
         '</nav>',
       '</div>'
     ].join("");

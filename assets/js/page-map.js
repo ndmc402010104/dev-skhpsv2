@@ -221,6 +221,15 @@ Purpose: render the shared SKHPS page map / breadcrumb.
     nav.setAttribute("aria-label", "頁面地圖");
     nav.textContent = "";
 
+    /* 母片可控間距（2026-07-22）：麵包屑到下方內容（標題）的距離是全站一致的麵包屑樣式 →
+       母片控制（shell.breadcrumb.gap，px）。用 inline important 覆蓋 registry 的寫死 margin，
+       確保調得動；沒設定＝清掉 inline＝用 registry 現值（prod 零風險）。 */
+    if (bc && bc.gap != null && isFinite(Number(bc.gap))) {
+      nav.style.setProperty("margin-bottom", Math.round(Number(bc.gap)) + "px", "important");
+    } else {
+      nav.style.removeProperty("margin-bottom");
+    }
+
     items.forEach(function (item, index) {
       if (index) nav.appendChild(makeSeparator());
       nav.appendChild(item.current || !item.href ? makeCurrent(item) : makeLink(item));

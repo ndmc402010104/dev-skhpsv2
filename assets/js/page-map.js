@@ -196,6 +196,19 @@ Purpose: render the shared SKHPS page map / breadcrumb.
 
   function render() {
     var target = getTarget();
+
+    /* 母片全站開關（2026-07-22）：麵包屑「要不要顯示」是全站共用行為 → 母片控制
+       （shell.breadcrumb.enabled）；每頁的「階層/名稱」仍由各頁 data-skhps-page-map 宣告
+       （那是頁面的事，不進母片——見母片邊界裁決）。enabled===false 全站隱藏麵包屑；沒設定
+       ／true＝各頁照自己宣告（現況，prod 零風險）。 */
+    var bc = window.SKHPS_SHELL && window.SKHPS_SHELL.breadcrumb;
+    if (bc && bc.enabled === false) {
+      var hide = claimExistingNav();
+      if (hide && hide.parentNode) hide.parentNode.removeChild(hide);
+      html().setAttribute("data-skhps-page-map-ready", "true");
+      return;
+    }
+
     var items = getItems();
     var existing = claimExistingNav();
     var nav;

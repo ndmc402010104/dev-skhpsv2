@@ -59,7 +59,7 @@
     timer: null,
     settleTimer: null,
     visualBudgetMs: 8000,
-    finishBudgetMs: 260,
+    finishBudgetMs: 450,
     startedAt: Date.now(),
     lastTickAt: Date.now(),
     finishRequested: false,
@@ -311,7 +311,7 @@
     progressState.settleTimer = window.setTimeout(function () {
       removeLoadingClassesNow();
       stopProgressTicker();
-    }, 520);
+    }, 650);
   }
 
   function releaseAfterProgressFill() {
@@ -1330,5 +1330,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v6");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v7");
 } catch (error) {}

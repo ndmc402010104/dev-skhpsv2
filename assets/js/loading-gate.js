@@ -59,13 +59,14 @@
     timer: null,
     settleTimer: null,
     visualBudgetMs: 8000,
-    finishBudgetMs: 450,
+    finishBudgetMs: 300,
     startedAt: Date.now(),
     lastTickAt: Date.now(),
     finishRequested: false,
     finishStartedAt: 0,
     finishSuccess: false,
     finishHoldStarted: false,
+    revealed: false,
     warnHoldMs: 1000
   };
 
@@ -204,7 +205,7 @@
 
     if (progressState.finishRequested) {
       if (!progressState.finishSuccess) {
-        removeLoadingClassesNow();
+        /* WARN/逾時：不衝 100、不在這裡掀幕；由 requestProgressFinish 的停頓 setTimeout→revealContent 處理。 */
         stopProgressTicker();
         return;
       }
@@ -218,13 +219,10 @@
       );
 
       if (progressState.current >= 99.7) {
-        /*
-          OK / all-ready：
-          到 100 後快速進畫面，不停 1 秒。
-        */
+        /* 填滿到 100 了 → 現在才渲染頁面內容＋掀幕。把會卡主執行緒的重渲染放到填滿之後，
+           填滿動畫才不會被凍住、使用者一定看得到跑到 100（撞 100 才拿掉布幕）。 */
         setProgressValue(100, "runway-pass-100-fast-enter");
-        removeLoadingClassesNow();
-        stopProgressTicker();
+        revealContent();
       }
 
       return;
@@ -259,6 +257,17 @@
     progressState.timer = null;
   }
 
+  /* 填滿(或 WARN 停頓)之後才渲染頁面內容＋掀幕：markShellReady/markPageReady 會觸發 header/footer/main
+     重渲染、卡住主執行緒；挪到這裡(填滿動畫之後)，填滿才不會被凍住、使用者一定看得到跑到 100。冪等。 */
+  function revealContent() {
+    if (progressState.revealed) return;
+    progressState.revealed = true;
+    if (!state.shellReady) markShellReady(state.releaseReason, "OK");
+    if (!state.pageReady) markPageReady(state.releaseReason, "OK");
+    removeLoadingClassesNow();
+    stopProgressTicker();
+  }
+
   function requestProgressFinish(reason, status) {
     var releaseReason = String(reason || state.releaseReason || "");
     var releaseStatus = String(status || "").toUpperCase();
@@ -289,10 +298,7 @@
       html.setAttribute("data-skhps-loading-warn-hold", "true");
       html.setAttribute("data-skhps-loading-warn-hold-ms", String(progressState.warnHoldMs || 1000));
 
-      window.setTimeout(function () {
-        removeLoadingClassesNow();
-        stopProgressTicker();
-      }, progressState.warnHoldMs || 1000);
+      window.setTimeout(revealContent, progressState.warnHoldMs || 1000);
       return;
     }
 
@@ -305,13 +311,10 @@
 
     /*
       OK / all-ready 保底：
-      正常會由 tickProgress 到 100 後快速進畫面。
-      這裡只防動畫異常。
+      正常由 tickProgress 填滿到 100 後才 revealContent(渲染+掀幕)。
+      這裡只防填滿動畫異常沒跑完：填滿預算+緩衝後也保底 revealContent。
     */
-    progressState.settleTimer = window.setTimeout(function () {
-      removeLoadingClassesNow();
-      stopProgressTicker();
-    }, 650);
+    progressState.settleTimer = window.setTimeout(revealContent, progressState.finishBudgetMs + 240);
   }
 
   function releaseAfterProgressFill() {
@@ -328,6 +331,7 @@
     progressState.finishStartedAt = 0;
     progressState.finishSuccess = false;
     progressState.finishHoldStarted = false;
+    progressState.revealed = false;
 
     if (progressState.settleTimer) {
       window.clearTimeout(progressState.settleTimer);
@@ -807,18 +811,10 @@
       markCssReady(state.releaseReason, status || "OK");
     }
 
-    if (!state.shellReady) {
-      markShellReady(state.releaseReason, status || "OK");
-    }
-
-    if (!state.pageReady) {
-      markPageReady(state.releaseReason, status || "OK");
-    }
-
     /*
-      先讓 progress 補滿，再移除 loading class。
-      保底 timer 會避免動畫卡住畫面。
-    */
+      關鍵順序（2026-07-23）：**先讓 progress 平滑填滿到 100，填滿之後才 markShellReady/markPageReady
+      渲染頁面＋移除 loading class(掀幕)**。因為那些重渲染會卡住主執行緒、填滿動畫會被凍住只剩「跳」，
+      所以把 shell/page ready 挪進 requestProgressFinish→revealContent(填滿或WARN停頓之後)才做。 */
     requestProgressFinish(state.releaseReason, status || "OK");
 
     html.setAttribute("data-skhps-loading-released", "true");
@@ -1330,5 +1326,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v7");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v8");
 } catch (error) {}

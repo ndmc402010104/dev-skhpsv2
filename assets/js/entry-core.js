@@ -41,6 +41,12 @@
     "assets/js/config.js",
     "assets/js/route.js",
     "assets/js/backend-client.js",
+    // 2026-07-22（母片）：讀 shell-skhps 的母片設定填 window.SKHPS_SHELL，讓
+    // header/footer/loading-gate 可由母片控制。放 backend-client 之後（要用 SKHPSBackend）、
+    // css-sheet-runtime／shell scripts 之前（header render 前母片值要就位）。optional＝
+    // 讀失敗不擋 boot、無母片設定＝維持寫死預設（prod 零風險）。外部專案共用這份 boot
+    // scripts，自動吃到同一份母片，不用改任何 config/JS（水庫理論）。
+    { path: "assets/js/shell-config.js", optional: true },
     { path: "assets/js/jonaminz-bridge.js", optional: true },
     "assets/js/css-sheet-runtime.js",
     { path: "assets/js/toast.js", optional: true }

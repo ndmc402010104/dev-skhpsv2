@@ -333,6 +333,14 @@
   }
 
   function getLoginHref() {
+    /* 母片優先（2026-07-22）：跟品牌名同一個「有母片設定就用、沒有就用既有邏輯」模式。
+       母片沒設 loginHref＝走原本的 data 屬性→sharedHref 預設，行為不變。 */
+    var sh = (window.SKHPS_SHELL && window.SKHPS_SHELL.header) || {};
+    var fromShell = normalizeText(sh.loginHref);
+    if (fromShell) {
+      return fromShell;
+    }
+
     var fromHtml = normalizeText(
       document.documentElement.getAttribute("data-skhps-header-login-href")
     );
@@ -416,6 +424,26 @@
     });
   }
 
+  /* 母片結構值 → root CSS 變數（2026-07-22）。只在母片有設定該值時才寫變數，沒設定＝
+     不寫＝維持 registry 現有樣式（prod 零影響）。bg 只認 hex（防斷屬性），高度數字化。
+     registry 端的 header 規則要用 var(--skhps-header-*, 原值) 才會吃到——沒吃到也不出錯，
+     只是該結構值暫時無效果（等 agent 把 registry 規則變數化，屬「展示出來讓 agent 調」）。 */
+  function applyShellHeaderStyle(sh) {
+    try {
+      var root = document.documentElement;
+      var h = (sh && sh.heightPx != null && isFinite(Number(sh.heightPx))) ? Math.round(Number(sh.heightPx)) : null;
+      if (h != null) root.style.setProperty("--skhps-header-height", h + "px");
+      else root.style.removeProperty("--skhps-header-height");
+
+      var bg = sh && typeof sh.bg === "string" && /^#[0-9a-fA-F]{3,8}$/.test(sh.bg) ? sh.bg : null;
+      if (bg) root.style.setProperty("--skhps-header-bg", bg);
+      else root.style.removeProperty("--skhps-header-bg");
+
+      if (sh && sh.sticky === false) root.setAttribute("data-skhps-header-sticky", "false");
+      else root.removeAttribute("data-skhps-header-sticky");
+    } catch (e) {}
+  }
+
   function renderHeader() {
     var root = getHeaderRoot();
     var mode;
@@ -433,22 +461,36 @@
 
     currentRenderedHomeHref = homeHref;
 
+    /* 母片（2026-07-22）：品牌名／登入文字改成「有母片設定就用、沒有就用寫死常數」——
+       跟 getHomeHref()/getLoginHref() 同一個漸進增強模式。window.SKHPS_SHELL 由 shell-config.js
+       在 boot 階段填入；prod 沒母片設定時 sh 為空物件，全數 fallback 到原常數＝行為不變。
+       值一律經 escapeHtml（下面 innerHTML），母片來源即使被竄改也不會 XSS。 */
+    var sh = (window.SKHPS_SHELL && window.SKHPS_SHELL.header) || {};
+    var brandMark = normalizeText(sh.brandMark) || BRAND_MARK;
+    var brandMain = normalizeText(sh.brandMain) || BRAND_MAIN;
+    var brandSub = (sh.brandSub != null && String(sh.brandSub) !== "") ? String(sh.brandSub) : BRAND_SUB;
+    var loginText = normalizeText(sh.loginText) || "登入";
+
     root.classList.add("skhps-header");
     root.setAttribute("data-skhps-header-ready", "true");
     root.setAttribute("data-skhps-header-mode", mode);
+
+    /* 結構值（高度／sticky／背景）＝「展示出來讓 agent 調」那一類：設成 root CSS 變數，
+       registry 規則吃這些變數才會生效。沒設定＝不寫變數＝維持 registry 現有寫死值。 */
+    applyShellHeaderStyle(sh);
 
     root.innerHTML = [
       '<div class="skhps-header-inner">',
         '<a class="skhps-header-brand" href="' + escapeHtml(homeHref) + '" aria-label="回到首頁">',
           '<span class="skhps-header-brand-mark">',
-            escapeHtml(BRAND_MARK),
+            escapeHtml(brandMark),
           '</span>',
           '<span class="skhps-header-brand-copy">',
             '<span class="skhps-header-brand-main">',
-              escapeHtml(BRAND_MAIN),
+              escapeHtml(brandMain),
             '</span>',
             '<span class="skhps-header-brand-sub">',
-              escapeHtml(BRAND_SUB),
+              escapeHtml(brandSub),
             '</span>',
           '</span>',
         '</a>',
@@ -459,7 +501,7 @@
             ' href="' + escapeHtml(loginHref) + '"',
             ' data-skhps-login-link',
           '>',
-            '登入',
+            escapeHtml(loginText),
           '</a>',
         '</nav>',
       '</div>'

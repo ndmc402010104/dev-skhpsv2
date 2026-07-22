@@ -23,6 +23,21 @@
   var MAIN_LOADING_CLASS = "skhps-main-loading";
   var DEFAULT_TIMEOUT_MS = 8000;
 
+  /* 母片可控逾時（2026-07-22，階段 B）：loading gate 的逾時保護值可由 shell-skhps 母片設定。
+     時序坑：startTimeout() 在 init 就跑（boot 第4支），早於 shell-config.js（第8支）填
+     window.SKHPS_SHELL——所以「當下讀」讀不到。解法＝shell-config 就位後 dispatch
+     'skhps-shell-ready'，本模組監聽並在**尚未 release** 時用母片值重設 timer（見 init 的監聽）。
+     沒母片設定＝維持 8000＝行為不變（prod 零風險）。 */
+  function resolveTimeoutMs() {
+    try {
+      var g = window.SKHPS_SHELL && window.SKHPS_SHELL.gate;
+      if (g && isFinite(Number(g.timeoutMs)) && Number(g.timeoutMs) > 0) {
+        return Math.round(Number(g.timeoutMs));
+      }
+    } catch (e) {}
+    return DEFAULT_TIMEOUT_MS;
+  }
+
   var state = {
     required: {},
     background: {},
@@ -985,7 +1000,20 @@
       return;
     }
 
-    state.timer = window.setTimeout(releaseTimeoutFallback, DEFAULT_TIMEOUT_MS);
+    state.timer = window.setTimeout(releaseTimeoutFallback, resolveTimeoutMs());
+  }
+
+  /* 母片就位後（shell-config 填好 window.SKHPS_SHELL）用母片逾時重設 timer——只在尚未
+     release、timer 還在跑時才動（已完成的不能倒回去延後）。母片沒設 gate.timeoutMs 時
+     resolveTimeoutMs() 回 8000，重設等於原值、無副作用。 */
+  function onShellReady() {
+    try {
+      if (state.released || !state.timer) return;
+      var ms = resolveTimeoutMs();
+      if (ms === DEFAULT_TIMEOUT_MS) return; // 沒母片值＝不用重設
+      window.clearTimeout(state.timer);
+      state.timer = window.setTimeout(releaseTimeoutFallback, ms);
+    } catch (e) {}
   }
 
   function receive(input) {
@@ -1078,6 +1106,9 @@
 
     loadInitialTasksFromHtml();
     startTimeout();
+    /* 母片逾時 late update：shell-config 填好 window.SKHPS_SHELL 後才知道母片值，屆時重設
+       timer（見 onShellReady）。同一函式參考重複 addEventListener 會被瀏覽器去重，安全。 */
+    try { document.addEventListener("skhps-shell-ready", onShellReady); } catch (e) {}
   }
 
   function isSpareElement(el) {

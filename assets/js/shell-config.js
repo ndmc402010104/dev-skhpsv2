@@ -73,6 +73,11 @@ prod 安全（使用者反覆強調「正式站不能被影響」）：
     var work = promise.then(applyShell).catch(function (error) {
       rlog("WARN", "shellLoadFailed", { error: error && error.message ? error.message : String(error) });
       // 靜默降級：不設 window.SKHPS_SHELL＝三支 shell 模組用寫死預設
+    }).then(function () {
+      /* 通知已就位：loading-gate 監聽此事件，若母片有設 gate.timeoutMs 就重設保護逾時
+         （startTimeout 早於本檔，當下讀不到，靠這個 late update）。成功失敗都發，讀不到值
+         的模組自然 no-op。 */
+      try { document.dispatchEvent(new CustomEvent("skhps-shell-ready")); } catch (e) {}
     });
 
     /* 讓 boot 等母片就位再繼續（header 在 shell 階段 render，要讀得到值）。 */

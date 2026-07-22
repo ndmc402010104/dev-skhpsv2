@@ -537,6 +537,11 @@
     });
   }
 
+  /* 公開 render（2026-07-22）：對稱 window.SKHPSFooter.render——讓 header 可被程式化重繪
+     （母片回歸測試注入 window.SKHPS_SHELL 後重繪檢查、未來母片即時預覽也用得到）。 */
+  window.SKHPSHeader = window.SKHPSHeader || {};
+  window.SKHPSHeader.render = renderHeader;
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
   } else {

@@ -521,6 +521,16 @@
     // 不要送空字串（送了反而會被當成「明確要求空主題」處理）。
     if (themePreview) payload.theme = themePreview;
 
+    /* 按需拉取（2026-07-23）：頁面用 <html data-skhps-css-components="qr-signin,dressing-inventory"> 宣告
+       要哪些「按需 component」。屬性不存在(沒宣告)→不傳→worker 回全部(行為不變、prod 安全)。屬性存在(含空
+       字串)→傳→worker 只回「核心 + 宣告的按需」。空字串＝只核心(母片編輯這種簡單頁)。 */
+    var compAttr = document.documentElement.getAttribute("data-skhps-css-components");
+    if (compAttr !== null) {
+      payload.pageComponents = compAttr.trim()
+        ? compAttr.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
+        : [];
+    }
+
     return window.SKHPSBackend.call("getCssRegistryRuntime", payload).then(function (res) {
       if (!res || res.ok === false) {
         throw new Error(res && (res.message || res.error) ? (res.message || res.error) : "getCssRegistryRuntime failed");

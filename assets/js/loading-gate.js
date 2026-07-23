@@ -60,7 +60,8 @@
     settleTimer: null,
     visualBudgetMs: 8000,
     finishBudgetMs: 300,
-    finishFillMs: 150,   /* ＝skhps-loading.css fill 的 transition 時長，衝100後等補間跑完才掀幕 */
+    finishFillMs: 150,   /* ＝skhps-loading.css fill 爬升 transition 時長 */
+    finishRushMs: 260,   /* 衝線專用 transition 時長(skhps-finishing)：一口氣俐落衝到100 */
     startedAt: Date.now(),
     lastTickAt: Date.now(),
     finishRequested: false,
@@ -171,10 +172,12 @@
      · 落後 cleared 就有界追上(反映真實、不暴衝)；否則分階段減速涓流(越高越慢但永不為0＝一直在動、
        不長平)；速度由 stage 主導(過越多關越快)。封 92(未完成不接近100)；all-ready 才由 finish 衝 100。 */
   var OUR_SPEED = 4, OUR_DECEL = 1.3, OUR_CAP = 92, OUR_CATCHUP_K = 3, OUR_CATCHUP_MAX = 25, OUR_STAGE_BASE = 1.0, OUR_STAGE_GAIN = 1.5;
-  /* 起步 kick：pos<10% 時額外加斜率，讓開場不會看起來太慢(0關 trickle 才~4%/s、0→10 要2.7s)。
-     線性衰減(pos=0 最大、pos=10 歸零)→平滑接回原曲線、10% 以上完全不變(不衝過頭)。只在沒落後真實
-     (cleared<=pos，即開場0關)時生效；一過關 catchup 就接管、lowKick 自動讓位。 */
-  var OUR_LOW_KICK = 5;
+  /* 出場：讀條一出現就平滑衝到 INITIAL_JUMP%(立即有存在感、不從0慢爬)。起步 kick：pos<KICK_UNTIL% 時
+     額外加斜率、線性衰減到 KICK_UNTIL 歸零→平滑接回原曲線、之上不變(不衝過頭)。只在沒落後真實(開場)時
+     生效，一過關 catchup 就接管、lowKick 自動讓位。(2026-07-23：使用者反映出場仍太慢→加初始跳+擴大kick。) */
+  var OUR_INITIAL_JUMP = 12;
+  var OUR_LOW_KICK = 6;
+  var OUR_KICK_UNTIL = 20;
 
   function ourClearedLevel() {
     var c = 0;
@@ -191,7 +194,7 @@
     var stage = cleared / 25;                        // 0/1/2/3 已完成里程碑數
     var aEff = OUR_STAGE_BASE * (1 + stage * OUR_STAGE_GAIN);
     var pos = progressState.current;
-    var lowKick = pos < 10 ? OUR_LOW_KICK * (1 - pos / 10) : 0;
+    var lowKick = pos < OUR_KICK_UNTIL ? OUR_LOW_KICK * (1 - pos / OUR_KICK_UNTIL) : 0;
     var trickle = OUR_SPEED * aEff * Math.pow(Math.max(0, 1 - pos / 100), OUR_DECEL) + lowKick;
     var catchup = pos < cleared ? Math.min((cleared - pos) * OUR_CATCHUP_K, OUR_CATCHUP_MAX) : 0;
     var next = Math.min(OUR_CAP, pos + Math.max(trickle, catchup) * dt);
@@ -232,7 +235,7 @@
         if (!progressState.finishHoldStarted) {
           progressState.finishHoldStarted = true;
           stopProgressTicker();
-          window.setTimeout(revealContent, progressState.finishFillMs + 40);
+          waitFillThenReveal();
         }
       }
 
@@ -266,6 +269,38 @@
 
     window.clearInterval(progressState.timer);
     progressState.timer = null;
+  }
+
+  /* 讀 fill(body::after)的「視覺」填滿%：解析 computed clip-path 的右 inset。用來確認衝線是否真的走到 100
+     (JS 值到 100 ≠ 視覺到 100，因為有 clip-path transition 落後)。 */
+  function fillVisualPct() {
+    try {
+      var cs = window.getComputedStyle(document.body, "::after");
+      var m = cs.clipPath.match(/inset\(([^)]+)\)/);
+      if (!m) return null;
+      var rv = m[1].trim().split(/\s+/)[1];   // clip-path 右 inset＝calc(100%-progress%)，computed 通常是「百分比」
+      if (rv.indexOf("%") >= 0) return 100 - parseFloat(rv);
+      var w = parseFloat(cs.width);            // 保險：若某瀏覽器 computed 成 px
+      if (!w || isNaN(parseFloat(rv))) return null;
+      return (1 - parseFloat(rv) / w) * 100;
+    } catch (e) { return null; }
+  }
+
+  /* 衝100後：等 fill「視覺」真的補到 ~100 才掀幕，解決「衝線只到95%就掀幕」。快速衝刺時 clip-path transition
+     會落後、若靠定時器猜時機提早 revealContent(重渲染卡主執行緒)會凍住 transition 定格在中途。改用 rAF 輪詢
+     實際視覺值(讀 computed clip-path)，到 99.5% 才掀＝最可靠、不猜；保底時間防輪詢因故讀不到。 */
+  function waitFillThenReveal() {
+    var startedAt = Date.now();
+    function poll() {
+      var v = fillVisualPct();
+      if ((v != null && v >= 99.5) || Date.now() - startedAt > progressState.finishRushMs + 120) {
+        /* 命中：再給 80ms 讓 transition 徹底補到 100 + 短暫展示滿條(撞底確認感)，才掀幕。 */
+        window.setTimeout(revealContent, 80);
+        return;
+      }
+      window.requestAnimationFrame(poll);
+    }
+    poll();
   }
 
   /* 填滿(或 WARN 停頓)之後才渲染頁面內容＋掀幕：markShellReady/markPageReady 會觸發 header/footer/main
@@ -313,19 +348,20 @@
       return;
     }
 
-    setProgressTarget(100, "finish");
-    startProgressTicker();
+    /* 衝線：一次把值設到 100，不用 ticker 多步逼近——多步會讓 clip-path transition 一直追移動目標、視覺遠
+       落後 JS(掀幕時視覺才90幾＝使用者說的「只到95%」)。加 skhps-finishing class 觸發衝線專用較長 ease-out
+       transition，fill 一口氣俐落衝到 100；waitFillThenReveal 輪詢視覺到 99.5 才掀＝一定看得到撞100。 */
+    progressState.finishHoldStarted = true;
+    stopProgressTicker();
+    html.classList.add("skhps-finishing");
+    setProgressValue(100, "finish-rush");
+    waitFillThenReveal();
 
     if (progressState.settleTimer) {
       window.clearTimeout(progressState.settleTimer);
     }
-
-    /*
-      OK / all-ready 保底：
-      正常由 tickProgress 填滿到 100 後才 revealContent(渲染+掀幕)。
-      這裡只防填滿動畫異常沒跑完：填滿預算+緩衝後也保底 revealContent。
-    */
-    progressState.settleTimer = window.setTimeout(revealContent, progressState.finishBudgetMs + 240);
+    /* 外層保底：衝線動畫異常沒跑完時也保底掀幕。 */
+    progressState.settleTimer = window.setTimeout(revealContent, progressState.finishRushMs + 400);
   }
 
   function releaseAfterProgressFill() {
@@ -349,7 +385,8 @@
       progressState.settleTimer = null;
     }
 
-    setProgressValue(0, "reset-zero");
+    html.classList.remove("skhps-finishing");  // 清衝線 class(重來時)
+    setProgressValue(OUR_INITIAL_JUMP, "reset-initial-jump");  // 出場：一出現就平滑衝到 12%，立即有存在感
     setProgressTarget(25, "reset-next-checkpoint");
     startProgressTicker();
   }
@@ -1337,5 +1374,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v9");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v10");
 } catch (error) {}

@@ -918,6 +918,16 @@ body {
   background-image: none;
 }
 
+/* =========================================================
+   SKHPS Loading Finish Rush（2026-07-23）
+   衝線專用 transition：loading-gate.js 在 all-ready 衝100前加 .skhps-finishing。
+   比爬升的 150ms linear 更長、ease-out，讓 fill 一口氣俐落衝到 100（看得到撞底）。
+   specificity(0,3,2) 高於 v5 的 (0,2,2) 且在後面→勝出。
+   ========================================================= */
+html.skhps-loading.skhps-finishing body::after {
+  transition: clip-path 260ms cubic-bezier(.16, .84, .3, 1) !important;
+}
+
 html.skhps-loading,
 html.skhps-css-loading:not(.skhps-loading) {
   background: var(--skhps-loading-page-gradient) !important;

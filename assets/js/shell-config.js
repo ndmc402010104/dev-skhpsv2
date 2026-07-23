@@ -42,6 +42,9 @@ prod 安全（使用者反覆強調「正式站不能被影響」）：
   }
 
   function applyShell(res) {
+    /* 2026-07-23：把完整 page(layout_json + revision)暴露給母片編輯 overlay 共用，免它重複打一次同樣的
+       getPageLayout(shell-skhps)。只是順手掛個 window 全域，對正式站/其他頁零影響(沒人讀就沒事)。 */
+    try { window.__SKHPS_SHELL_LAYOUT = { pageKey: SHELL_PAGE_KEY, page: (res && res.page) || null }; } catch (e) {}
     var shell = res && res.page && res.page.layout_json && res.page.layout_json.shell;
     if (shell && typeof shell === "object" && !Array.isArray(shell)) {
       window.SKHPS_SHELL = shell;

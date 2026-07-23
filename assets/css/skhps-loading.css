@@ -941,3 +941,15 @@ html.skhps-css-loading:not(.skhps-loading) {
    但那個「出場太慢」的真凶其實是 footer 診斷面板 reflow(已修 v14)、gate 接手也順了，不需要假起點。
    讀條從0開始、gate init 後自然爬出。前面 zero-start 已是 --skhps-loading-progress:0，這裡不再覆蓋。 */
 
+/* =========================================================
+   SKHPS Loading 外觀 token 化（2026-07-23）
+   gate 的可換外觀＝5 個 token：--skhps-loading-page-bg / -bg-mid / -bg-end（背景三段漸層）、
+   --skhps-loading-accent（讀條/強調色）、--skhps-loading-text（載入文字色，本次補上，原本寫死 #38332B）。
+   每個都有 fallback＝暖砂原值→沒注入就是原樣(prod 零風險)。換膚時由第一幀 bootstrap 從
+   localStorage["skhpsv2.loadingTheme.v1"](一組 token JSON) 注入這組 CSS 變數→gate 自動跟著 theme 走，
+   不必再為每個 theme 手寫 data-skhps-loading-theme 選擇器(那個舊機制保留當 fallback、相容不衝突)。
+   ========================================================= */
+html.skhps-loading::before {
+  color: var(--skhps-loading-text, #38332B) !important;
+}
+

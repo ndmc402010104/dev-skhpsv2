@@ -51,6 +51,27 @@
         }
       } catch (loadingThemeError) { /* localStorage 讀不到就維持預設暖砂 loading */ }
 
+      // 2026-07-23：gate 外觀 token 化。第一幀(不等網路)讀 localStorage 的 loading token 包，inline 注入
+      // 5 個 CSS 變數→gate 跟著當前 theme 走。沒有就用 skhps-loading.css 的 fallback(暖砂)＝prod 零風險。
+      try {
+        var loadingTheme = JSON.parse(localStorage.getItem("skhpsv2.loadingTheme.v1") || "null");
+        if (loadingTheme && typeof loadingTheme === "object") {
+          var ltEl = document.documentElement;
+          var ltMap = {
+            pageBg: "--skhps-loading-page-bg",
+            pageBgMid: "--skhps-loading-page-bg-mid",
+            pageBgEnd: "--skhps-loading-page-bg-end",
+            accent: "--skhps-loading-accent",
+            text: "--skhps-loading-text"
+          };
+          for (var ltKey in ltMap) {
+            if (ltMap.hasOwnProperty(ltKey) && loadingTheme[ltKey]) {
+              ltEl.style.setProperty(ltMap[ltKey], String(loadingTheme[ltKey]));
+            }
+          }
+        }
+      } catch (loadingTokenError) { /* 壞掉就用 fallback 暖砂 */ }
+
       document.write(
         '<link rel="stylesheet" href="assets/css/skhps-loading.css?v=' +
         encodeURIComponent(version) +

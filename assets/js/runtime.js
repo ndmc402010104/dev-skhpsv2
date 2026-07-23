@@ -2406,6 +2406,15 @@
   }
 
   function renderPanel() {
+    /* ⚠ loading 期間守衛（2026-07-23）：診斷面板在 loading 畫面被 CSS 遮罩藏著、使用者看不到，但這裡的
+       建構 + getBoundingClientRect 佈局測量會 forced reflow、卡住主執行緒→讀條動畫(gate)被凍＝使用者實測
+       「卡卡不順滑」的真兇(profile：載入期 getBoundingClientRect ~107ms)。載入期各模組不斷回報狀態→
+       scheduleRender→renderPanel 反覆測量。gate 只該等 backend，不該被診斷面板卡。→ loading 期間直接跳過，
+       掀幕(loading released)後由 renderWhenRevealed() 補跑一次。 */
+    var docEl = document.documentElement;
+    if (docEl.classList.contains("skhps-loading") && docEl.getAttribute("data-skhps-loading-released") !== "true") {
+      return null;
+    }
     var panel = findOrCreatePanel();
     var previousScrollTop = 0;
     var shouldRestorePanelScroll = false;
@@ -2656,6 +2665,11 @@
    * 直接回寫，不去動 --skhps-runtime-summary-height 等一整組本來就沒接上的變數。
    */
   function updateBottomSheetObstruction(panel) {
+    /* loading 期間守衛：同 renderPanel，getBoundingClientRect 測量會 reflow 卡讀條；掀幕後補跑。 */
+    var docEl = document.documentElement;
+    if (docEl.classList.contains("skhps-loading") && docEl.getAttribute("data-skhps-loading-released") !== "true") {
+      return;
+    }
     var height = 0;
     try {
       var target = panel || document.getElementById(PANEL_ID);
@@ -2855,9 +2869,38 @@
     status: "OK"
   });
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", renderPanel);
-  } else {
-    renderPanel();
+  /* 首次建面板：非 loading 頁立即(或 DOMContentLoaded)建；loading 頁則等掀幕(skhps-loading 移除 /
+     loading-released=true)後才建＝gate 期間主執行緒完全不被診斷面板的 reflow 佔用、讀條才順。
+     掀幕後補跑 renderPanel + updateBottomSheetObstruction 各一次。 */
+  function renderWhenRevealed() {
+    var docEl = document.documentElement;
+    function revealed() {
+      return !docEl.classList.contains("skhps-loading") ||
+        docEl.getAttribute("data-skhps-loading-released") === "true";
+    }
+    function fire() {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function () {
+          renderPanel();
+          updateBottomSheetObstruction();
+        });
+      } else {
+        renderPanel();
+        updateBottomSheetObstruction();
+      }
+    }
+    if (revealed()) {
+      fire();
+      return;
+    }
+    var mo = new MutationObserver(function () {
+      if (revealed()) {
+        mo.disconnect();
+        fire();
+      }
+    });
+    mo.observe(docEl, { attributes: true, attributeFilter: ["class", "data-skhps-loading-released"] });
   }
+
+  renderWhenRevealed();
 })();

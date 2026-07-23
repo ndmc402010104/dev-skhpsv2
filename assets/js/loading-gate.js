@@ -172,10 +172,10 @@
      · 落後 cleared 就有界追上(反映真實、不暴衝)；否則分階段減速涓流(越高越慢但永不為0＝一直在動、
        不長平)；速度由 stage 主導(過越多關越快)。封 92(未完成不接近100)；all-ready 才由 finish 衝 100。 */
   var OUR_SPEED = 4, OUR_DECEL = 1.3, OUR_CAP = 92, OUR_CATCHUP_K = 3, OUR_CATCHUP_MAX = 25, OUR_STAGE_BASE = 1.0, OUR_STAGE_GAIN = 1.5;
-  /* 出場：讀條一出現就平滑衝到 INITIAL_JUMP%(立即有存在感、不從0慢爬)。起步 kick：pos<KICK_UNTIL% 時
-     額外加斜率、線性衰減到 KICK_UNTIL 歸零→平滑接回原曲線、之上不變(不衝過頭)。只在沒落後真實(開場)時
-     生效，一過關 catchup 就接管、lowKick 自動讓位。(2026-07-23：使用者反映出場仍太慢→加初始跳+擴大kick。) */
-  var OUR_INITIAL_JUMP = 12;
+  /* 出場從 0 開始(2026-07-23 使用者：一進畫面就跳到起點很怪，要從0)。INITIAL_JUMP=0＝reset 設0、讀條從0爬。
+     起步 kick：pos<KICK_UNTIL% 額外加斜率、線性衰減到 KICK_UNTIL 歸零→平滑接回原曲線、之上不變(不衝過頭)，
+     讓 0 起步不會太慢；只在沒落後真實(開場)時生效，一過關 catchup 接管、lowKick 讓位。 */
+  var OUR_INITIAL_JUMP = 0;
   var OUR_LOW_KICK = 6;
   var OUR_KICK_UNTIL = 20;
 
@@ -386,7 +386,7 @@
     }
 
     html.classList.remove("skhps-finishing");  // 清衝線 class(重來時)
-    setProgressValue(OUR_INITIAL_JUMP, "reset-initial-jump");  // 出場：一出現就平滑衝到 12%，立即有存在感
+    setProgressValue(OUR_INITIAL_JUMP, "reset-initial-jump");  // 出場從 0 開始(INITIAL_JUMP=0)，靠 kick 爬出
     setProgressTarget(25, "reset-next-checkpoint");
     startProgressTicker();
   }
@@ -1374,5 +1374,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v14");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v15");
 } catch (error) {}

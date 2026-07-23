@@ -273,24 +273,34 @@
 
   /* 讀 fill(body::after)的「視覺」填滿%：解析 computed clip-path 的右 inset。用來確認衝線是否真的走到 100
      (JS 值到 100 ≠ 視覺到 100，因為有 clip-path transition 落後)。 */
-  /* 讀 fill 的「視覺」填滿%＝transform 的 scaleX(*100)。僅供 standalone 驗證用；真流程不靠它判斷掀幕時機
-     (compositor transition 的 getComputedStyle 可能回目標值、不是實時插值)。 */
   function fillVisualPct() {
     try {
-      var t = window.getComputedStyle(document.body, "::after").transform || "";
-      if (t.indexOf("matrix") === 0) {
-        var a = parseFloat(t.slice(t.indexOf("(") + 1).split(",")[0]);  // matrix(a,..) 的 a＝scaleX
-        if (!isNaN(a)) return a * 100;
-      }
-      return null;
+      var cs = window.getComputedStyle(document.body, "::after");
+      var m = cs.clipPath.match(/inset\(([^)]+)\)/);
+      if (!m) return null;
+      var rv = m[1].trim().split(/\s+/)[1];   // clip-path 右 inset＝calc(100%-progress%)，computed 通常是「百分比」
+      if (rv.indexOf("%") >= 0) return 100 - parseFloat(rv);
+      var w = parseFloat(cs.width);            // 保險：若某瀏覽器 computed 成 px
+      if (!w || isNaN(parseFloat(rv))) return null;
+      return (1 - parseFloat(rv) / w) * 100;
     } catch (e) { return null; }
   }
 
-  /* 衝100後掀幕時機：fill 用 transform scaleX＝合成器動畫，時間可靠(不受主執行緒 jank 影響)，所以用固定
-     timer 等衝線 transition(finishRushMs)跑完 + 短暫展示滿條再掀幕＝一定看得到俐落撞100。不用輪詢視覺
-     ——compositor transition 的 getComputedStyle 值不可靠(可能回目標)。settleTimer 為外層保底。 */
+  /* 衝100後：等 fill「視覺」真的補到 ~100 才掀幕，解決「衝線只到95%就掀幕」。快速衝刺時 clip-path transition
+     會落後、若靠定時器猜時機提早 revealContent(重渲染卡主執行緒)會凍住 transition 定格在中途。改用 rAF 輪詢
+     實際視覺值(讀 computed clip-path)，到 99.5% 才掀＝最可靠、不猜；保底時間防輪詢因故讀不到。 */
   function waitFillThenReveal() {
-    window.setTimeout(revealContent, progressState.finishRushMs + 80);
+    var startedAt = Date.now();
+    function poll() {
+      var v = fillVisualPct();
+      if ((v != null && v >= 99.5) || Date.now() - startedAt > progressState.finishRushMs + 120) {
+        /* 命中：再給 80ms 讓 transition 徹底補到 100 + 短暫展示滿條(撞底確認感)，才掀幕。 */
+        window.setTimeout(revealContent, 80);
+        return;
+      }
+      window.requestAnimationFrame(poll);
+    }
+    poll();
   }
 
   /* 填滿(或 WARN 停頓)之後才渲染頁面內容＋掀幕：markShellReady/markPageReady 會觸發 header/footer/main
@@ -1364,5 +1374,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v12");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v13");
 } catch (error) {}

@@ -947,26 +947,3 @@ html.skhps-loading {
   --skhps-loading-progress: 10;
 }
 
-/* =========================================================
-   SKHPS Loading Compositor Fill v6（2026-07-23）
-   把 fill 從 clip-path 改回 transform: scaleX。原因：clip-path 的 transition 由**主執行緒**驅動，載入期
-   主執行緒最忙(entry-core/CSS套用/header 渲染)→補間被 jank 凍住＝使用者實測「還是卡卡不順滑」。transform
-   是**合成器(GPU)加速**屬性，transition 在另一執行緒跑、**不受主執行緒 jank 影響**＝真正順滑(NProgress/
-   YouTube 頂部讀條同招)。代價：scaleX 讓右端圓角輕微變形(6px高幾乎看不出)——取捨：順滑 > 圓角完美。
-   放檔尾＋!important＝勝過 v5 的 clip-path。scaleX 讀 --skhps-loading-progress(出場初值10)。
-   ========================================================= */
-html.skhps-loading body::after {
-  clip-path: none !important;
-  transform-origin: left center !important;
-  transform:
-    translateX(-50%)
-    scaleX(calc(max(0, min(100, var(--skhps-loading-progress, 10))) / 100)) !important;
-  transition: transform 150ms linear !important;
-  will-change: transform !important;
-}
-
-/* 衝線：合成器動畫，時間可靠(不被 jank 卡)，用較長 ease-out 一口氣俐落衝到 100。 */
-html.skhps-loading.skhps-finishing body::after {
-  transition: transform 260ms cubic-bezier(.16, .84, .3, 1) !important;
-}
-

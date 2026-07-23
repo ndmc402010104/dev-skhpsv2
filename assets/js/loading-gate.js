@@ -171,6 +171,10 @@
      · 落後 cleared 就有界追上(反映真實、不暴衝)；否則分階段減速涓流(越高越慢但永不為0＝一直在動、
        不長平)；速度由 stage 主導(過越多關越快)。封 92(未完成不接近100)；all-ready 才由 finish 衝 100。 */
   var OUR_SPEED = 4, OUR_DECEL = 1.3, OUR_CAP = 92, OUR_CATCHUP_K = 3, OUR_CATCHUP_MAX = 25, OUR_STAGE_BASE = 1.0, OUR_STAGE_GAIN = 1.5;
+  /* 起步 kick：pos<10% 時額外加斜率，讓開場不會看起來太慢(0關 trickle 才~4%/s、0→10 要2.7s)。
+     線性衰減(pos=0 最大、pos=10 歸零)→平滑接回原曲線、10% 以上完全不變(不衝過頭)。只在沒落後真實
+     (cleared<=pos，即開場0關)時生效；一過關 catchup 就接管、lowKick 自動讓位。 */
+  var OUR_LOW_KICK = 5;
 
   function ourClearedLevel() {
     var c = 0;
@@ -187,7 +191,8 @@
     var stage = cleared / 25;                        // 0/1/2/3 已完成里程碑數
     var aEff = OUR_STAGE_BASE * (1 + stage * OUR_STAGE_GAIN);
     var pos = progressState.current;
-    var trickle = OUR_SPEED * aEff * Math.pow(Math.max(0, 1 - pos / 100), OUR_DECEL);
+    var lowKick = pos < 10 ? OUR_LOW_KICK * (1 - pos / 10) : 0;
+    var trickle = OUR_SPEED * aEff * Math.pow(Math.max(0, 1 - pos / 100), OUR_DECEL) + lowKick;
     var catchup = pos < cleared ? Math.min((cleared - pos) * OUR_CATCHUP_K, OUR_CATCHUP_MAX) : 0;
     var next = Math.min(OUR_CAP, pos + Math.max(trickle, catchup) * dt);
     setProgressValue(next, "our-trickle");
@@ -1332,5 +1337,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v8");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v9");
 } catch (error) {}

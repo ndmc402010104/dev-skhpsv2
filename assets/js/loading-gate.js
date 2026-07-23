@@ -1374,5 +1374,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v10");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v11");
 } catch (error) {}

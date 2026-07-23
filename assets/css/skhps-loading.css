@@ -937,3 +937,13 @@ html.skhps-css-loading:not(.skhps-loading) {
   animation: none !important;
 }
 
+/* =========================================================
+   SKHPS Loading 出場起點（2026-07-23）
+   gate JS(setProgressValue)接手前的第一幀起點：給非0初值，讀條一出現就有存在感，不會在 gate 模組
+   (entry-core boot 序列)載入完成前『空窗停在0』——那才是「出場太慢」的真凶(實測真站頭420ms視覺=0)。
+   gate init 後 setProgressValue 寫 inline 值(優先於 stylesheet)無縫接手。放檔尾＝勝過前面所有 zero-start。
+   ========================================================= */
+html.skhps-loading {
+  --skhps-loading-progress: 10;
+}
+

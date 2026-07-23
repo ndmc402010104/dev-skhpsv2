@@ -133,6 +133,12 @@
     try {
       var style = window.getComputedStyle ? window.getComputedStyle(footer) : null;
       var isFixed = style && style.position === "fixed";
+      /* 母片可設 footer 往上位移（2026-07-23，母片編輯拖 footer 設計位置）：offsetY＝footer 底邊離視窗底的
+         px。只在 fixed 時套（釘視窗底才有意義），覆蓋 registry 的 bottom。0/未設＝清掉＝貼底（現況不變）。 */
+      var shellFooter = (window.SKHPS_SHELL && window.SKHPS_SHELL.footer) || {};
+      var footerOffsetY = Math.max(0, Math.min(400, Math.round(Number(shellFooter.offsetY) || 0)));
+      if (isFixed && footerOffsetY) footer.style.setProperty("bottom", footerOffsetY + "px", "important");
+      else footer.style.removeProperty("bottom");
       var footerRect = footer.getBoundingClientRect();
       var viewportHeight = metrics.layoutHeight || window.innerHeight || document.documentElement.clientHeight || 0;
       var footerHeight = Math.ceil(footerRect.height || footer.offsetHeight || 0) || 48;
@@ -147,7 +153,7 @@
        * 只有 flow full 需要讓頁尾 runtime-tail 接續內容；如果 footer 是 fixed，才保留安全距離。
        */
       var shouldReserve = Boolean(isFixed);
-      var height = shouldReserve ? footerHeight + metrics.bottomGap + 16 : 0;
+      var height = shouldReserve ? footerHeight + metrics.bottomGap + 16 + footerOffsetY : 0;
 
       document.documentElement.setAttribute("data-skhps-footer-fixed", isFixed ? "true" : "false");
       document.documentElement.setAttribute("data-skhps-footer-reserve", shouldReserve ? "true" : "false");

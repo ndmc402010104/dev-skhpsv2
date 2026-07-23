@@ -31,12 +31,10 @@
   --skhps-loading-page-bg-mid: #FAF5EC;
   --skhps-loading-page-bg-end: #F6EFE0;
   --skhps-loading-accent: #587F5C;
-  --skhps-loading-page-gradient: linear-gradient(
-    135deg,
-    var(--skhps-loading-page-bg, #FBF7EE) 0%,
-    var(--skhps-loading-page-bg-mid, #FAF5EC) 48%,
-    var(--skhps-loading-page-bg-end, #F6EFE0) 100%
-  );
+  /* 2026-07-23：背景收成單一純色。原本三段漸層 #FBF7EE→#FAF5EC→#F6EFE0 差異肉眼看不出、是歷史 patch
+     的「假漸層」(非刻意設計)。收純色①更符合原意②純色才能讓 background-color 直接 CSS transition(往後
+     「中性開場→染上當前皮膚」的染色過渡就一行搞定，不必 gradient crossfade)。變數名保留相容既有引用。 */
+  --skhps-loading-page-gradient: var(--skhps-loading-page-bg, #FBF7EE);
   color-scheme: light;
 }
 

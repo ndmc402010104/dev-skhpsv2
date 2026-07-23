@@ -891,7 +891,12 @@ html.skhps-loading body::after {
   background: var(--skhps-loading-accent) !important;
   box-shadow: none !important;
   filter: none !important;
-  transition: none !important;
+  /* 2026-07-23：讀條「一卡一卡」根因＝這裡原本 transition:none，每次 JS 改
+     --skhps-loading-progress 就瞬跳；載入期主執行緒忙、setInterval(16) 觸發不規律→一次跳一大格。
+     改加短 transition，讓瀏覽器在兩次 JS 更新之間補間 clip-path→平滑掩護 jank。
+     150ms linear：夠補掉頓挫、又只落後真實顯示 1~2%(無感)。配套：loading-gate.js finish 衝 100 後
+     要等這段補間跑完(FILL_MS)才掀幕，否則 fill 沒補滿就被移除 loading class 而消失。 */
+  transition: clip-path 150ms linear !important;
   will-change: clip-path;
 }
 

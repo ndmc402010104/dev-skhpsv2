@@ -594,11 +594,21 @@
           root.style.removeProperty("padding-left");
           root.style.removeProperty("padding-right");
         }
+        /* 切換級距的「一卡一卡」＝寬度瞬間跳變、沒過渡。加 transition 讓膠囊寬度/root 內距平滑滑動。
+           用 rAF 延一幀才掛 transition：首次 render（真站載入）width 是在無 transition 下設定＝直接到位
+           不亂滑；之後的切換(編輯器/母片改寬)transition 已就位＝平滑動畫。只在有母片 width 設定時掛，
+           prod 無設定走 else 完全不碰(零風險)。 */
+        requestAnimationFrame(function () {
+          innerEl.style.setProperty("transition", "width .28s cubic-bezier(.22,.61,.36,1)", "important");
+          root.style.setProperty("transition", "padding .28s cubic-bezier(.22,.61,.36,1)", "important");
+        });
       } else {
         innerEl.style.removeProperty("width");
         innerEl.style.removeProperty("max-width");
+        innerEl.style.removeProperty("transition");
         root.style.removeProperty("padding-left");
         root.style.removeProperty("padding-right");
+        root.style.removeProperty("transition");
       }
     }
 

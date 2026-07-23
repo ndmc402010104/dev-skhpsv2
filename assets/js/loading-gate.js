@@ -60,6 +60,7 @@
     settleTimer: null,
     visualBudgetMs: 8000,
     finishBudgetMs: 300,
+    finishFillMs: 150,   /* ＝skhps-loading.css fill 的 transition 時長，衝100後等補間跑完才掀幕 */
     startedAt: Date.now(),
     lastTickAt: Date.now(),
     finishRequested: false,
@@ -219,10 +220,15 @@
       );
 
       if (progressState.current >= 99.7) {
-        /* 填滿到 100 了 → 現在才渲染頁面內容＋掀幕。把會卡主執行緒的重渲染放到填滿之後，
-           填滿動畫才不會被凍住、使用者一定看得到跑到 100（撞 100 才拿掉布幕）。 */
+        /* 填滿到 100 了。JS 值到 100 ≠ CSS fill 視覺到 100：fill 有 150ms clip-path transition 補間，
+           若立刻 revealContent(移除 skhps-loading)會讓 fill 元素在補滿前就消失＝沒看到撞100。所以等
+           補間跑完(finishFillMs)再掀幕。停 ticker+finishHoldStarted 保證只排一次；settleTimer 為外層保底。 */
         setProgressValue(100, "runway-pass-100-fast-enter");
-        revealContent();
+        if (!progressState.finishHoldStarted) {
+          progressState.finishHoldStarted = true;
+          stopProgressTicker();
+          window.setTimeout(revealContent, progressState.finishFillMs + 40);
+        }
       }
 
       return;

@@ -951,3 +951,16 @@ html.skhps-loading::before {
   color: var(--skhps-loading-text, #38332B) !important;
 }
 
+/* =========================================================
+   SKHPS Loading 染色過渡（2026-07-23）
+   gate 中性/暖砂開場 → loading-gate.js 在「皮膚 CSS 就緒」(markCssReady)時把當前皮膚色(--sk-*)
+   set 到 gate token → 這裡的 .55s transition 讓背景/文字/讀條「柔和染上」當前皮膚色。
+   純色背景才能這樣直接 transition(不必 gradient crossfade)。所有皮膚(含外部)自動支援＝載入中才拿色。
+   衝線(skhps-finishing)的 clip-path 260ms 仍由更高 specificity 規則勝出，不受影響。 */
+html.skhps-loading { transition: background-color .55s ease !important; }
+html.skhps-loading::before { transition: color .55s ease !important; }
+html.skhps-loading::after { transition: background-color .55s ease !important; }
+html.skhps-loading body::after {
+  transition: clip-path 150ms linear, background-color .55s ease !important;
+}
+

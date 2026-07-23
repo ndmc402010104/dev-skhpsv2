@@ -621,12 +621,33 @@
     };
   }
 
+  /* 染色：皮膚 CSS 就緒後(markCssReady)，把正式皮膚色 --sk-bg/-primary/-text 讀出來 set 到 gate token
+     (--skhps-loading-page-bg/-accent/-text)。配合 skhps-loading.css 的 .55s transition→gate 從中性/暖砂
+     開場「柔和染上」當前皮膚色。任何皮膚(含外部動態新增)都自動支援＝載入中才從當前 registry 拿色，不必
+     第一幀就知道皮膚、不必 localStorage 快取。讀不到(無皮膚/舊頁)就維持開場色。 */
+  function tintGateFromTheme() {
+    try {
+      var cs = window.getComputedStyle(html);
+      var map = {
+        "--skhps-loading-page-bg": "--sk-bg",
+        "--skhps-loading-accent": "--sk-primary",
+        "--skhps-loading-text": "--sk-text"
+      };
+      for (var gv in map) {
+        if (!map.hasOwnProperty(gv)) continue;
+        var v = cs.getPropertyValue(map[gv]).trim();
+        if (v) html.style.setProperty(gv, v);
+      }
+    } catch (e) {}
+  }
+
   function markCssReady(reason, status) {
     if (state.cssReady) {
       return;
     }
 
     state.cssReady = true;
+    tintGateFromTheme();
 
     html.classList.remove(CSS_LOADING_CLASS);
 
@@ -1374,5 +1395,5 @@
 
 /* SKHPS Loading Runway Chase Round Fill v5 marker */
 try {
-  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v15");
+  document.documentElement.setAttribute("data-skhps-loading-gate-version", "our-trickle-round-fill-v16");
 } catch (error) {}

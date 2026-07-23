@@ -93,9 +93,14 @@
          .skhps-footer-quiet——把三欄開發診斷（狀態燈/版本/切換）display:none，只留置中版權列。
          DOM 仍完整建構（measure/互動監聽不會 null），observeFooterSize 量到的是版權列高度，
          版面計算自動相容。runtime panel 因 toggle 被隱藏、使用者點不開，維持收合不顯示。 */
-      ".skhps-footer-copyright{display:none;width:100%;text-align:center;padding:10px 12px;font-size:13px;font-weight:600;opacity:.85}",
+      ".skhps-footer-copyright{display:none;box-sizing:border-box;width:100%;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:10px 12px;font-size:13px;font-weight:600;opacity:.85}",
+      ".skhps-footer-cp-slot{display:flex;align-items:center;gap:10px;min-width:0}",
+      ".skhps-footer-cp-slot-left{justify-content:flex-start}",
+      ".skhps-footer-cp-slot-center{justify-content:center}",
+      ".skhps-footer-cp-slot-right{justify-content:flex-end}",
+      ".skhps-footer-cp-item{white-space:nowrap}",
       ".skhps-footer-quiet>.skhps-footer-left,.skhps-footer-quiet>.skhps-footer-center,.skhps-footer-quiet>.skhps-footer-right{display:none!important}",
-      ".skhps-footer-quiet .skhps-footer-copyright{display:block}"
+      ".skhps-footer-quiet .skhps-footer-copyright{display:grid}"
     ].join("\n");
     document.head.appendChild(style);
   }
@@ -133,12 +138,9 @@
     try {
       var style = window.getComputedStyle ? window.getComputedStyle(footer) : null;
       var isFixed = style && style.position === "fixed";
-      /* 母片可設 footer 往上位移（2026-07-23，母片編輯拖 footer 設計位置）：offsetY＝footer 底邊離視窗底的
-         px。只在 fixed 時套（釘視窗底才有意義），覆蓋 registry 的 bottom。0/未設＝清掉＝貼底（現況不變）。 */
-      var shellFooter = (window.SKHPS_SHELL && window.SKHPS_SHELL.footer) || {};
-      var footerOffsetY = Math.max(0, Math.min(400, Math.round(Number(shellFooter.offsetY) || 0)));
-      if (isFixed && footerOffsetY) footer.style.setProperty("bottom", footerOffsetY + "px", "important");
-      else footer.style.removeProperty("bottom");
+      /* footer 一律貼底（2026-07-23：拿掉「拖到半空中」的 offsetY，改成只調高度——高度套在版權列上、
+         footer 隨之高，下面的 footerHeight 量測會自然帶到，safe-area 自動相容）。 */
+      footer.style.removeProperty("bottom");
       var footerRect = footer.getBoundingClientRect();
       var viewportHeight = metrics.layoutHeight || window.innerHeight || document.documentElement.clientHeight || 0;
       var footerHeight = Math.ceil(footerRect.height || footer.offsetHeight || 0) || 48;
@@ -153,7 +155,7 @@
        * 只有 flow full 需要讓頁尾 runtime-tail 接續內容；如果 footer 是 fixed，才保留安全距離。
        */
       var shouldReserve = Boolean(isFixed);
-      var height = shouldReserve ? footerHeight + metrics.bottomGap + 16 + footerOffsetY : 0;
+      var height = shouldReserve ? footerHeight + metrics.bottomGap + 16 : 0;
 
       document.documentElement.setAttribute("data-skhps-footer-fixed", isFixed ? "true" : "false");
       document.documentElement.setAttribute("data-skhps-footer-reserve", shouldReserve ? "true" : "false");
@@ -1711,11 +1713,44 @@
     var copyrightRow = document.createElement("div");
     copyrightRow.className = "skhps-footer-copyright";
     /* 正式版那條＝版權 + 版本號（2026-07-23）：版權由母片 footer.copyright 設；版本號取
-       getBusinessVersionInfo()。兩者都有→「版權　·　版本」；只有一個就顯示那個；版本還沒載到→先只版權。 */
+       getBusinessVersionInfo()、正式站只顯示主版號（v0.9.79，去掉 -時間戳）。版權/版本號各自可設
+       左/中/右對齊（母片 footer.copyrightAlign / versionAlign，預設版權靠左、版本號靠右）；用「左/中/右
+       三格」grid 排（中間格保證置中）。兩者選同一格時，footer.copyVersionOrder 決定誰在前。
+       高度由 footer.heightPx 套在版權列上（footer 隨之高，safe-area 量測自動相容）。 */
     var copyText = shellFooter.copyright != null ? String(shellFooter.copyright).trim() : "";
     var vInfo = getBusinessVersionInfo();
-    var vText = vInfo && vInfo.version ? String(vInfo.version).trim() : "";
-    copyrightRow.textContent = [copyText, vText].filter(Boolean).join("　·　");
+    var vRaw = vInfo && vInfo.version ? String(vInfo.version).trim() : "";
+    var vText = vRaw ? vRaw.split("-")[0] : "";  // v0.9.79-202607... → v0.9.79
+    var validAlign = function (a, dft) { a = String(a || "").toLowerCase(); return ["left", "center", "right"].indexOf(a) >= 0 ? a : dft; };
+    var copyItem = null, verItem = null;
+    if (copyText) {
+      copyItem = document.createElement("span");
+      copyItem.className = "skhps-footer-cp-item skhps-footer-cp-copyright";
+      copyItem.textContent = copyText;
+    }
+    if (vText) {
+      verItem = document.createElement("span");
+      verItem.className = "skhps-footer-cp-item skhps-footer-cp-version";
+      verItem.textContent = vText;
+    }
+    var copyAlign = validAlign(shellFooter.copyrightAlign, "left");
+    var verAlign = validAlign(shellFooter.versionAlign, "right");
+    var versionFirst = String(shellFooter.copyVersionOrder || "").toLowerCase() === "version";  // 同格時版本號在前
+    var slots = { left: [], center: [], right: [] };
+    var first = versionFirst ? verItem : copyItem;
+    var firstAlign = versionFirst ? verAlign : copyAlign;
+    var second = versionFirst ? copyItem : verItem;
+    var secondAlign = versionFirst ? copyAlign : verAlign;
+    if (first) slots[firstAlign].push(first);
+    if (second) slots[secondAlign].push(second);
+    ["left", "center", "right"].forEach(function (pos) {
+      var slot = document.createElement("div");
+      slot.className = "skhps-footer-cp-slot skhps-footer-cp-slot-" + pos;
+      slots[pos].forEach(function (el) { slot.appendChild(el); });
+      copyrightRow.appendChild(slot);
+    });
+    var footerHeightPx = Math.max(0, Math.min(240, Math.round(Number(shellFooter.heightPx) || 0)));
+    if (footerHeightPx) copyrightRow.style.minHeight = footerHeightPx + "px";  // 高度可調（0/未設＝內容撐、現況不變）
     footer.appendChild(copyrightRow);
 
     ensureRuntimePanel(true);

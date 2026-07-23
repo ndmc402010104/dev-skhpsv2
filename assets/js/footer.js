@@ -1701,9 +1701,15 @@
 
     /* 版權列（quiet 模式才顯示，CSS 控制）：母片沒設 copyright 就留空——footer 變成一條很矮的
        空列，仍是有效狀態（使用者填了才有字）。三欄照建在上面，被 CSS 隱藏、不佔高。 */
+    loadVersionJsIfNeeded();  // 確保版本載入；載到後 render() 重建、版本號自然補上
     var copyrightRow = document.createElement("div");
     copyrightRow.className = "skhps-footer-copyright";
-    copyrightRow.textContent = (shellFooter.copyright != null ? String(shellFooter.copyright) : "");
+    /* 正式版那條＝版權 + 版本號（2026-07-23）：版權由母片 footer.copyright 設；版本號取
+       getBusinessVersionInfo()。兩者都有→「版權　·　版本」；只有一個就顯示那個；版本還沒載到→先只版權。 */
+    var copyText = shellFooter.copyright != null ? String(shellFooter.copyright).trim() : "";
+    var vInfo = getBusinessVersionInfo();
+    var vText = vInfo && vInfo.version ? String(vInfo.version).trim() : "";
+    copyrightRow.textContent = [copyText, vText].filter(Boolean).join("　·　");
     footer.appendChild(copyrightRow);
 
     ensureRuntimePanel(true);

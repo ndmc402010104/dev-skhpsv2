@@ -1750,7 +1750,7 @@
       copyrightRow.appendChild(slot);
     });
     var footerHeightAdjust = Math.max(-20, Math.min(60, Math.round(Number(shellFooter.footerHeightAdjust) || 0)));
-    if (footerHeightAdjust) {
+    if (footerQuiet && footerHeightAdjust) {   // 高度只作用在正式版（版權列）；開發版診斷面板另一回事，不被影響
       /* 相對自然高度的增減（不是絕對高度）：版權列預設垂直 padding 10px＝自然。adjust/2 加減到 padding
          →整條總高變化約 ±adjust。負＝變薄（padding 最低 0，約到內容高）、正＝變厚。全程只調 padding，
          不設固定 height、不裁切內容；並用 !important 解除 footer 元素本身的 min-height 地板（registry／

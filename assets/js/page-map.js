@@ -194,7 +194,27 @@ Purpose: render the shared SKHPS page map / breadcrumb.
     return sep;
   }
 
+  /* 母片可控「內容外框間距」（2026-07-24）：頁面內容根（main＝.skhps-page）上緣到頁首、下緣到頁尾
+     的距離，是全站一致的版面外框 → 母片控制（shell.content.topGap／bottomGap，px）。用 inline
+     important 覆蓋 registry 的寫死 padding（首頁 hero 的 .skhps-index-page 上緣 ~51px），確保調得動；
+     沒設定＝清掉 inline＝用 registry 現值（prod 零風險）。跟麵包屑顯示與否無關，故在 render() 最前面
+     就套——麵包屑全站關掉時外框間距照樣生效。統一管理間距的中央入口，之後其他間距照同一套擴充。 */
+  function applyContentFrame() {
+    var main = document.querySelector("main");
+    if (!main) return;
+    var c = window.SKHPS_SHELL && window.SKHPS_SHELL.content;
+    function px(v) { return (v != null && isFinite(Number(v))) ? Math.round(Number(v)) : null; }
+    var top = px(c && c.topGap);
+    var bottom = px(c && c.bottomGap);
+    if (top != null) main.style.setProperty("padding-top", top + "px", "important");
+    else main.style.removeProperty("padding-top");
+    if (bottom != null) main.style.setProperty("padding-bottom", bottom + "px", "important");
+    else main.style.removeProperty("padding-bottom");
+  }
+
   function render() {
+    applyContentFrame();
+
     var target = getTarget();
 
     /* 母片全站開關（2026-07-22）：麵包屑「要不要顯示」是全站共用行為 → 母片控制

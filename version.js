@@ -34,11 +34,11 @@ margin-top 72px 等會疊在 topGap 上讓各頁 header→內容不一）。head
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.12-202607241304",
+  version: "v2.12.13-202607241309",
   major: 2,
   minor: 12,
-  patch: 12,
-  buildTime: "202607241304",
+  patch: 13,
+  buildTime: "202607241309",
   updatedAt: "2026-07-24T13:04:00+08:00",
   source: "version.js"
 };

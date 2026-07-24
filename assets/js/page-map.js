@@ -213,19 +213,21 @@ Purpose: render the shared SKHPS page map / breadcrumb.
        各頁不一。所以 topGap 生效時，把第一個內容元素自帶的 top margin 一併收掉（bottomGap 同理收
        最後一個元素的 bottom margin）——header→內容／內容→footer 完全由母片這兩個值決定，全站一致。
        沒設＝清掉全部 inline＝退回 registry 現值（prod 零風險）。 */
+    /* 第一個內容元素（多半是 .skhps-container）自帶的頂部間距，各頁用 margin-top（admin/tools 72px）
+       或 padding-top（quick 34px）表達，兩種都要收，header→內容才會全站一致由 topGap 決定。 */
     if (top != null) {
       main.style.setProperty("padding-top", top + "px", "important");
-      if (first) first.style.setProperty("margin-top", "0", "important");
+      if (first) { first.style.setProperty("margin-top", "0", "important"); first.style.setProperty("padding-top", "0", "important"); }
     } else {
       main.style.removeProperty("padding-top");
-      if (first) first.style.removeProperty("margin-top");
+      if (first) { first.style.removeProperty("margin-top"); first.style.removeProperty("padding-top"); }
     }
     if (bottom != null) {
       main.style.setProperty("padding-bottom", bottom + "px", "important");
-      if (last) last.style.setProperty("margin-bottom", "0", "important");
+      if (last) { last.style.setProperty("margin-bottom", "0", "important"); last.style.setProperty("padding-bottom", "0", "important"); }
     } else {
       main.style.removeProperty("padding-bottom");
-      if (last) last.style.removeProperty("margin-bottom");
+      if (last) { last.style.removeProperty("margin-bottom"); last.style.removeProperty("padding-bottom"); }
     }
   }
 

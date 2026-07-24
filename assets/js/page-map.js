@@ -206,10 +206,27 @@ Purpose: render the shared SKHPS page map / breadcrumb.
     function px(v) { return (v != null && isFinite(Number(v))) ? Math.round(Number(v)) : null; }
     var top = px(c && c.topGap);
     var bottom = px(c && c.bottomGap);
-    if (top != null) main.style.setProperty("padding-top", top + "px", "important");
-    else main.style.removeProperty("padding-top");
-    if (bottom != null) main.style.setProperty("padding-bottom", bottom + "px", "important");
-    else main.style.removeProperty("padding-bottom");
+    var first = main.firstElementChild;
+    var last = main.lastElementChild;
+    /* 只設 main 的 padding 還不夠統一：有些頁在 main 內又包一層 .skhps-container，那層自帶
+       margin-top（admin/tools 72px、quick ~34px、index 沒有），會疊在 topGap 上讓「header→內容」
+       各頁不一。所以 topGap 生效時，把第一個內容元素自帶的 top margin 一併收掉（bottomGap 同理收
+       最後一個元素的 bottom margin）——header→內容／內容→footer 完全由母片這兩個值決定，全站一致。
+       沒設＝清掉全部 inline＝退回 registry 現值（prod 零風險）。 */
+    if (top != null) {
+      main.style.setProperty("padding-top", top + "px", "important");
+      if (first) first.style.setProperty("margin-top", "0", "important");
+    } else {
+      main.style.removeProperty("padding-top");
+      if (first) first.style.removeProperty("margin-top");
+    }
+    if (bottom != null) {
+      main.style.setProperty("padding-bottom", bottom + "px", "important");
+      if (last) last.style.setProperty("margin-bottom", "0", "important");
+    } else {
+      main.style.removeProperty("padding-bottom");
+      if (last) last.style.removeProperty("margin-bottom");
+    }
   }
 
   function render() {

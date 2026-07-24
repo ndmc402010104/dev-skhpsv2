@@ -1749,24 +1749,32 @@
       slots[pos].forEach(function (el) { slot.appendChild(el); });
       copyrightRow.appendChild(slot);
     });
-    var footerHeightAdjust = Math.max(-20, Math.min(60, Math.round(Number(shellFooter.footerHeightAdjust) || 0)));
-    if (footerQuiet && footerHeightAdjust) {   // 高度只作用在正式版（版權列）；開發版診斷面板另一回事，不被影響
-      /* 相對自然高度的增減（不是絕對高度）：版權列預設垂直 padding 10px＝自然。adjust/2 加減到 padding
-         →整條總高變化約 ±adjust。負＝變薄（padding 最低 0，約到內容高）、正＝變厚。全程只調 padding，
-         不設固定 height、不裁切內容；並用 !important 解除 footer 元素本身的 min-height 地板（registry／
-         loading CSS 的 ~42px）才吃得到變薄。內容靠既有 grid align-items:center 垂直置中。 */
-      var vPad = Math.max(0, 10 + footerHeightAdjust / 2);
-      copyrightRow.style.minHeight = "0";
-      copyrightRow.style.paddingTop = vPad + "px";
-      copyrightRow.style.paddingBottom = vPad + "px";
-      footer.style.setProperty("min-height", "0", "important");
-      footer.style.setProperty("padding-top", "0", "important");
-      footer.style.setProperty("padding-bottom", "0", "important");
-    } else {
-      /* 未設＝恢復自然（footer 元素跨 render 復用，清掉可能殘留的覆蓋）。 */
-      footer.style.removeProperty("min-height");
-      footer.style.removeProperty("padding-top");
-      footer.style.removeProperty("padding-bottom");
+    /* 頁尾高度＝正式版（版權列）與開發版（診斷面板）兩個獨立設定，各自相對自然增減（0＝自動、負薄正厚）：
+       - footer.footerHeightAdjust    → 正式版：調版權列垂直 padding（base 10），footer 元素貼合它。
+       - footer.footerHeightAdjustDev → 開發版：調診斷面板（footer 元素）自身垂直 padding，相對其自然 padding 增減。
+       footer 元素跨 render 復用，先清掉可能殘留的覆蓋，才能量到自然值 / 恢復自然。 */
+    var adjProd = Math.max(-20, Math.min(60, Math.round(Number(shellFooter.footerHeightAdjust) || 0)));
+    var adjDev = Math.max(-20, Math.min(60, Math.round(Number(shellFooter.footerHeightAdjustDev) || 0)));
+    footer.style.removeProperty("min-height");
+    footer.style.removeProperty("padding-top");
+    footer.style.removeProperty("padding-bottom");
+    if (footerQuiet) {
+      if (adjProd) {
+        var vPad = Math.max(0, 10 + adjProd / 2);   // 版權列 padding；負到 0＝最薄（約內容高），正＝厚
+        copyrightRow.style.minHeight = "0";
+        copyrightRow.style.paddingTop = vPad + "px";
+        copyrightRow.style.paddingBottom = vPad + "px";
+        footer.style.setProperty("min-height", "0", "important");
+        footer.style.setProperty("padding-top", "0", "important");
+        footer.style.setProperty("padding-bottom", "0", "important");
+      }
+    } else if (adjDev) {
+      var cs = window.getComputedStyle ? window.getComputedStyle(footer) : null;   // 已清掉 inline→量到 registry 自然 padding
+      var basePT = cs ? (parseFloat(cs.paddingTop) || 0) : 6;
+      var basePB = cs ? (parseFloat(cs.paddingBottom) || 0) : 6;
+      var dd = adjDev / 2;
+      footer.style.setProperty("padding-top", Math.max(0, basePT + dd) + "px", "important");
+      footer.style.setProperty("padding-bottom", Math.max(0, basePB + dd) + "px", "important");
     }
     footer.appendChild(copyrightRow);
 

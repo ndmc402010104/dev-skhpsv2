@@ -1716,7 +1716,7 @@
        getBusinessVersionInfo()、正式站只顯示主版號（v0.9.79，去掉 -時間戳）。版權/版本號各自可設
        左/中/右對齊（母片 footer.copyrightAlign / versionAlign，預設版權靠左、版本號靠右）；用「左/中/右
        三格」grid 排（中間格保證置中）。兩者選同一格時，footer.copyVersionOrder 決定誰在前。
-       高度由 footer.heightPx 套在版權列上（footer 隨之高，safe-area 量測自動相容）。 */
+       高度由 footer.footerHeightAdjust 相對自然增減（負薄正厚，見下方），safe-area 量測自動相容。 */
     var copyText = shellFooter.copyright != null ? String(shellFooter.copyright).trim() : "";
     var vInfo = getBusinessVersionInfo();
     var vRaw = vInfo && vInfo.version ? String(vInfo.version).trim() : "";
@@ -1749,15 +1749,16 @@
       slots[pos].forEach(function (el) { slot.appendChild(el); });
       copyrightRow.appendChild(slot);
     });
-    var footerHeightPx = Math.max(0, Math.min(240, Math.round(Number(shellFooter.heightPx) || 0)));
-    if (footerHeightPx) {
-      /* 用固定 height（不是 min-height）才能「縮矮」，min-height 只會變高縮不下去。同時去掉版權列與
-         footer 元素的垂直 padding、用 !important 解除 footer 元素本身的 min-height 地板（registry／
-         loading CSS 的 ~42px 底），高度才真的吃 heightPx；內容靠既有 grid align-items:center 垂直置中。 */
-      copyrightRow.style.height = footerHeightPx + "px";
+    var footerHeightAdjust = Math.max(-20, Math.min(60, Math.round(Number(shellFooter.footerHeightAdjust) || 0)));
+    if (footerHeightAdjust) {
+      /* 相對自然高度的增減（不是絕對高度）：版權列預設垂直 padding 10px＝自然。adjust/2 加減到 padding
+         →整條總高變化約 ±adjust。負＝變薄（padding 最低 0，約到內容高）、正＝變厚。全程只調 padding，
+         不設固定 height、不裁切內容；並用 !important 解除 footer 元素本身的 min-height 地板（registry／
+         loading CSS 的 ~42px）才吃得到變薄。內容靠既有 grid align-items:center 垂直置中。 */
+      var vPad = Math.max(0, 10 + footerHeightAdjust / 2);
       copyrightRow.style.minHeight = "0";
-      copyrightRow.style.paddingTop = "0";
-      copyrightRow.style.paddingBottom = "0";
+      copyrightRow.style.paddingTop = vPad + "px";
+      copyrightRow.style.paddingBottom = vPad + "px";
       footer.style.setProperty("min-height", "0", "important");
       footer.style.setProperty("padding-top", "0", "important");
       footer.style.setProperty("padding-bottom", "0", "important");

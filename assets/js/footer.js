@@ -1750,7 +1750,23 @@
       copyrightRow.appendChild(slot);
     });
     var footerHeightPx = Math.max(0, Math.min(240, Math.round(Number(shellFooter.heightPx) || 0)));
-    if (footerHeightPx) copyrightRow.style.minHeight = footerHeightPx + "px";  // 高度可調（0/未設＝內容撐、現況不變）
+    if (footerHeightPx) {
+      /* 用固定 height（不是 min-height）才能「縮矮」，min-height 只會變高縮不下去。同時去掉版權列與
+         footer 元素的垂直 padding、用 !important 解除 footer 元素本身的 min-height 地板（registry／
+         loading CSS 的 ~42px 底），高度才真的吃 heightPx；內容靠既有 grid align-items:center 垂直置中。 */
+      copyrightRow.style.height = footerHeightPx + "px";
+      copyrightRow.style.minHeight = "0";
+      copyrightRow.style.paddingTop = "0";
+      copyrightRow.style.paddingBottom = "0";
+      footer.style.setProperty("min-height", "0", "important");
+      footer.style.setProperty("padding-top", "0", "important");
+      footer.style.setProperty("padding-bottom", "0", "important");
+    } else {
+      /* 未設＝恢復自然（footer 元素跨 render 復用，清掉可能殘留的覆蓋）。 */
+      footer.style.removeProperty("min-height");
+      footer.style.removeProperty("padding-top");
+      footer.style.removeProperty("padding-bottom");
+    }
     footer.appendChild(copyrightRow);
 
     ensureRuntimePanel(true);

@@ -31,15 +31,19 @@ window.SKHPS_SHELL.content.{topGap,bottomGap} inline important 套 main padding-
 內容元素自帶的 margin-top/bottom 一起收掉（有些頁在 main 內又包 .skhps-container，那層自帶
 margin-top 72px 等會疊在 topGap 上讓各頁 header→內容不一）。header→內容／內容→footer 完全由母片
 兩個值決定＝全站真正一致。沒設＝清掉 inline＝registry 現值（prod 零風險）。
+2026-07-24：footer 型別改「env 驅動」——footerQuiet 從看母片 showDiagnostics 改成看執行期 env
+（footerRuntimeEnv，同 shell-config）：prod→正式版(安靜版權列)、dev/local-dev→開發版(診斷面板)。
+修正原本顛倒的狀況（正式版設定誤存 dev 母片、footer.js 又不看 env，導致 dev 顯示正式版、prod 顯示
+診斷版）。母片編輯的開發版/正式版鈕改成純預覽（設 window.SKHPS_FOOTER_PREVIEW 覆寫、不寫母片）。
 */
 window.SKHPS_VERSION = {
   appId: "skhpsv2",
-  version: "v2.12.13-202607241309",
+  version: "v2.12.14-202607241432",
   major: 2,
   minor: 12,
-  patch: 13,
-  buildTime: "202607241309",
-  updatedAt: "2026-07-24T13:04:00+08:00",
+  patch: 14,
+  buildTime: "202607241432",
+  updatedAt: "2026-07-24T14:32:00+08:00",
   source: "version.js"
 };
 

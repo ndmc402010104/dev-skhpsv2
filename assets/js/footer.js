@@ -199,6 +199,19 @@
     return "UNKNOWN";
   }
 
+  /* footer 型別用的執行期 env（跟 shell-config currentEnv 同源：SKHPSConfig.getEnv →
+     data-skhps-runtime → 預設 prod）。回 'prod'/'dev'/'local-dev'。用這個而非 host 猜測，
+     確保跟載入母片的 env 一致（dev 預覽走 ?skhpsRuntime=dev 也判得對）。 */
+  function footerRuntimeEnv() {
+    try {
+      if (window.SKHPSConfig && typeof window.SKHPSConfig.getEnv === "function") {
+        var e = String(window.SKHPSConfig.getEnv() || "").trim().toLowerCase();
+        if (e) return e;
+      }
+    } catch (err) {}
+    return String(document.documentElement.getAttribute("data-skhps-runtime") || "").trim().toLowerCase() || "prod";
+  }
+
   function pageTitle() {
     var html = document.documentElement;
     return String(
@@ -1623,10 +1636,15 @@
     footer.classList.add("skhps-footer");
     footer.innerHTML = "";
 
-    /* 母片安靜模式（2026-07-22，階段 C）：diagnostics 診斷面板照建（DOM 完整），
-       只是 quiet class 用 CSS 隱藏三欄、顯示版權列。母片沒設或設 true＝顯示診斷（現況）。 */
+    /* footer 型別＝env 驅動（2026-07-24，取代原母片 showDiagnostics 旗標）：prod → 正式版
+       （安靜版權列）、dev/local-dev → 開發版（診斷面板）。開發版/正式版是 env 內生的（工程師在
+       dev 看診斷、使用者在 prod 看乾淨），不靠母片手動旗標。母片編輯要預覽兩種時設
+       window.SKHPS_FOOTER_PREVIEW（boolean，只在編輯器）覆寫；正式線上頁永不設＝一律走 env。
+       diagnostics 面板照建（DOM 完整），quiet class 只用 CSS 隱藏三欄、顯示版權列。 */
     var shellFooter = (window.SKHPS_SHELL && window.SKHPS_SHELL.footer) || {};
-    var footerQuiet = shellFooter.showDiagnostics === false;
+    var footerQuiet = (typeof window.SKHPS_FOOTER_PREVIEW === "boolean")
+      ? window.SKHPS_FOOTER_PREVIEW
+      : (footerRuntimeEnv() === "prod");
     footer.classList.toggle("skhps-footer-quiet", footerQuiet);
 
     var envSummary = footerEnvSummary(state);
